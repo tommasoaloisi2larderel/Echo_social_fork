@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,9 +9,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ScrollView,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { styles } from '@/styles/appStyles';
+import DefaultAvatar from '@/components/DefaultAvatar';
 
 interface Message {
   id: number;
@@ -19,7 +22,9 @@ interface Message {
   sender_username: string;
   content: string;
   created_at: string;
+  is_read?: boolean;
 }
+
 
 export default function ConversationDetail() {
   const { conversationId } = useLocalSearchParams();
@@ -31,6 +36,8 @@ export default function ConversationDetail() {
   const [newMessage, setNewMessage] = useState<string>('');
 
   const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
+  
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const connectWebSocket = () => {
     if (!conversationId || !accessToken) return;
@@ -175,162 +182,97 @@ export default function ConversationDetail() {
     };
   }, [conversationId, accessToken]);
 
-  const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_username === user?.username;
-
-    return (
-      <View
-        style={[
-          styles.message,
-          isMe ? styles.myMessage : styles.otherMessage,
-        ]}
-      >
-        {!isMe && <Text style={styles.sender}>{item.sender_username}</Text>}
-        <Text style={styles.content}>{item.content}</Text>
-        <Text style={styles.time}>
-          {new Date(item.created_at).toLocaleTimeString()}
-        </Text>
-      </View>
-    );
-  };
-
   if (loading) {
     return (
-      <View style={styles.loading}>
-        <Stack.Screen options={{ title: 'Chargement...' }} />
-        <ActivityIndicator size="large" />
+      <View style={styles.chatContainer}>
+        <Stack.Screen options={{ title: 'Chargement...', headerShown: true }} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="rgba(55, 116, 69, 1)" />
+          <Text style={{ marginTop: 10, color: '#666' }}>Chargement des messages...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Stack.Screen options={{ title: 'Conversation' }} />
+      <Stack.Screen options={{ title: 'Conversation', headerShown: true }} />
+      
+      <View style={styles.chatContainer}>
+        {/* Header flottant avec avatar et nom */}
+        <View style={styles.chatHeader}>
+          <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
+          <Text style={styles.chatHeaderName}>Conversation</Text>
+          <View style={styles.chatHeaderStatus}>
+            <Text style={styles.statusDot}>•</Text>
+          </View>
+        </View>
 
-      <FlatList
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.uuid}
-        style={styles.list}
-      />
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          placeholder="Tapez votre message..."
-          multiline
-          maxLength={1000}
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            !newMessage.trim() && styles.sendButtonDisabled,
-          ]}
-          onPress={sendMessage}
-          disabled={!newMessage.trim()}
+        {/* Liste des messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.messagesContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.sendButtonText}>Envoyer</Text>
-        </TouchableOpacity>
-      </View>
+          {messages.map((msg) => {
+            const isMe = msg.sender_username === user?.username;
+            return (
+              <View
+                key={msg.uuid}
+                style={[
+                  styles.messageBubble,
+                  isMe ? styles.myMessage : styles.theirMessage
+                ]}
+              >
+                <Text style={[
+                  styles.messageText,
+                  isMe ? styles.myMessageText : styles.theirMessageText
+                ]}>
+                  {msg.content}
+                </Text>
+                <View style={styles.messageMeta}>
+                  <Text style={styles.timestampText}>
+                    {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </Text>
+                  {isMe && (
+                    <Text style={styles.readStatus}>
+                      {msg.is_read ? "Lu" : "Envoyé"}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
 
-      <View style={styles.connectionStatus}>
-        <Text style={styles.connectionText}>
-          {websocket ? '🟢 Connecté' : '🔴 Déconnecté'}
-        </Text>
+        {/* Zone de saisie - on la laisse simple pour l'instant */}
+        <View style={{ padding: 10, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e0e0e0' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextInput
+              style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, marginRight: 10 }}
+              value={newMessage}
+              onChangeText={setNewMessage}
+              placeholder="Message..."
+              placeholderTextColor="rgba(105, 105, 105, 0.8)"
+              multiline
+              maxLength={1000}
+            />
+            <TouchableOpacity
+              style={{ backgroundColor: newMessage.trim() ? 'rgba(55, 116, 69, 1)' : '#ccc', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10 }}
+              onPress={sendMessage}
+              disabled={!newMessage.trim()}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>➤</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  list: {
-    flex: 1,
-    padding: 10,
-  },
-  message: {
-    padding: 10,
-    marginVertical: 5,
-    borderRadius: 10,
-    maxWidth: '80%',
-  },
-  myMessage: {
-    backgroundColor: '#da913eff',
-    alignSelf: 'flex-end',
-  },
-  otherMessage: {
-    backgroundColor: 'white',
-    alignSelf: 'flex-start',
-  },
-  sender: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
-  },
-  content: {
-    fontSize: 16,
-  },
-  time: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 2,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 10,
-    backgroundColor: 'white',
-    alignItems: 'flex-end',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    marginRight: 10,
-    maxHeight: 100,
-    fontSize: 16,
-  },
-  sendButton: {
-    backgroundColor: '#da913eff',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  sendButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  connectionStatus: {
-    position: 'absolute',
-    top: 50,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 5,
-    borderRadius: 10,
-  },
-  connectionText: {
-    color: 'white',
-    fontSize: 12,
-  },
-});

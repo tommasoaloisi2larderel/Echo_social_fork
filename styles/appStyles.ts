@@ -31,7 +31,7 @@ export const styles = StyleSheet.create({
   conversationGrid: {
     paddingTop: 150,
     paddingBottom: 180,
-    paddingHorizontal: 5,
+    paddingHorizontal: 10,
   },
   row: {
     justifyContent: "space-between",
@@ -39,6 +39,7 @@ export const styles = StyleSheet.create({
   },
   conversationSquare: { 
     width: 110, 
+    height : 110,
     alignItems: "center", 
     justifyContent: "center", 
     backgroundColor: LIGHT_GRAY, 
@@ -46,7 +47,7 @@ export const styles = StyleSheet.create({
     borderRadius: 25, 
     paddingTop: 0, 
     paddingBottom: 0, 
-    shadowColor: "rgba(150, 150, 150, 1)", 
+    shadowColor: "rgba(170, 255, 181, 1)", 
     shadowOffset: { height : 0, width : 0},
     shadowOpacity: 1, 
     shadowRadius: 5,
@@ -309,7 +310,7 @@ export const styles = StyleSheet.create({
   ///////////////////////////////////// STYLES FOR BOTTOM BAR
   bottomBar: {
     position: "absolute",
-    bottom: -300,
+    bottom: -280,
     left: 0,
     right: 0,
     backgroundColor: "rgba(55, 116, 69, 0.7)",
