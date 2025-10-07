@@ -1,7 +1,6 @@
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs, usePathname } from "expo-router";
 import { useState } from "react";
-import { usePathname } from "expo-router";
 import BottomBar from "../../components/BottomBar";
 
 
@@ -9,6 +8,14 @@ import BottomBar from "../../components/BottomBar";
 export default function TabsLayout() {
   const [chatText, setChatText] = useState("");
   const pathname = usePathname();
+  
+  // Fonction pour envoyer un message (sera utilisée par la BottomBar en mode chat)
+  const handleSendMessage = () => {
+    // Cette fonction sera appelée par la BottomBar quand on est en mode chat
+    console.log("Envoi du message:", chatText);
+    // Ici vous pouvez ajouter la logique d'envoi de message
+    setChatText(""); // Vider le champ après envoi
+  };
   
   return (
     <>
@@ -58,6 +65,20 @@ export default function TabsLayout() {
             )
           }}
         />
+
+        <Tabs.Screen 
+          name="conversation-detail"
+          options={{
+            headerTitle: "Conversation",
+            tabBarIcon: ({focused, color}) => (
+              <Ionicons 
+                name={focused ? "chat" : "chat-outline"} 
+                color={color}  
+                size={24}
+              />
+            )
+          }}
+        />
       </Tabs>
       
       {/* BottomBar personnalisé */}
@@ -65,6 +86,8 @@ export default function TabsLayout() {
         currentRoute={pathname}
         chatText={chatText}
         setChatText={setChatText}
+        chatRecipient={pathname.includes('conversation-detail') ? "Contact" : ""}
+        onSendMessage={pathname.includes('conversation-detail') ? handleSendMessage : undefined}
       />
     </>
   );

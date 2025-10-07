@@ -1,4 +1,3 @@
-import BottomBar from '@/components/BottomBar';
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { styles } from '@/styles/appStyles';
 import { Stack, useLocalSearchParams } from 'expo-router';
@@ -190,68 +189,55 @@ export default function ConversationDetail() {
   }
 
   return (
-    <>
-      <Stack.Screen options={{ title: 'Conversation', headerShown: true }} />
-      
-      <View style={styles.chatContainer}>
-        {/* Header flottant avec avatar et nom */}
-        <View style={styles.chatHeader}>
-          <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
-          <Text style={styles.chatHeaderName}>Conversation</Text>
-          <View style={styles.chatHeaderStatus}>
-            <Text style={styles.statusDot}>•</Text>
-          </View>
+    <View style={styles.chatContainer}>
+      {/* Header flottant avec avatar et nom */}
+      <View style={styles.chatHeader}>
+        <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
+        <Text style={styles.chatHeaderName}>Conversation</Text>
+        <View style={styles.chatHeaderStatus}>
+          <Text style={styles.statusDot}>•</Text>
         </View>
-
-        {/* Liste des messages */}
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.map((msg) => {
-            const isMe = msg.sender_username === user?.username;
-            return (
-              <View
-                key={msg.uuid}
-                style={[
-                  styles.messageBubble,
-                  isMe ? styles.myMessage : styles.theirMessage
-                ]}
-              >
-                <Text style={[
-                  styles.messageText,
-                  isMe ? styles.myMessageText : styles.theirMessageText
-                ]}>
-                  {msg.content}
-                </Text>
-                <View style={styles.messageMeta}>
-                  <Text style={styles.timestampText}>
-                    {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </Text>
-                  {isMe && (
-                    <Text style={styles.readStatus}>
-                      {msg.is_read ? "Lu" : "Envoyé"}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
       </View>
 
-      {/* BottomBar fixe en bas avec isChat = true */}
-      <BottomBar
-        currentRoute="conversation-detail"
-        chatText={newMessage}
-        setChatText={setNewMessage}
-        chatRecipient="Contact"
-        onSendMessage={sendMessage}
-      />
-    </>
+      {/* Liste des messages */}
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.messagesContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {messages.map((msg) => {
+          const isMe = msg.sender_username === user?.username;
+          return (
+            <View
+              key={msg.uuid}
+              style={[
+                styles.messageBubble,
+                isMe ? styles.myMessage : styles.theirMessage
+              ]}
+            >
+              <Text style={[
+                styles.messageText,
+                isMe ? styles.myMessageText : styles.theirMessageText
+              ]}>
+                {msg.content}
+              </Text>
+              <View style={styles.messageMeta}>
+                <Text style={styles.timestampText}>
+                  {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </Text>
+                {isMe && (
+                  <Text style={styles.readStatus}>
+                    {msg.is_read ? "Lu" : "Envoyé"}
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
