@@ -1,20 +1,15 @@
+import BottomBar from '@/components/BottomBar';
+import DefaultAvatar from '@/components/DefaultAvatar';
+import { styles } from '@/styles/appStyles';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
   ScrollView,
+  Text,
+  View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { styles } from '@/styles/appStyles';
-import DefaultAvatar from '@/components/DefaultAvatar';
 
 interface Message {
   id: number;
@@ -195,10 +190,7 @@ export default function ConversationDetail() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <>
       <Stack.Screen options={{ title: 'Conversation', headerShown: true }} />
       
       <View style={styles.chatContainer}>
@@ -250,29 +242,16 @@ export default function ConversationDetail() {
             );
           })}
         </ScrollView>
-
-        {/* Zone de saisie - on la laisse simple pour l'instant */}
-        <View style={{ padding: 10, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e0e0e0' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TextInput
-              style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, marginRight: 10 }}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Message..."
-              placeholderTextColor="rgba(105, 105, 105, 0.8)"
-              multiline
-              maxLength={1000}
-            />
-            <TouchableOpacity
-              style={{ backgroundColor: newMessage.trim() ? 'rgba(55, 116, 69, 1)' : '#ccc', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10 }}
-              onPress={sendMessage}
-              disabled={!newMessage.trim()}
-            >
-              <Text style={{ color: 'white', fontWeight: 'bold' }}>➤</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
-    </KeyboardAvoidingView>
+
+      {/* BottomBar fixe en bas avec isChat = true */}
+      <BottomBar
+        currentRoute="conversation-detail"
+        chatText={newMessage}
+        setChatText={setNewMessage}
+        chatRecipient="Contact"
+        onSendMessage={sendMessage}
+      />
+    </>
   );
 }
