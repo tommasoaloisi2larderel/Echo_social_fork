@@ -1,24 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  TouchableOpacity,
-  RefreshControl,
-  Image,
-  TextInput,
-} from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
+import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { styles } from '@/styles/appStyles';
+import { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import DefaultAvatar from '../../components/DefaultAvatar';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Import type pour forcer TypeScript à reconnaître la route
-import type { Href } from 'expo-router';
 
 // Types pour les données des conversations
 interface Conversation {
@@ -182,7 +179,7 @@ export default function ConversationsScreen() {
             photoUrl={item.other_participant?.photo_profil_url}
             onPress={() => {
               router.push({
-                pathname: '/(screens)/conversation-detail',
+                pathname: '/(tabs)/conversation-detail',
                 params: { conversationId: item.uuid }
               });
             }}
