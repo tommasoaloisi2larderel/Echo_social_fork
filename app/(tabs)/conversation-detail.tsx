@@ -29,6 +29,9 @@ export default function ConversationDetail() {
 
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const [newMessage, setNewMessage] = useState<string>('');
+  
+  // Synchroniser avec l'état global du layout
+  const [isLayoutSynced, setIsLayoutSynced] = useState(false);
 
   const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
   

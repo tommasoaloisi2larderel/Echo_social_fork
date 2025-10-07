@@ -1,13 +1,12 @@
-import React from "react";
+import { router } from "expo-router";
 import {
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { router } from "expo-router";
 import { styles } from "../styles/appStyles";
 
 interface BottomBarProps {
@@ -26,7 +25,10 @@ export default function BottomBar({
   onSendMessage
 }: BottomBarProps) {
   
-  const isChat = currentRoute === "conversation-detail";
+  const isChat = currentRoute.includes("conversation-detail");
+  
+  // Debug: vérifier que isChat fonctionne
+  console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
 
   return (
     <KeyboardAvoidingView

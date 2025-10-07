@@ -13,8 +13,8 @@ export default function TabsLayout() {
   const handleSendMessage = () => {
     // Cette fonction sera appelée par la BottomBar quand on est en mode chat
     console.log("Envoi du message:", chatText);
-    // Ici vous pouvez ajouter la logique d'envoi de message
-    setChatText(""); // Vider le champ après envoi
+    // La logique d'envoi sera gérée par le composant conversation-detail
+    // On ne vide pas le champ ici car c'est géré par le composant
   };
   
   return (
