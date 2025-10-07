@@ -1,11 +1,12 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { styles } from '@/styles/appStyles';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
   Text,
+  TouchableOpacity,
   View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -190,6 +191,27 @@ export default function ConversationDetail() {
 
   return (
     <View style={styles.chatContainer}>
+      {/* Bouton de retour flottant */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 15,
+          zIndex: 1000,
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: 20,
+          padding: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }}
+        onPress={() => router.push('/(tabs)/conversations')}
+      >
+        <Text style={{ fontSize: 18, color: 'rgba(55, 116, 69, 1)' }}>←</Text>
+      </TouchableOpacity>
+
       {/* Header flottant avec avatar et nom */}
       <View style={styles.chatHeader}>
         <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
