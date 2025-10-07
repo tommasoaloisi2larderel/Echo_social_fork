@@ -3,15 +3,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../../components/DefaultAvatar';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -89,7 +91,9 @@ export default function ConversationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { makeAuthenticatedRequest, user } = useAuth(); // Utiliser la nouvelle fonction
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<'direct' | 'group'>('direct');
   const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
 
   // Fonction pour récupérer les conversations
@@ -161,14 +165,44 @@ export default function ConversationsScreen() {
     );
   }
 
-  // Filtrer les conversations selon la recherche
-  const filteredConversations = conversations.filter((c) => {
+  // Helpers to detect 1-on-1 vs group
+  const isDirect = (c: Conversation) => !!c.other_participant;
+  const isGroup = (c: Conversation) => !c.other_participant;
+
+  const modeFiltered = conversations.filter((c) =>
+    viewMode === 'direct' ? isDirect(c) : isGroup(c)
+  );
+
+  // Filtrer selon la recherche
+  const filteredConversations = modeFiltered.filter((c) => {
     const name = c.other_participant?.surnom || c.other_participant?.username || '';
     return name.toLowerCase().includes(query.toLowerCase());
   });
   
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: (insets.top || 0) + 0 }]}> 
+      <SearchBar query={query} setQuery={setQuery} />
+
+      {/* Toggle 1-on-1 / Groupes */}
+      <View style={localStyles.toggleContainer}>
+        <TouchableOpacity
+          style={[localStyles.toggleButton, viewMode === 'direct' && localStyles.toggleActive]}
+          onPress={() => setViewMode('direct')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : '#2e7d32'} />
+          <Text style={[localStyles.toggleLabel, viewMode === 'direct' && localStyles.toggleLabelActive]}>Privé</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[localStyles.toggleButton, viewMode === 'group' && localStyles.toggleActive]}
+          onPress={() => setViewMode('group')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : '#2e7d32'} />
+          <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={filteredConversations}
         keyExtractor={(item) => item.uuid}
@@ -187,10 +221,47 @@ export default function ConversationsScreen() {
         )}
         numColumns={3}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.conversationGrid}
+        contentContainerStyle={[styles.conversationGrid, localStyles.gridCompact]}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
-      <SearchBar query={query} setQuery={setQuery} />
     </View>
   );
 }
+
+const localStyles = StyleSheet.create({
+  toggleContainer: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 6,
+    borderRadius: 999,
+    marginTop: 66,
+    marginBottom: 8,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    marginHorizontal: 2,
+    backgroundColor: 'transparent',
+  },
+  toggleActive: {
+    backgroundColor: '#2e7d32',
+  },
+  toggleLabel: {
+    marginLeft: 6,
+    color: '#2e7d32',
+    fontWeight: '700',
+  },
+  toggleLabelActive: {
+    color: '#fff',
+  },
+  gridCompact: {
+    paddingTop: 0,
+    marginTop: 8,
+  },
+});

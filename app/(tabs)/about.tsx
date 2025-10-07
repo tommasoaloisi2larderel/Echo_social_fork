@@ -3,8 +3,9 @@ import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 
@@ -114,7 +115,13 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.avatarWrap}>
-          <DefaultAvatar name={user?.username || 'User'} size={110} />
+          {(() => {
+            const avatarUri = (user as any)?.avatar || (user as any)?.avatar_url || (user as any)?.photo_url || (user as any)?.profile_picture || (user as any)?.image;
+            if (avatarUri) {
+              return <Image source={{ uri: String(avatarUri) }} style={styles.avatarImage} />;
+            }
+            return <DefaultAvatar name={user?.username || 'User'} size={110} />;
+          })()}
         </View>
 
         <Text style={styles.nameText}>{user?.username}</Text>
@@ -126,23 +133,23 @@ export default function ProfileScreen() {
         ) : null}
 
         {/* Quick stats */}
-        {stats && (
+        {(
           <View style={styles.quickStatsRow}>
-            <View style={styles.quickStatCard}>
-              <Ionicons name="log-in-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{user?.nb_connexions || 0}</Text>
-              <Text style={styles.quickStatLabel}>Connexions</Text>
-            </View>
-            <View style={styles.quickStatCard}>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
+              <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.quickStatNum}>{(user as any)?.nb_amis ?? 0}</Text>
+              <Text style={styles.quickStatLabel}>Amis</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/events' as any)}>
               <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{stats.total_evenements}</Text>
+              <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Événements</Text>
-            </View>
-            <View style={styles.quickStatCard}>
-              <Ionicons name="chatbubbles-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{stats.total_reponses}</Text>
-              <Text style={styles.quickStatLabel}>Réponses</Text>
-            </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/stats' as any)}>
+              <Ionicons name="bar-chart-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
+              <Text style={styles.quickStatLabel}>Statistiques</Text>
+            </TouchableOpacity>
           </View>
         )}
       </LinearGradient>
@@ -151,32 +158,19 @@ export default function ProfileScreen() {
       <View style={styles.cardsGrid}>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="information-circle-outline" size={18} color={ECHO_COLOR} />
-            <Text style={styles.cardTitle}>Profil</Text>
+            <Ionicons name="document-text-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.cardTitle}>Posts</Text>
+            <TouchableOpacity style={styles.newPostBtn} onPress={() => router.push('/posts/new' as any)}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.newPostText}>Nouveau</Text>
+            </TouchableOpacity>
           </View>
-          <InfoRow icon="mail" label="Email" value={user?.email} />
-          {user?.first_name && <InfoRow icon="person" label="Prénom" value={user.first_name} />}
-          {user?.last_name && <InfoRow icon="person-outline" label="Nom" value={user.last_name} />}
-          {user?.nationalite && <InfoRow icon="flag" label="Nationalité" value={user.nationalite} />}        
-          <InfoRow icon="calendar-outline" label="Membre depuis" value={formatDate(user?.date_inscription || '')} />
+          <View style={styles.emptyState}>
+            <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
+            <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
+          </View>
         </View>
 
-        {isDerniereReponse(lastAnswer) && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="sparkles-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.cardTitle}>Dernière réponse</Text>
-            </View>
-            <View style={styles.answerBox}>
-              <Text style={styles.questionText}>Q: {lastAnswer.question}</Text>
-              <Text style={styles.answerText}>R: {lastAnswer.reponse}</Text>
-              <View style={styles.answerFooter}>
-                <Ionicons name="time-outline" size={14} color="#999" />
-                <Text style={styles.dateText}>{formatDate(lastAnswer.date)}</Text>
-              </View>
-            </View>
-          </View>
-        )}
       </View>
 
       {/* Primary action */}
@@ -237,6 +231,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 6,
     marginBottom: 10,
+  },
+  avatarImage: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: 'white',
   },
   nameText: {
     fontSize: 28,
@@ -361,4 +362,23 @@ const styles = StyleSheet.create({
   footerSpace: {
     height: 60,
   },
+
+  newPostBtn: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2e7d32',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  newPostText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
+  emptyState: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  emptyText: { marginLeft: 8, color: '#6e7f71' },
+
+  statsPreviewRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  previewItem: { flex: 1, alignItems: 'center' },
+  previewNumber: { fontSize: 20, fontWeight: '800', color: '#1b5e20' },
+  previewLabel: { fontSize: 11, color: '#6c8a6e', marginTop: 2 },
+  statsHint: { textAlign: 'center', marginTop: 10, fontSize: 12, color: '#6c8a6e' },
 });

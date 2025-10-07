@@ -194,7 +194,7 @@ export default function AuthScreen() {
           </View>
 
           {/* Form Section */}
-          <LinearGradient style={styles.cardWrapper} colors={['rgba(46,125,50,0.35)', 'rgba(200,230,201,0.35)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <LinearGradient style={styles.cardWrapper} colors={['rgba(75, 171, 80, 0.35)', 'rgba(9, 105, 12, 0.35)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
             <Animated.View style={[styles.formCard, { opacity: fadeAnim }]}> 
               <Text style={styles.formTitle}>
                 {mode === 'login' ? 'Connexion' : 'Inscription'}
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: 'rgba(129, 199, 132, 0.35)',
+    backgroundColor: 'rgba(42, 136, 47, 0.35)',
     top: 60,
     left: -40,
     shadowColor: '#66bb6a',
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: 'rgba(200, 230, 201, 0.35)',
+    backgroundColor: 'rgba(97, 215, 101, 0.35)',
     bottom: -40,
     right: -60,
     shadowColor: '#81c784',
