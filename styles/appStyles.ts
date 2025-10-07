@@ -313,7 +313,11 @@ export const styles = StyleSheet.create({
     bottom: -280,
     left: 0,
     right: 0,
+<<<<<<< HEAD
     backgroundColor: "rgba(0, 86, 20, 0.7)",
+=======
+    backgroundColor: "rgba(76, 157, 95, 0.76)",
+>>>>>>> 47fa73c72e7bf847b79e619fe0c79e1ca9ccbc35
     borderTopLeftRadius: 42,
     borderTopRightRadius: 42,
     borderBottomLeftRadius: 0,
