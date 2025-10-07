@@ -98,58 +98,49 @@ export default function AuthScreen() {
   };
 
   const handleAuth = async () => {
-    if (!username.trim() || !password.trim()) {
-      setErrorType('other');
-      setErrorMessage('Veuillez remplir tous les champs');
-      return;
-    }
+    const u = username.trim();
+    const p = password;
+    const e = email.trim();
 
-    if (mode === 'register' && !email.trim()) {
+    // Basic form requirements
+    if (!u || !p || (mode === 'register' && !e)) {
       setErrorType('other');
-      setErrorMessage('L\'email est requis pour l\'inscription');
+      setErrorMessage(!u || !p ? 'Veuillez remplir tous les champs' : "L'email est requis pour l'inscription");
       return;
     }
 
     setIsLoading(true);
     setErrorType('none');
+    setErrorMessage('');
 
     try {
       if (mode === 'login') {
-        // Try to login
-        try {
-          await login(username.trim(), password);
-          router.replace('/(tabs)');
-        } catch (error) {
-          // Check if username exists via lightweight endpoint
-          const exists = await checkUsernameExists(username.trim());
-          if (exists === false) {
-            // Username doesn't exist - switch to register mode
-            setErrorType('user_not_found');
-            setErrorMessage('Utilisateur non trouvé. Créons votre compte !');
-
-            Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-              setMode('register');
-              Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-            });
-          } else {
-            // Username exists or unknown -> show wrong password and keep on login form
-            setErrorType('wrong_password');
-            setErrorMessage('Mot de passe incorrect');
-          }
+        // 1) If username not in DB -> switch to register
+        const exists = await checkUsernameExists(u);
+        if (exists === false) {
+          setMode('register');
+          setErrorType('user_not_found');
+          setErrorMessage('Utilisateur non trouvé. Créons votre compte !');
+          return;
         }
-      } else {
-        // Register mode
-        await register({
-          username: username.trim(),
-          password: password,
-          email: email.trim(),
-        });
+
+        // 2) Username exists (or unknown) -> try to login
+        await login(u, p);
         router.replace('/(tabs)');
+        return;
       }
-    } catch (error) {
-      if (errorType === 'none') {
+
+      // 3) Register flow
+      await register({ username: u, password: p, email: e });
+      router.replace('/(tabs)');
+    } catch (err) {
+      // For login failures at this point, we assume wrong password
+      if (mode === 'login') {
+        setErrorType('wrong_password');
+        setErrorMessage('Mot de passe incorrect');
+      } else {
         setErrorType('other');
-        setErrorMessage(error instanceof Error ? error.message : 'Une erreur est survenue');
+        setErrorMessage(err instanceof Error ? err.message : 'Une erreur est survenue');
       }
     } finally {
       setIsLoading(false);

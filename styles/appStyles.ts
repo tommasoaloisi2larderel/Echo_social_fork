@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { ECHO_COLOR, WHITE, BACKGROUND_GRAY, LIGHT_GRAY, DARK_GRAY } from "../constants/colors";
+import { BACKGROUND_GRAY, DARK_GRAY, ECHO_COLOR, LIGHT_GRAY, WHITE } from "../constants/colors";
 
 export const styles = StyleSheet.create({
   container: {
@@ -313,7 +313,7 @@ export const styles = StyleSheet.create({
     bottom: -280,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(55, 116, 69, 0.7)",
+    backgroundColor: "rgba(0, 86, 20, 0.7)",
     borderTopLeftRadius: 42,
     borderTopRightRadius: 42,
     borderBottomLeftRadius: 0,

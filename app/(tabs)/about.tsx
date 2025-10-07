@@ -2,6 +2,7 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -100,68 +101,86 @@ export default function ProfileScreen() {
   return (
     <ScrollView 
       style={styles.container}
+      contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      showsVerticalScrollIndicator={false}
     >
-      {/* Header with avatar and name */}
-      <View style={styles.header}>
-        <DefaultAvatar 
-          name={user?.username || 'User'} 
-          size={100} 
-        />
-        <Text style={styles.username}>{user?.username}</Text>
-        {user?.surnom && <Text style={styles.surnom}>&ldquo;{user.surnom}&rdquo;</Text>}
-        {user?.bio && <Text style={styles.bio}>{user.bio}</Text>}
-      </View>
-
-      {/* Stats Section */}
-      {stats && (
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{user?.nb_connexions || 0}</Text>
-            <Text style={styles.statLabel}>Connexions</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{stats.total_evenements}</Text>
-            <Text style={styles.statLabel}>Événements</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{stats.total_reponses}</Text>
-            <Text style={styles.statLabel}>Réponses</Text>
-          </View>
+      {/* Hero Header */}
+      <LinearGradient colors={['#e8f5e9', '#c8e6c9']} style={styles.hero} start={{x:0, y:0}} end={{x:1, y:1}}>
+        <View style={styles.heroTopRow}>
+          <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
+            <Ionicons name="log-out-outline" size={22} color="#2e7d32" />
+          </TouchableOpacity>
         </View>
-      )}
 
-      {/* User Info Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Informations</Text>
-        
-        <InfoRow icon="mail" label="Email" value={user?.email} />
-        {user?.first_name && <InfoRow icon="person" label="Prénom" value={user.first_name} />}
-        {user?.last_name && <InfoRow icon="person-outline" label="Nom" value={user.last_name} />}
-        {user?.nationalite && <InfoRow icon="flag" label="Nationalité" value={user.nationalite} />}
-        {user?.date_naissance && <InfoRow icon="calendar" label="Date de naissance" value={formatDate(user.date_naissance)} />}
-        <InfoRow icon="calendar-outline" label="Membre depuis" value={formatDate(user?.date_inscription || '')} />
-      </View>
-
-      {/* Last Question Answered */}
-      {isDerniereReponse(lastAnswer) && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Dernière réponse</Text>
-          <View style={styles.questionBox}>
-            <Text style={styles.questionText}>Q: {lastAnswer.question}</Text>
-            <Text style={styles.answerText}>R: {lastAnswer.reponse}</Text>
-            <Text style={styles.dateText}>{formatDate(lastAnswer.date)}</Text>
-          </View>
+        <View style={styles.avatarWrap}>
+          <DefaultAvatar name={user?.username || 'User'} size={110} />
         </View>
-      )}
 
-      {/* Actions */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="white" />
-          <Text style={styles.logoutText}>Déconnexion</Text>
-        </TouchableOpacity>
+        <Text style={styles.nameText}>{user?.username}</Text>
+        {user?.surnom ? (
+          <Text style={styles.tagline}>&ldquo;{user.surnom}&rdquo;</Text>
+        ) : null}
+        {user?.bio ? (
+          <Text style={styles.bioText}>{user.bio}</Text>
+        ) : null}
+
+        {/* Quick stats */}
+        {stats && (
+          <View style={styles.quickStatsRow}>
+            <View style={styles.quickStatCard}>
+              <Ionicons name="log-in-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.quickStatNum}>{user?.nb_connexions || 0}</Text>
+              <Text style={styles.quickStatLabel}>Connexions</Text>
+            </View>
+            <View style={styles.quickStatCard}>
+              <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.quickStatNum}>{stats.total_evenements}</Text>
+              <Text style={styles.quickStatLabel}>Événements</Text>
+            </View>
+            <View style={styles.quickStatCard}>
+              <Ionicons name="chatbubbles-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.quickStatNum}>{stats.total_reponses}</Text>
+              <Text style={styles.quickStatLabel}>Réponses</Text>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* Information & Activity */}
+      <View style={styles.cardsGrid}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="information-circle-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.cardTitle}>Profil</Text>
+          </View>
+          <InfoRow icon="mail" label="Email" value={user?.email} />
+          {user?.first_name && <InfoRow icon="person" label="Prénom" value={user.first_name} />}
+          {user?.last_name && <InfoRow icon="person-outline" label="Nom" value={user.last_name} />}
+          {user?.nationalite && <InfoRow icon="flag" label="Nationalité" value={user.nationalite} />}        
+          <InfoRow icon="calendar-outline" label="Membre depuis" value={formatDate(user?.date_inscription || '')} />
+        </View>
+
+        {isDerniereReponse(lastAnswer) && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="sparkles-outline" size={18} color={ECHO_COLOR} />
+              <Text style={styles.cardTitle}>Dernière réponse</Text>
+            </View>
+            <View style={styles.answerBox}>
+              <Text style={styles.questionText}>Q: {lastAnswer.question}</Text>
+              <Text style={styles.answerText}>R: {lastAnswer.reponse}</Text>
+              <View style={styles.answerFooter}>
+                <Ionicons name="time-outline" size={14} color="#999" />
+                <Text style={styles.dateText}>{formatDate(lastAnswer.date)}</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
+
+      {/* Primary action */}
+      <View style={styles.footerSpace} />
     </ScrollView>
   );
 }
@@ -180,87 +199,118 @@ const InfoRow = ({ icon, label, value }: { icon: any; label: string; value?: str
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BACKGROUND_GRAY,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: BACKGROUND_GRAY,
   },
-  header: {
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 30,
-    backgroundColor: 'white',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+  container: {
+    flex: 1,
+    backgroundColor: BACKGROUND_GRAY,
   },
-  username: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 15,
+  content: {
+    paddingBottom: 40,
   },
-  surnom: {
-    fontSize: 18,
-    color: ECHO_COLOR,
-    fontStyle: 'italic',
-    marginTop: 5,
+  hero: {
+    paddingTop: 36,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  bio: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 10,
-    paddingHorizontal: 40,
-  },
-  statsContainer: {
+  heroTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 25,
-    marginHorizontal: 20,
-    marginTop: 20,
+    justifyContent: 'flex-end',
+  },
+  iconButton: {
     backgroundColor: 'white',
-    borderRadius: 15,
+    padding: 10,
+    borderRadius: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
   },
-  statBox: {
-    alignItems: 'center',
+  avatarWrap: {
+    alignSelf: 'center',
+    marginTop: 6,
+    marginBottom: 10,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  nameText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1b5e20',
+    textAlign: 'center',
+  },
+  tagline: {
+    textAlign: 'center',
     color: ECHO_COLOR,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
+  bioText: {
+    textAlign: 'center',
+    color: '#375a3b',
+    marginTop: 8,
+    paddingHorizontal: 24,
   },
-  section: {
-    marginHorizontal: 20,
-    marginTop: 20,
+  quickStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  quickStatCard: {
+    flex: 1,
     backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginHorizontal: 4,
+    alignItems: 'center',
     shadowColor: '#000',
+    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  sectionTitle: {
+  quickStatNum: {
+    marginTop: 6,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#1b5e20',
+  },
+  quickStatLabel: {
+    fontSize: 11,
+    color: '#6c8a6e',
+    marginTop: 2,
+  },
+  cardsGrid: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#333',
-    marginBottom: 15,
+    marginLeft: 8,
   },
   infoRow: {
     flexDirection: 'row',
@@ -282,49 +332,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
   },
-  questionBox: {
-    padding: 15,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
+  answerBox: {
+    padding: 14,
+    backgroundColor: '#f6fbf6',
+    borderRadius: 12,
   },
   questionText: {
     fontSize: 14,
-    color: '#666',
+    color: '#5f6d61',
     marginBottom: 8,
     fontStyle: 'italic',
   },
   answerText: {
     fontSize: 15,
     color: '#333',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  answerFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
   },
   dateText: {
     fontSize: 11,
     color: '#999',
-    marginTop: 8,
+    marginLeft: 6,
   },
-  actionsContainer: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 100,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ff6b6b',
-    borderRadius: 12,
-    paddingVertical: 15,
-    shadowColor: '#ff6b6b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  logoutText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
+  footerSpace: {
+    height: 60,
   },
 });
