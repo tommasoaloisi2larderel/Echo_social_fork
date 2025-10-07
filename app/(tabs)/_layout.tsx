@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs, usePathname } from "expo-router";
+import { Tabs, useLocalSearchParams, usePathname } from "expo-router";
 import { useState } from "react";
 import BottomBar from "../../components/BottomBar";
 
@@ -8,6 +8,7 @@ import BottomBar from "../../components/BottomBar";
 export default function TabsLayout() {
   const [chatText, setChatText] = useState("");
   const pathname = usePathname();
+  const { conversationId } = useLocalSearchParams();
   
   // Fonction pour envoyer un message (sera utilisée par la BottomBar en mode chat)
   const handleSendMessage = () => {
@@ -70,6 +71,7 @@ export default function TabsLayout() {
           name="conversation-detail"
           options={{
             headerTitle: "Conversation",
+            headerShown: false,
             tabBarIcon: ({focused, color}) => (
               <Ionicons 
                 name={focused ? "chat" : "chat-outline"} 
@@ -88,6 +90,7 @@ export default function TabsLayout() {
         setChatText={setChatText}
         chatRecipient={pathname.includes('conversation-detail') ? "Contact" : ""}
         onSendMessage={pathname.includes('conversation-detail') ? handleSendMessage : undefined}
+        conversationId={pathname.includes('conversation-detail') ? conversationId as string : undefined}
       />
     </>
   );
