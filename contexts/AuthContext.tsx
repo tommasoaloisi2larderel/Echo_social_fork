@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
@@ -26,6 +27,8 @@ interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   refreshToken: string | null;
+  loading: boolean;
+  isLoggedIn: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
@@ -41,18 +44,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Charger depuis SecureStore au démarrage
   useEffect(() => {
     const loadAuthData = async () => {
-      const storedAccessToken = await SecureStore.getItemAsync("accessToken");
-      const storedRefreshToken = await SecureStore.getItemAsync("refreshToken");
-      const storedUser = await SecureStore.getItemAsync("user");
+      try {
+        const storedAccessToken = await SecureStore.getItemAsync("accessToken");
+        const storedRefreshToken = await SecureStore.getItemAsync("refreshToken");
+        const storedUser = await SecureStore.getItemAsync("user");
 
-      if (storedAccessToken && storedRefreshToken && storedUser) {
-        setAccessToken(storedAccessToken);
-        setRefreshToken(storedRefreshToken);
-        setUser(JSON.parse(storedUser));
+        if (storedAccessToken && storedRefreshToken && storedUser) {
+          setAccessToken(storedAccessToken);
+          setRefreshToken(storedRefreshToken);
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.error("Error loading auth data:", error);
+      } finally {
+        setLoading(false);
       }
     };
     loadAuthData();
@@ -118,13 +128,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.warn("Erreur lors de la déconnexion:", error);
     }
 
+    // Clear state
     setUser(null);
     setAccessToken(null);
     setRefreshToken(null);
 
+    // Clear storage
     await SecureStore.deleteItemAsync("accessToken");
     await SecureStore.deleteItemAsync("refreshToken");
     await SecureStore.deleteItemAsync("user");
+
+    // Navigate to login
+    router.replace("/(auth)/login");
   };
 
   // 🔄 Refresh token si nécessaire
@@ -193,12 +208,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return response;
   };
 
+  const isLoggedIn = !!user && !!accessToken;
+
   return (
     <AuthContext.Provider
       value={{
         user,
         accessToken,
         refreshToken,
+        loading,
+        isLoggedIn,
         login,
         register,
         logout,
