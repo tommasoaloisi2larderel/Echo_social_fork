@@ -74,7 +74,7 @@ export default function TabsLayout() {
             headerShown: false,
             tabBarIcon: ({focused, color}) => (
               <Ionicons 
-                name={focused ? "chat" : "chat-outline"} 
+                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
                 color={color}  
                 size={24}
               />
