@@ -1,8 +1,7 @@
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -235,7 +234,7 @@ export default function CalendarScreen() {
         type: newType,
         is_all_day: false,
       };
-      const resp = await makeAuthenticatedRequest(`${API_BASE_URL}/calendrier/`, {
+      const resp = await makeAuthenticatedRequest(`${API_BASE_URL}/calendrier/events/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -298,7 +297,6 @@ export default function CalendarScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: 'Calendrier', headerShown: true }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={ECHO_COLOR} />
           <Text style={styles.loadingText}>Chargement du calendrier...</Text>
@@ -310,21 +308,6 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: 'Calendrier',
-          headerShown: true,
-          headerRight: () => (
-            <TouchableOpacity 
-              onPress={() => setShowCreate(true)}
-              style={styles.addButton}
-            >
-              <Ionicons name="add-circle-outline" size={28} color={ECHO_COLOR} />
-            </TouchableOpacity>
-          ),
-        }} 
-      />
-
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
@@ -370,6 +353,7 @@ export default function CalendarScreen() {
                       currentMonth.getMonth() === new Date().getMonth() &&
                       currentMonth.getFullYear() === new Date().getFullYear();
                     const count = day ? countEventsForDay(day) : 0;
+                    const isSelected = !!day && isSelectedDay(day);
                     return (
                       <TouchableOpacity
                         key={index}
@@ -382,10 +366,16 @@ export default function CalendarScreen() {
                           <>
                             <View style={[
                               styles.dayNumberWrap,
-                              isSelectedDay(day) ? styles.dayNumberSelected : undefined,
+                              isSelected ? styles.dayNumberSelected : undefined,
                               isToday ? styles.dayNumberToday : undefined,
                             ]}>
-                              <Text style={[styles.dayText, isSelectedDay(day) && styles.selectedDayText]}>{day}</Text>
+                              {isSelected ? (
+                                <TouchableOpacity onPress={() => setShowCreate(true)}>
+                                  <Ionicons name="add-circle" size={34} color="white" />
+                                </TouchableOpacity>
+                              ) : (
+                                <Text style={[styles.dayText, isSelected && styles.selectedDayText]}>{day}</Text>
+                              )}
                             </View>
                             {count > 0 && (
                               <View style={styles.dotsRow}>
@@ -466,54 +456,97 @@ function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEv
     return d;
   });
 
-  const slotH = 22; // px per hour
+  const slotH = 26; // px per hour (bigger for readability)
 
+  // Build events per day
   const eventsByDay = days.map((d) => {
     const key = d.toISOString().slice(0,10);
-    const list = events.filter((ev) => ev.date_debut.slice(0,10) === key);
-    return list;
+    return events.filter((ev) => ev.date_debut.slice(0,10) === key);
   });
 
+  // Scrolling to current time if this week is the current one
+  const scrollerRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const now = new Date();
+    const weekStart = new Date(startDate);
+    const weekEnd = new Date(startDate);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    if (now >= weekStart && now <= weekEnd) {
+      const targetY = Math.max(0, (now.getHours() + now.getMinutes() / 60) * slotH - 160);
+      scrollerRef.current?.scrollTo({ y: targetY, animated: true });
+    }
+  }, [startDate]);
+
+  // Helper for day label (Lun 09)
+  const dayLabel = (d: Date) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }).replace('.', '');
+
+  // Current time indicator within each column (only for today)
+  const now = new Date();
+  const todayIndex = days.findIndex((d) => d.toDateString() === now.toDateString());
+  const nowTop = (now.getHours() + now.getMinutes() / 60) * slotH;
+
   return (
-    <View style={styles.agendaContainer}>
-      <View style={styles.agendaHoursCol}>
-        {HOURS.map(h => (
-          <View key={h} style={[styles.agendaHour, { height: slotH }]}>
-            <Text style={styles.agendaHourText}>{h.toString().padStart(2,'0')}h</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.agendaDaysWrap}>
-        {days.map((d, colIdx) => (
-          <View key={colIdx} style={styles.agendaDayCol}>
-            {/* grid lines */}
-            {HOURS.map((h) => (
-              <View key={h} style={[styles.agendaLine, { height: slotH }]} />
-            ))}
-            {/* events absolute */}
-            <View style={StyleSheet.absoluteFillObject}>
-              {eventsByDay[colIdx].map((ev, i) => {
-                const start = new Date(ev.date_debut);
-                const end = new Date(ev.date_fin);
-                const startHour = start.getHours() + start.getMinutes()/60;
-                const endHour = end.getHours() + end.getMinutes()/60;
-                const top = startHour * slotH;
-                const height = Math.max(slotH * (endHour - startHour), 18);
-                return (
-                  <View key={i} style={[styles.agendaEvent, { top, height, backgroundColor: EVENT_TYPES_COLORS[ev.type] || '#6a6a6a' }]}> 
-                    <Text style={styles.agendaEventTitle} numberOfLines={1}>{ev.titre}</Text>
-                    {!ev.is_all_day && (
-                      <Text style={styles.agendaEventTime} numberOfLines={1}>
-                        {start.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
+    <View>
+      {/* Header for week days */}
+      <View style={styles.agendaWeekHeader}>
+        <View style={styles.agendaHoursCol} />
+        <View style={styles.agendaDaysHeaderRow}>
+          {days.map((d, i) => (
+            <View key={i} style={styles.agendaDayHeaderCell}>
+              <Text style={styles.agendaDayHeaderText}>{dayLabel(d)}</Text>
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
       </View>
+
+      <ScrollView ref={scrollerRef} style={{ maxHeight: 7 * slotH + 260 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.agendaContainer}>
+          <View style={styles.agendaHoursCol}>
+            {HOURS.map(h => (
+              <View key={h} style={[styles.agendaHour, { height: slotH }] }>
+                <Text style={styles.agendaHourText}>{h.toString().padStart(2,'0')}h</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.agendaDaysWrap}>
+            {days.map((d, colIdx) => (
+              <View key={colIdx} style={styles.agendaDayCol}>
+                {/* grid lines */}
+                {HOURS.map((h) => (
+                  <View key={h} style={[styles.agendaLine, { height: slotH }]} />
+                ))}
+
+                {/* red current-time line for today */}
+                {todayIndex === colIdx && (
+                  <View style={[styles.nowLine, { top: nowTop }]} />
+                )}
+
+                {/* events absolute */}
+                <View style={StyleSheet.absoluteFillObject}>
+                  {eventsByDay[colIdx].map((ev, i) => {
+                    const start = new Date(ev.date_debut);
+                    const end = new Date(ev.date_fin);
+                    const startHour = start.getHours() + start.getMinutes()/60;
+                    const endHour = end.getHours() + end.getMinutes()/60;
+                    const top = startHour * slotH;
+                    const height = Math.max(slotH * (endHour - startHour), 22);
+                    return (
+                      <View key={i} style={[styles.agendaEvent, { top, height, backgroundColor: EVENT_TYPES_COLORS[ev.type] || '#6a6a6a' }]}> 
+                        <Text style={styles.agendaEventTitle} numberOfLines={1}>{ev.titre}</Text>
+                        {!ev.is_all_day && (
+                          <Text style={styles.agendaEventTime} numberOfLines={1}>
+                            {start.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -782,4 +815,9 @@ const styles = StyleSheet.create({
   typeChipActive: { backgroundColor: THEME.green },
   typeChipText: { color: THEME.green, fontWeight: '700' },
   typeChipTextActive: { color: '#fff' },
+  agendaWeekHeader: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#e8e8e8' },
+  agendaDaysHeaderRow: { flex: 1, flexDirection: 'row' },
+  agendaDayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8e8e8' },
+  agendaDayHeaderText: { fontSize: 12, fontWeight: '700', color: '#2e2e2e' },
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#e53935' },
 });
