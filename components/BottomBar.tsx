@@ -1,6 +1,10 @@
 import { router } from "expo-router";
+import { useRef } from "react";
 import {
+  Animated,
+  Dimensions,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Text,
   TextInput,
@@ -31,8 +35,62 @@ export default function BottomBar({
   const isChat = currentRoute.includes("conversation-detail");
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   
+  // Dimensions de l'écran
+  const screenHeight = Dimensions.get('window').height;
+  
+  // Animation pour le panneau coulissant
+  const panelHeight = useRef(new Animated.Value(0)).current;
+  const isPanelOpen = useRef(false);
+  
   // Debug: vérifier que isChat fonctionne
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
+  
+  // PanResponder pour gérer le swipe
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Activer seulement pour les mouvements verticaux significatifs
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Limiter le mouvement vers le haut seulement
+        if (gestureState.dy < 0) {
+          const newHeight = Math.min(Math.abs(gestureState.dy), screenHeight * 0.7);
+          panelHeight.setValue(newHeight);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // Si on a swipé assez haut, ouvrir complètement le panneau
+        if (Math.abs(gestureState.dy) > 100) {
+          openPanel();
+        } else {
+          closePanel();
+        }
+      },
+    })
+  ).current;
+
+  // Fonctions pour ouvrir/fermer le panneau
+  const openPanel = () => {
+    isPanelOpen.current = true;
+    Animated.spring(panelHeight, {
+      toValue: screenHeight * 0.7,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 8,
+    }).start();
+  };
+
+  const closePanel = () => {
+    isPanelOpen.current = false;
+    Animated.spring(panelHeight, {
+      toValue: 0,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 8,
+    }).start();
+  };
 
   // Fonction pour envoyer un message
   const handleSendMessage = async () => {
@@ -78,11 +136,91 @@ export default function BottomBar({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={0}
-    >
-      <View style={styles.bottomBar}>
+    <>
+      {/* Panneau coulissant pour la gestion des agents IA */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: panelHeight,
+          backgroundColor: 'white',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+          elevation: 10,
+          zIndex: 999,
+        }}
+      >
+        {/* Header du panneau avec poignée */}
+        <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+          <View style={{
+            width: 40,
+            height: 4,
+            backgroundColor: '#ccc',
+            borderRadius: 2,
+            alignSelf: 'center',
+            marginBottom: 15,
+          }} />
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
+            Gestion des Agents IA
+          </Text>
+        </View>
+        
+        {/* Contenu du panneau */}
+        <View style={{ flex: 1, padding: 20 }}>
+          <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
+            Configurez vos agents IA pour personnaliser leurs comportements et interactions.
+          </Text>
+          
+          {/* Liste des agents IA (à implémenter) */}
+          <View style={{ 
+            backgroundColor: '#f5f5f5', 
+            padding: 15, 
+            borderRadius: 10,
+            marginBottom: 15,
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
+              Assistant personnel intelligent
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={{
+              backgroundColor: 'rgba(55, 116, 69, 1)',
+              padding: 15,
+              borderRadius: 10,
+              alignItems: 'center',
+              marginTop: 20,
+            }}
+            onPress={closePanel}
+          >
+            <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.bottomBar} {...panResponder.panHandlers}>
+        {/* Indicateur de swipe */}
+        <View style={{
+          width: 40,
+          height: 4,
+          backgroundColor: 'rgba(200, 200, 200, 0.6)',
+          borderRadius: 2,
+          alignSelf: 'center',
+          marginBottom: 8,
+          marginTop: 5,
+        }} />
+        
         {/* Champ de saisie avec bouton d'envoi */}
         <View style={styles.chatSection}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -161,7 +299,8 @@ export default function BottomBar({
             </TouchableOpacity>
           </View>
         )}
-      </View>
-    </KeyboardAvoidingView>
+        </View>
+      </KeyboardAvoidingView>
+    </>
   );
 }
