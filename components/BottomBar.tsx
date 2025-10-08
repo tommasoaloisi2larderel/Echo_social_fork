@@ -39,7 +39,8 @@ export default function BottomBar({
   const screenHeight = Dimensions.get('window').height;
   
   // Animation pour le panneau coulissant
-  const panelHeight = useRef(new Animated.Value(0)).current;
+  // Commencer avec une valeur négative pour cacher le panneau (hauteur de la BottomBar ~ -150)
+  const panelHeight = useRef(new Animated.Value(-screenHeight * 0.7)).current;
   const isPanelOpen = useRef(false);
   
   // Debug: vérifier que isChat fonctionne
@@ -57,14 +58,13 @@ export default function BottomBar({
         if (isPanelOpen.current) {
           // Si le panneau est ouvert, permettre de le fermer en swipant vers le bas
           if (gestureState.dy > 0) {
-            const currentHeight = screenHeight * 0.7;
-            const newHeight = Math.max(0, currentHeight - gestureState.dy);
+            const newHeight = Math.max(-screenHeight * 0.7, -gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         } else {
           // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
           if (gestureState.dy < 0) {
-            const newHeight = Math.min(Math.abs(gestureState.dy), screenHeight * 0.7);
+            const newHeight = Math.max(-screenHeight * 0.7, gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         }
@@ -93,7 +93,7 @@ export default function BottomBar({
   const openPanel = () => {
     isPanelOpen.current = true;
     Animated.spring(panelHeight, {
-      toValue: screenHeight * 0.7,
+      toValue: 0, // Position ouverte : bottom à 0
       useNativeDriver: false,
       tension: 50,
       friction: 8,
@@ -103,7 +103,7 @@ export default function BottomBar({
   const closePanel = () => {
     isPanelOpen.current = false;
     Animated.spring(panelHeight, {
-      toValue: 0,
+      toValue: -screenHeight * 0.7, // Position fermée : bottom à -70% de l'écran
       useNativeDriver: false,
       tension: 50,
       friction: 8,
@@ -160,8 +160,8 @@ export default function BottomBar({
         style={{
           position: 'absolute',
           bottom: panelHeight.interpolate({
-            inputRange: [0, screenHeight * 0.7],
-            outputRange: [0, screenHeight * 0.7],
+            inputRange: [-screenHeight * 0.7, 0],
+            outputRange: [-screenHeight * 0.7, 0],
           }),
           left: 0,
           right: 0,
