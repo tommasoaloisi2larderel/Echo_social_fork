@@ -39,8 +39,8 @@ export default function BottomBar({
   const screenHeight = Dimensions.get('window').height;
   
   // Animation pour le panneau coulissant
-  // Commencer avec une valeur négative pour cacher le panneau (hauteur de la BottomBar ~ -150)
-  const panelHeight = useRef(new Animated.Value(-screenHeight * 0.7)).current;
+  // Commencer avec une valeur négative pour cacher le panneau
+  const panelHeight = useRef(new Animated.Value(-screenHeight * 0.9)).current;
   const isPanelOpen = useRef(false);
   
   // Debug: vérifier que isChat fonctionne
@@ -55,19 +55,21 @@ export default function BottomBar({
         return Math.abs(gestureState.dy) > 10;
       },
       onPanResponderMove: (_, gestureState) => {
+        const maxPanelHeight = screenHeight * 0.9;
+        
         if (isPanelOpen.current) {
           // Si le panneau est ouvert, permettre de le fermer en swipant vers le bas
           if (gestureState.dy > 0) {
-            // Partir de 0 (ouvert) et descendre vers -70% (fermé)
-            const newHeight = Math.max(-screenHeight * 0.7, -gestureState.dy);
+            // Partir de 0 (ouvert) et descendre vers -90% (fermé)
+            const newHeight = Math.max(-maxPanelHeight, 0 - gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         } else {
           // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
           if (gestureState.dy < 0) {
-            // Partir de -70% (fermé) et monter vers 0 (ouvert)
-            // Même logique que la descente mais inversée
-            const newHeight = Math.min(0, gestureState.dy);
+            // Partir de -90% (fermé) et monter progressivement vers 0 (ouvert)
+            // On ajoute la distance du swipe à la position de départ
+            const newHeight = Math.min(0, -maxPanelHeight - gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         }
@@ -106,7 +108,7 @@ export default function BottomBar({
   const closePanel = () => {
     isPanelOpen.current = false;
     Animated.spring(panelHeight, {
-      toValue: -screenHeight * 0.7, // Position fermée : bottom à -70% de l'écran
+      toValue: -screenHeight * 0.9, // Position fermée : bottom à -90% de l'écran
       useNativeDriver: false,
       tension: 50,
       friction: 8,
@@ -163,8 +165,8 @@ export default function BottomBar({
         style={{
           position: 'absolute',
           bottom: panelHeight.interpolate({
-            inputRange: [-screenHeight * 0.7, 0],
-            outputRange: [-screenHeight * 0.7, 0],
+            inputRange: [-screenHeight * 0.9, 0],
+            outputRange: [-screenHeight * 0.9, 0],
           }),
           left: 0,
           right: 0,
@@ -272,7 +274,7 @@ export default function BottomBar({
         {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
         <View
           style={{
-            height: screenHeight * 0.7,
+            height: screenHeight * 0.9,
             backgroundColor: 'white',
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
