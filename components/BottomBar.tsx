@@ -163,7 +163,7 @@ export default function BottomBar({
             backgroundColor: 'rgba(200, 200, 200, 0.65)',
             borderRadius: 3,
             alignSelf: 'center',
-            marginBottom: 10,
+            marginBottom: 6,
             marginTop: 6,
           }} />
         </View>

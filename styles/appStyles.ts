@@ -242,7 +242,7 @@ export const styles = StyleSheet.create({
   notificationButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: WHITE,
+    backgroundColor: "rgba(240, 240, 240, 0.2)",
     borderRadius: 15,
     paddingVertical: 15,
     paddingHorizontal: 15,
@@ -318,7 +318,7 @@ export const styles = StyleSheet.create({
     borderTopRightRadius: 42,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 20,
     shadowColor: "rgba(250, 250, 250, 0.2)", 
     shadowOpacity: 0.6, 
