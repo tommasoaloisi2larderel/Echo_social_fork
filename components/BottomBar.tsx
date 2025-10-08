@@ -66,7 +66,8 @@ export default function BottomBar({
           // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
           if (gestureState.dy < 0) {
             // Partir de -70% (fermé) et monter vers 0 (ouvert)
-            const newHeight = Math.min(0, -screenHeight * 0.7 + Math.abs(gestureState.dy));
+            // Même logique que la descente mais inversée
+            const newHeight = Math.min(0, gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         }
