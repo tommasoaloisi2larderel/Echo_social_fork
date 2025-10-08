@@ -143,7 +143,7 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/events' as any)}>
               <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Événements</Text>
+              <Text style={styles.quickStatLabel}>Calendrier</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/stats' as any)}>
               <Ionicons name="bar-chart-outline" size={18} color={ECHO_COLOR} />
