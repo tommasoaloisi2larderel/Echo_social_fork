@@ -168,57 +168,7 @@ export default function BottomBar({
           zIndex: 999,
         }}
       >
-        {/* Panneau coulissant pour la gestion des agents IA - au dessus de la barre */}
-        <View
-          style={{
-            height: screenHeight * 0.7,
-            backgroundColor: 'white',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 10,
-            elevation: 10,
-          }}
-        >
-          {/* Header du panneau avec poignée */}
-          <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
-            <View style={{
-              width: 40,
-              height: 4,
-              backgroundColor: '#ccc',
-              borderRadius: 2,
-              alignSelf: 'center',
-              marginBottom: 15,
-            }} />
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
-              Gestion des Agents IA
-            </Text>
-          </View>
-          
-          {/* Contenu du panneau */}
-          <View style={{ flex: 1, padding: 20 }}>
-            <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
-              Configurez vos agents IA pour personnaliser leurs comportements et interactions.
-            </Text>
-            
-            {/* Liste des agents IA (à implémenter) */}
-            <View style={{ 
-              backgroundColor: '#f5f5f5', 
-              padding: 15, 
-              borderRadius: 10,
-              marginBottom: 15,
-            }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
-              <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
-                Assistant personnel intelligent
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* BottomBar - toujours visible en bas du conteneur */}
+        {/* BottomBar - toujours visible en haut du conteneur (fait aussi office de header) */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
@@ -315,6 +265,40 @@ export default function BottomBar({
         )}
           </View>
         </KeyboardAvoidingView>
+
+        {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
+        <View
+          style={{
+            height: screenHeight * 0.7,
+            backgroundColor: 'white',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 10,
+            elevation: 10,
+          }}
+        >
+          {/* Contenu du panneau */}
+          <View style={{ flex: 1, padding: 20 }}>
+            
+            <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
+              Configurez vos agents IA pour personnaliser leurs comportements et interactions.
+            </Text>
+            
+            {/* Liste des agents IA (à implémenter) */}
+            <View style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: 15, 
+              borderRadius: 10,
+              marginBottom: 15,
+            }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
+              <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
+                Assistant personnel intelligent
+              </Text>
+            </View>
+          </View>
+        </View>
       </Animated.View>
     </>
   );
