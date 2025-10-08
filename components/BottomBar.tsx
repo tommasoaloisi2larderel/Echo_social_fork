@@ -58,13 +58,15 @@ export default function BottomBar({
         if (isPanelOpen.current) {
           // Si le panneau est ouvert, permettre de le fermer en swipant vers le bas
           if (gestureState.dy > 0) {
+            // Partir de 0 (ouvert) et descendre vers -70% (fermé)
             const newHeight = Math.max(-screenHeight * 0.7, -gestureState.dy);
             panelHeight.setValue(newHeight);
           }
         } else {
           // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
           if (gestureState.dy < 0) {
-            const newHeight = Math.max(-screenHeight * 0.7, gestureState.dy);
+            // Partir de -70% (fermé) et monter vers 0 (ouvert)
+            const newHeight = Math.min(0, -screenHeight * 0.7 + Math.abs(gestureState.dy));
             panelHeight.setValue(newHeight);
           }
         }
