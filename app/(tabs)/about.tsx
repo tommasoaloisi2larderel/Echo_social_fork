@@ -140,7 +140,7 @@ export default function ProfileScreen() {
               <Text style={styles.quickStatNum}>{(user as any)?.nb_amis ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/events' as any)}>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
               <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Calendrier</Text>

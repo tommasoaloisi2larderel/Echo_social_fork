@@ -46,7 +46,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Charger depuis SecureStore au démarrage
   useEffect(() => {
     const loadAuthData = async () => {
       try {
@@ -68,7 +67,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loadAuthData();
   }, []);
 
-  // 🔑 Login
   const login = async (username: string, password: string) => {
     const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
       method: "POST",
@@ -77,7 +75,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     if (!response.ok) {
-      throw new Error("Échec de la connexion");
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || errorData.error || "Échec de la connexion";
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -91,8 +91,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.setItemAsync("user", JSON.stringify(data.user));
   };
 
-  // 📝 Register
   const register = async (formData: Record<string, any>) => {
+    // Django requires password confirmation
+    if (formData.password && !formData.password2) {
+      formData.password2 = formData.password;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/auth/register/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,7 +104,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     if (!response.ok) {
-      throw new Error("Échec de l'inscription");
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle field-specific errors
+      if (errorData.username) {
+        const msg = Array.isArray(errorData.username) ? errorData.username.join(', ') : errorData.username;
+        throw new Error(`Nom d'utilisateur: ${msg}`);
+      }
+      if (errorData.email) {
+        const msg = Array.isArray(errorData.email) ? errorData.email.join(', ') : errorData.email;
+        throw new Error(`Email: ${msg}`);
+      }
+      if (errorData.password) {
+        const msg = Array.isArray(errorData.password) ? errorData.password.join(', ') : errorData.password;
+        throw new Error(`Mot de passe: ${msg}`);
+      }
+      
+      const errorMessage = errorData.detail || errorData.error || "Échec de l'inscription";
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -114,7 +135,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.setItemAsync("user", JSON.stringify(data.user));
   };
 
-  // 🚪 Logout
   const logout = async () => {
     try {
       if (refreshToken) {
@@ -128,21 +148,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.warn("Erreur lors de la déconnexion:", error);
     }
 
-    // Clear state
     setUser(null);
     setAccessToken(null);
     setRefreshToken(null);
 
-    // Clear storage
     await SecureStore.deleteItemAsync("accessToken");
     await SecureStore.deleteItemAsync("refreshToken");
     await SecureStore.deleteItemAsync("user");
 
-    // Navigate to login
     router.replace("/(auth)/login");
   };
 
-  // 🔄 Refresh token si nécessaire
   const refreshAccessToken = async (): Promise<string | null> => {
     if (!refreshToken) return null;
 
@@ -153,25 +169,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify({ refresh: refreshToken }),
       });
 
-      if (!response.ok) {
-        console.log("❌ Refresh échoué:", response.status);
-        return null;
-      }
+      if (!response.ok) return null;
 
       const data = await response.json();
-      console.log("✅ Nouveau token reçu:", data.access);
 
       setAccessToken(data.access);
       await SecureStore.setItemAsync("accessToken", data.access);
 
       return data.access;
     } catch (error) {
-      console.error("❌ Erreur lors du refresh:", error);
+      console.error("Erreur refresh token:", error);
       return null;
     }
   };
 
-  // ⚡️ Requêtes protégées
   const makeAuthenticatedRequest = async (
     url: string,
     options: RequestInit = {}
@@ -187,11 +198,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     if (response.status === 401) {
-      console.log("⚠️ Token expiré, tentative de refresh...");
-
       const newToken = await refreshAccessToken();
       if (!newToken) {
-        console.log("❌ Refresh impossible, déconnexion");
         await logout();
         throw new Error("Session expirée, veuillez vous reconnecter");
       }
