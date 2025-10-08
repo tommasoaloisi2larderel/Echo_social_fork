@@ -1,4 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useRef, useState } from "react";
 import {
   Animated,
@@ -193,7 +195,16 @@ export default function BottomBar({
               onPress={handleSendMessage}
               disabled={!chatText.trim()}
             >
-              <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>➤</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="arrow.up.circle.fill"
+                  size={20}
+                  tintColor="white"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="send" size={18} color="white" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -205,21 +216,48 @@ export default function BottomBar({
               style={styles.navButton}
               onPress={() => console.log('Ajouter un fichier')}
             >
-              <Text style={styles.navText}>file</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="doc.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="document" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.navButton}
               onPress={() => console.log('Prendre une photo')}
             >
-              <Text style={styles.navText}>pic</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="camera.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="camera" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.navButton}
               onPress={() => console.log('Message vocal')}
             >
-              <Text style={styles.navText}>voc</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="mic.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="mic" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
           </View>
         ) : (
@@ -228,21 +266,48 @@ export default function BottomBar({
               style={styles.navButton}
               onPress={() => router.push("/(tabs)/conversations")}
             >
-              <Text style={styles.navText}>Chats</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="bubble.left.and.bubble.right.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="chatbubbles" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.navButton}
               onPress={() => router.push("/(tabs)")}
             >
-              <Text style={styles.navText}>Home</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="house.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="home" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.navButton}
               onPress={() => router.push("/(tabs)/about")}
             >
-              <Text style={styles.navText}>Profile</Text>
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="person.circle.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.8)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="person-circle" size={22} color="rgba(240, 240, 240, 0.8)" />
+              )}
             </TouchableOpacity>
           </View>
         )}
