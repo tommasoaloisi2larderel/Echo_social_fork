@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -37,11 +37,15 @@ export default function BottomBar({
   
   // Dimensions de l'écran
   const screenHeight = Dimensions.get('window').height;
-  
-  // Animation pour le panneau coulissant
-  // Commencer avec une valeur négative pour cacher le panneau
-  const panelHeight = useRef(new Animated.Value(-screenHeight * 0.9)).current;
+  // hauteur de l'espace panneau (90% de l'écran)
+  const MAX_TRANSLATE = screenHeight * 0.75; // hauteur du panneau
+
+  // translateY du panneau: 0 = ouvert, MAX_TRANSLATE = fermé (caché sous la barre)
+  const sheetY = useRef(new Animated.Value(MAX_TRANSLATE)).current;
   const isPanelOpen = useRef(false);
+  const dragStartY = useRef(0);
+
+  const [barHeight, setBarHeight] = useState(96); // default, will be measured
   
   // Debug: vérifier que isChat fonctionne
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
@@ -50,46 +54,21 @@ export default function BottomBar({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Activer seulement pour les mouvements verticaux significatifs
-        return Math.abs(gestureState.dy) > 10;
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderGrant: () => {
+        // @ts-ignore
+        dragStartY.current = (sheetY as any)._value ?? MAX_TRANSLATE;
       },
-      onPanResponderMove: (_, gestureState) => {
-        const maxPanelHeight = screenHeight * 0.9;
-        
-        if (isPanelOpen.current) {
-          // Si le panneau est ouvert, permettre de le fermer en swipant vers le bas
-          if (gestureState.dy > 0) {
-            // Partir de 0 (ouvert) et descendre vers -90% (fermé)
-            const newHeight = Math.max(-maxPanelHeight, 0 - gestureState.dy);
-            panelHeight.setValue(newHeight);
-          }
-        } else {
-          // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
-          if (gestureState.dy < 0) {
-            // Partir de -90% (fermé) et monter progressivement vers 0 (ouvert)
-            // On ajoute la distance du swipe à la position de départ
-            const newHeight = Math.min(0, -maxPanelHeight - gestureState.dy);
-            panelHeight.setValue(newHeight);
-          }
-        }
+      onPanResponderMove: (_, g) => {
+        const next = dragStartY.current + g.dy; // dy>0 vers le bas
+        const clamped = Math.max(0, Math.min(MAX_TRANSLATE, next));
+        sheetY.setValue(clamped);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        if (isPanelOpen.current) {
-          // Si le panneau est ouvert et qu'on swipe vers le bas assez loin, fermer
-          if (gestureState.dy > 100) {
-            closePanel();
-          } else {
-            openPanel(); // Retourner à la position ouverte
-          }
-        } else {
-          // Si le panneau est fermé et qu'on swipe vers le haut assez loin, ouvrir
-          if (Math.abs(gestureState.dy) > 100 && gestureState.dy < 0) {
-            openPanel();
-          } else {
-            closePanel(); // Retourner à la position fermée
-          }
-        }
+      onPanResponderRelease: (_, g) => {
+        // @ts-ignore
+        const current = (sheetY as any)._value ?? MAX_TRANSLATE;
+        const shouldOpen = current < MAX_TRANSLATE / 2 || g.vy < -0.5;
+        if (shouldOpen) openPanel(); else closePanel();
       },
     })
   ).current;
@@ -97,22 +76,11 @@ export default function BottomBar({
   // Fonctions pour ouvrir/fermer le panneau
   const openPanel = () => {
     isPanelOpen.current = true;
-    Animated.spring(panelHeight, {
-      toValue: 0, // Position ouverte : bottom à 0
-      useNativeDriver: false,
-      tension: 50,
-      friction: 8,
-    }).start();
+    Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
   };
-
   const closePanel = () => {
     isPanelOpen.current = false;
-    Animated.spring(panelHeight, {
-      toValue: -screenHeight * 0.9, // Position fermée : bottom à -90% de l'écran
-      useNativeDriver: false,
-      tension: 50,
-      friction: 8,
-    }).start();
+    Animated.spring(sheetY, { toValue: MAX_TRANSLATE, useNativeDriver: true, tension: 60, friction: 10 }).start();
   };
 
   // Fonction pour envoyer un message
@@ -160,35 +128,45 @@ export default function BottomBar({
 
   return (
     <>
-      {/* Conteneur animé qui contient à la fois le panneau et la BottomBar */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          bottom: panelHeight.interpolate({
-            inputRange: [-screenHeight * 0.9, 0],
-            outputRange: [-screenHeight * 0.9, 0],
-          }),
-          left: 0,
-          right: 0,
-          zIndex: 999,
-        }}
+      <View
+        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999 }}
       >
-        {/* BottomBar - toujours visible en haut du conteneur (fait aussi office de header) */}
+
+        {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
+        <Animated.View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: MAX_TRANSLATE,
+            backgroundColor: 'white',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 10,
+            elevation: 10,
+            transform: [{ translateY: sheetY }],
+          }}
+        >
+          {/* BottomBar - toujours visible en haut du conteneur (fait aussi office de header) */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
         >
-          <View style={styles.bottomBar} {...panResponder.panHandlers}>
-        {/* Indicateur de swipe */}
-        <View style={{
-          width: 40,
-          height: 4,
-          backgroundColor: 'rgba(200, 200, 200, 0.6)',
-          borderRadius: 2,
-          alignSelf: 'center',
-          marginBottom: 8,
-          marginTop: 5,
-        }} />
+          <View style={styles.bottomBar} onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}>
+        {/* Indicateur de swipe (zone de saisie du geste) */}
+        <View {...panResponder.panHandlers}>
+          <View style={{
+            width: 44,
+            height: 6,
+            backgroundColor: 'rgba(200, 200, 200, 0.65)',
+            borderRadius: 3,
+            alignSelf: 'center',
+            marginBottom: 10,
+            marginTop: 6,
+          }} />
+        </View>
         
         {/* Champ de saisie avec bouton d'envoi */}
         <View style={styles.chatSection}>
@@ -271,18 +249,6 @@ export default function BottomBar({
           </View>
         </KeyboardAvoidingView>
 
-        {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
-        <View
-          style={{
-            height: screenHeight * 0.9,
-            backgroundColor: 'white',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 10,
-            elevation: 10,
-          }}
-        >
           {/* Contenu du panneau */}
           <View style={{ flex: 1, padding: 20 }}>
             
@@ -303,8 +269,8 @@ export default function BottomBar({
               </Text>
             </View>
           </View>
-        </View>
-      </Animated.View>
+        </Animated.View>
+      </View>
     </>
   );
 }
