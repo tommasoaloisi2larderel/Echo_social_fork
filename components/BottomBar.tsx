@@ -159,17 +159,19 @@ export default function BottomBar({
       <Animated.View
         style={{
           position: 'absolute',
-          bottom: 0,
+          bottom: panelHeight.interpolate({
+            inputRange: [0, screenHeight * 0.7],
+            outputRange: [0, screenHeight * 0.7],
+          }),
           left: 0,
           right: 0,
-          height: Animated.add(panelHeight, 150), // 150 est approximativement la hauteur de la BottomBar
           zIndex: 999,
         }}
       >
-        {/* Panneau coulissant pour la gestion des agents IA */}
+        {/* Panneau coulissant pour la gestion des agents IA - au dessus de la barre */}
         <View
           style={{
-            flex: 1,
+            height: screenHeight * 0.7,
             backgroundColor: 'white',
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
@@ -179,7 +181,6 @@ export default function BottomBar({
             shadowRadius: 10,
             elevation: 10,
           }}
-          {...panResponder.panHandlers}
         >
           {/* Header du panneau avec poignée */}
           <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
@@ -217,12 +218,12 @@ export default function BottomBar({
           </View>
         </View>
 
-        {/* BottomBar au bas du conteneur animé */}
+        {/* BottomBar - toujours visible en bas du conteneur */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
         >
-          <View style={styles.bottomBar}>
+          <View style={styles.bottomBar} {...panResponder.panHandlers}>
         {/* Indicateur de swipe */}
         <View style={{
           width: 40,
