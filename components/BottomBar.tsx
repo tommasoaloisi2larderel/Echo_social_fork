@@ -54,18 +54,36 @@ export default function BottomBar({
         return Math.abs(gestureState.dy) > 10;
       },
       onPanResponderMove: (_, gestureState) => {
-        // Limiter le mouvement vers le haut seulement
-        if (gestureState.dy < 0) {
-          const newHeight = Math.min(Math.abs(gestureState.dy), screenHeight * 0.7);
-          panelHeight.setValue(newHeight);
+        if (isPanelOpen.current) {
+          // Si le panneau est ouvert, permettre de le fermer en swipant vers le bas
+          if (gestureState.dy > 0) {
+            const currentHeight = screenHeight * 0.7;
+            const newHeight = Math.max(0, currentHeight - gestureState.dy);
+            panelHeight.setValue(newHeight);
+          }
+        } else {
+          // Si le panneau est fermé, permettre de l'ouvrir en swipant vers le haut
+          if (gestureState.dy < 0) {
+            const newHeight = Math.min(Math.abs(gestureState.dy), screenHeight * 0.7);
+            panelHeight.setValue(newHeight);
+          }
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Si on a swipé assez haut, ouvrir complètement le panneau
-        if (Math.abs(gestureState.dy) > 100) {
-          openPanel();
+        if (isPanelOpen.current) {
+          // Si le panneau est ouvert et qu'on swipe vers le bas assez loin, fermer
+          if (gestureState.dy > 100) {
+            closePanel();
+          } else {
+            openPanel(); // Retourner à la position ouverte
+          }
         } else {
-          closePanel();
+          // Si le panneau est fermé et qu'on swipe vers le haut assez loin, ouvrir
+          if (Math.abs(gestureState.dy) > 100 && gestureState.dy < 0) {
+            openPanel();
+          } else {
+            closePanel(); // Retourner à la position fermée
+          }
         }
       },
     })
@@ -137,79 +155,74 @@ export default function BottomBar({
 
   return (
     <>
-      {/* Panneau coulissant pour la gestion des agents IA */}
+      {/* Conteneur animé qui contient à la fois le panneau et la BottomBar */}
       <Animated.View
         style={{
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: panelHeight,
-          backgroundColor: 'white',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 10,
-          elevation: 10,
+          height: Animated.add(panelHeight, 150), // 150 est approximativement la hauteur de la BottomBar
           zIndex: 999,
         }}
       >
-        {/* Header du panneau avec poignée */}
-        <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
-          <View style={{
-            width: 40,
-            height: 4,
-            backgroundColor: '#ccc',
-            borderRadius: 2,
-            alignSelf: 'center',
-            marginBottom: 15,
-          }} />
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
-            Gestion des Agents IA
-          </Text>
-        </View>
-        
-        {/* Contenu du panneau */}
-        <View style={{ flex: 1, padding: 20 }}>
-          <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
-            Configurez vos agents IA pour personnaliser leurs comportements et interactions.
-          </Text>
-          
-          {/* Liste des agents IA (à implémenter) */}
-          <View style={{ 
-            backgroundColor: '#f5f5f5', 
-            padding: 15, 
-            borderRadius: 10,
-            marginBottom: 15,
-          }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
-            <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
-              Assistant personnel intelligent
+        {/* Panneau coulissant pour la gestion des agents IA */}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'white',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 10,
+            elevation: 10,
+          }}
+          {...panResponder.panHandlers}
+        >
+          {/* Header du panneau avec poignée */}
+          <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+            <View style={{
+              width: 40,
+              height: 4,
+              backgroundColor: '#ccc',
+              borderRadius: 2,
+              alignSelf: 'center',
+              marginBottom: 15,
+            }} />
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
+              Gestion des Agents IA
             </Text>
           </View>
           
-          <TouchableOpacity
-            style={{
-              backgroundColor: 'rgba(55, 116, 69, 1)',
-              padding: 15,
+          {/* Contenu du panneau */}
+          <View style={{ flex: 1, padding: 20 }}>
+            <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
+              Configurez vos agents IA pour personnaliser leurs comportements et interactions.
+            </Text>
+            
+            {/* Liste des agents IA (à implémenter) */}
+            <View style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: 15, 
               borderRadius: 10,
-              alignItems: 'center',
-              marginTop: 20,
-            }}
-            onPress={closePanel}
-          >
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Fermer</Text>
-          </TouchableOpacity>
+              marginBottom: 15,
+            }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
+              <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
+                Assistant personnel intelligent
+              </Text>
+            </View>
+          </View>
         </View>
-      </Animated.View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.bottomBar} {...panResponder.panHandlers}>
+        {/* BottomBar au bas du conteneur animé */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.bottomBar}>
         {/* Indicateur de swipe */}
         <View style={{
           width: 40,
@@ -299,8 +312,9 @@ export default function BottomBar({
             </TouchableOpacity>
           </View>
         )}
-        </View>
-      </KeyboardAvoidingView>
+          </View>
+        </KeyboardAvoidingView>
+      </Animated.View>
     </>
   );
 }
