@@ -17,6 +17,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
 
@@ -47,18 +48,18 @@ const MONTHS = [
 ];
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']; // Monday -> Sunday (FR)
 const THEME = {
-  green: '#2e7d32',
-  greenSoft: '#e8f5e9',
-  text: '#333',
-  sub: '#666',
-  card: '#fff'
+  green: ECHO_COLOR,
+  greenSoft: '#f6fbf6',
+  text: '#375a3b',
+  sub: '#6b7c6d',
+  card: '#ffffff',
 };
 
 const EVENT_TYPES_COLORS: Record<string, string> = {
-  professionnel: '#2196F3',
-  personnel: '#4CAF50',
-  anniversaire: '#FF9800',
-  autre: '#9E9E9E',
+  professionnel: '#3a7d44', // deep moss
+  personnel: '#5aa469',     // fresh leaf
+  anniversaire: '#7fb685',   // soft mint
+  autre: '#9bb89f',          // sage gray‑green
 };
 
 export default function CalendarScreen() {
@@ -296,18 +297,18 @@ export default function CalendarScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={ECHO_COLOR} />
           <Text style={styles.loadingText}>Chargement du calendrier...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
@@ -444,7 +445,7 @@ export default function CalendarScreen() {
           </View>
         </Modal>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -554,7 +555,7 @@ function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEv
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: THEME.greenSoft,
   },
   scrollView: {
     flex: 1,
@@ -579,6 +580,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: THEME.card,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   navButton: {
     padding: 8,
@@ -586,7 +594,7 @@ const styles = StyleSheet.create({
   monthTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: THEME.text,
   },
   weekDaysHeader: {
     flexDirection: 'row',
@@ -594,14 +602,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: THEME.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#e6eee6',
   },
   weekDayText: {
     flex: 1,
     textAlign: 'center',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: '700',
+    color: THEME.sub,
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -616,30 +624,32 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: '14.28%',
-    height: 52,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingVertical: 4,
   },
   dayNumberWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e6eee6',
   },
   dayNumberSelected: {
     backgroundColor: ECHO_COLOR,
   },
   dayNumberToday: {
     borderWidth: 1.5,
-    borderColor: THEME.green,
+    borderColor: ECHO_COLOR,
     borderRadius: 17,
   },
   dayText: {
     fontSize: 14,
     color: THEME.text,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   selectedDayText: {
     color: 'white',
@@ -661,6 +671,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: THEME.sub,
     marginLeft: 2,
+    fontWeight: '700',
   },
   // (old filter styles kept harmless if referenced later; safe to remove if unused)
   filterRow: {
@@ -730,7 +741,7 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#999',
+    color: THEME.sub,
   },
   eventCard: {
     flexDirection: 'row',
@@ -755,12 +766,12 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.text,
     marginBottom: 4,
   },
   eventDescription: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.sub,
     marginBottom: 8,
   },
   eventMeta: {
@@ -773,7 +784,7 @@ const styles = StyleSheet.create({
   },
   eventMetaText: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.sub,
   },
   // Week agenda styles
   agendaContainer: {
@@ -781,21 +792,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e8e8e8',
+    borderColor: '#e6eee6',
   },
   agendaHoursCol: {
     width: 48,
-    backgroundColor: '#fafafa',
+    backgroundColor: '#f9fcf9',
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#e8e8e8',
+    borderRightColor: '#e6eee6',
   },
   agendaHour: { justifyContent: 'flex-start', paddingTop: 2, paddingHorizontal: 6 },
   agendaHourText: { fontSize: 10, color: '#7a7a7a' },
   agendaDaysWrap: { flex: 1, flexDirection: 'row' },
   agendaDayCol: { flex: 1, position: 'relative' },
-  agendaLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ededed' },
-  agendaEvent: { position: 'absolute', left: 4, right: 4, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4 },
-  agendaEventTitle: { color: 'white', fontSize: 11, fontWeight: '700' },
+  agendaLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef5ef' },
+  agendaEvent: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  agendaEventTitle: { color: 'white', fontSize: 12, fontWeight: '700' },
   agendaEventTime: { color: 'white', fontSize: 10, opacity: 0.9 },
   // Modal création
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
@@ -815,9 +838,9 @@ const styles = StyleSheet.create({
   typeChipActive: { backgroundColor: THEME.green },
   typeChipText: { color: THEME.green, fontWeight: '700' },
   typeChipTextActive: { color: '#fff' },
-  agendaWeekHeader: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#e8e8e8' },
+  agendaWeekHeader: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#e6eee6' },
   agendaDaysHeaderRow: { flex: 1, flexDirection: 'row' },
   agendaDayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8e8e8' },
   agendaDayHeaderText: { fontSize: 12, fontWeight: '700', color: '#2e2e2e' },
-  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#e53935' },
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: ECHO_COLOR },
 });
