@@ -1,8 +1,11 @@
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { storage } from "../utils/storage";
 
-const API_BASE_URL = "https://reseausocial-production.up.railway.app"
+// Utilise le proxy local pour éviter CORS en développement web
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? "http://localhost:3001"
+  : "https://reseausocial-production.up.railway.app"
 
 interface User {
   id: number;
@@ -49,9 +52,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const loadAuthData = async () => {
       try {
-        const storedAccessToken = await SecureStore.getItemAsync("accessToken");
-        const storedRefreshToken = await SecureStore.getItemAsync("refreshToken");
-        const storedUser = await SecureStore.getItemAsync("user");
+        const storedAccessToken = await storage.getItemAsync("accessToken");
+        const storedRefreshToken = await storage.getItemAsync("refreshToken");
+        const storedUser = await storage.getItemAsync("user");
 
         if (storedAccessToken && storedRefreshToken && storedUser) {
           setAccessToken(storedAccessToken);
@@ -86,9 +89,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setRefreshToken(data.refresh);
     setUser(data.user);
 
-    await SecureStore.setItemAsync("accessToken", data.access);
-    await SecureStore.setItemAsync("refreshToken", data.refresh);
-    await SecureStore.setItemAsync("user", JSON.stringify(data.user));
+    await storage.setItemAsync("accessToken", data.access);
+    await storage.setItemAsync("refreshToken", data.refresh);
+    await storage.setItemAsync("user", JSON.stringify(data.user));
   };
 
   const register = async (formData: Record<string, any>) => {
@@ -130,9 +133,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setRefreshToken(data.tokens.refresh);
     setUser(data.user);
 
-    await SecureStore.setItemAsync("accessToken", data.tokens.access);
-    await SecureStore.setItemAsync("refreshToken", data.tokens.refresh);
-    await SecureStore.setItemAsync("user", JSON.stringify(data.user));
+    await storage.setItemAsync("accessToken", data.tokens.access);
+    await storage.setItemAsync("refreshToken", data.tokens.refresh);
+    await storage.setItemAsync("user", JSON.stringify(data.user));
   };
 
   const logout = async () => {
@@ -152,9 +155,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setAccessToken(null);
     setRefreshToken(null);
 
-    await SecureStore.deleteItemAsync("accessToken");
-    await SecureStore.deleteItemAsync("refreshToken");
-    await SecureStore.deleteItemAsync("user");
+    await storage.deleteItemAsync("accessToken");
+    await storage.deleteItemAsync("refreshToken");
+    await storage.deleteItemAsync("user");
 
     router.replace("/(auth)/login");
   };
@@ -174,7 +177,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const data = await response.json();
 
       setAccessToken(data.access);
-      await SecureStore.setItemAsync("accessToken", data.access);
+      await storage.setItemAsync("accessToken", data.access);
 
       return data.access;
     } catch (error) {

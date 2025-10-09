@@ -17,7 +17,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 
-const API_BASE_URL = "https://reseausocial-production.up.railway.app";
+// Utilise le proxy local pour éviter CORS en développement web
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? "http://localhost:3001"
+  : "https://reseausocial-production.up.railway.app";
 
 type AuthMode = 'login' | 'register';
 type ErrorType = 'none' | 'wrong_password' | 'user_not_found' | 'other';
@@ -52,19 +55,20 @@ export default function AuthScreen() {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  const checkUsernameExists = async (usernameToCheck: string): Promise<boolean | null> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/exists/?username=${encodeURIComponent(usernameToCheck)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (typeof data.exists === 'boolean') return data.exists;
-      }
-      return null; // unknown
-    } catch (error) {
-      console.error('Error checking username:', error);
-      return null; // unknown
-    }
-  };
+  // Fonction désactivée car l'endpoint n'existe pas sur le serveur
+  // const checkUsernameExists = async (usernameToCheck: string): Promise<boolean | null> => {
+  //   try {
+  //     const response = await fetch(`${API_BASE_URL}/api/users/exists/?username=${encodeURIComponent(usernameToCheck)}`);
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       if (typeof data.exists === 'boolean') return data.exists;
+  //     }
+  //     return null; // unknown
+  //   } catch (error) {
+  //     console.error('Error checking username:', error);
+  //     return null; // unknown
+  //   }
+  // };
 
   const openReset = () => {
     setResetTarget(username.includes('@') ? username : '');
@@ -115,29 +119,27 @@ export default function AuthScreen() {
 
     try {
       if (mode === 'login') {
-        // 1) If username not in DB -> switch to register
-        const exists = await checkUsernameExists(u);
-        if (exists === false) {
-          setMode('register');
-          setErrorType('user_not_found');
-          setErrorMessage('Utilisateur non trouvé. Créons votre compte !');
-          return;
-        }
-
-        // 2) Username exists (or unknown) -> try to login
+        // Tentative de connexion directe
         await login(u, p);
         router.replace('/(tabs)');
         return;
       }
 
-      // 3) Register flow
+      // Register flow
       await register({ username: u, password: p, email: e });
       router.replace('/(tabs)');
     } catch (err) {
-      // For login failures at this point, we assume wrong password
+      // Pour les erreurs de connexion
       if (mode === 'login') {
-        setErrorType('wrong_password');
-        setErrorMessage('Mot de passe incorrect');
+        const errorMsg = err instanceof Error ? err.message : '';
+        // Si l'utilisateur n'existe pas, proposer de créer un compte
+        if (errorMsg.toLowerCase().includes('utilisateur') || errorMsg.toLowerCase().includes('user')) {
+          setErrorType('user_not_found');
+          setErrorMessage('Utilisateur non trouvé. Créez votre compte en cliquant sur "S\'inscrire"');
+        } else {
+          setErrorType('wrong_password');
+          setErrorMessage(errorMsg || 'Identifiants incorrects');
+        }
       } else {
         setErrorType('other');
         setErrorMessage(err instanceof Error ? err.message : 'Une erreur est survenue');
@@ -170,7 +172,7 @@ export default function AuthScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#e8f5e9', '#c8e6c9', '#a5d6a7', '#81c784']}
+        colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)', 'rgba(100, 200, 180, 1)', 'rgba(10, 145, 104, 0.8)']}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -266,7 +268,7 @@ export default function AuthScreen() {
                   <Ionicons 
                     name={errorType === 'user_not_found' ? 'information-circle' : 'alert-circle'} 
                     size={18} 
-                    color={errorType === 'user_not_found' ? '#2e7d32' : '#ff6b6b'}
+                    color={errorType === 'user_not_found' ? 'rgba(10, 145, 104, 1)' : '#ff6b6b'}
                   />
                   <Text style={[
                     styles.errorText,
@@ -363,10 +365,10 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: 'rgba(42, 136, 47, 0.35)',
+    backgroundColor: 'rgba(10, 145, 104, 0.25)',
     top: 60,
     left: -40,
-    shadowColor: '#66bb6a',
+    shadowColor: 'rgba(10, 145, 104, 0.5)',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -376,10 +378,10 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: 'rgba(97, 215, 101, 0.35)',
+    backgroundColor: 'rgba(10, 145, 104, 0.2)',
     bottom: -40,
     right: -60,
-    shadowColor: '#81c784',
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -440,11 +442,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#c8e6c9',
+    borderColor: 'rgba(200, 235, 225, 1)',
     borderRadius: 12,
     marginBottom: 15,
     paddingHorizontal: 15,
-    backgroundColor: '#f1f8e9',
+    backgroundColor: 'rgba(240, 250, 248, 1)',
   },
   inputIcon: {
     marginRight: 10,
@@ -467,7 +469,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   infoContainer: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: 'rgba(235, 248, 245, 1)',
   },
   errorText: {
     flex: 1,
@@ -476,26 +478,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   infoText: {
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 15,
   },
   forgotPasswordText: {
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
     fontSize: 14,
     fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
     borderRadius: 12,
     paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#2e7d32',
+    shadowColor: 'rgba(10, 145, 104, 0.6)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -522,7 +524,7 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   toggleButton: {
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -538,7 +540,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#2e7d32',
+    shadowColor: 'rgba(10, 145, 104, 0.6)',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -547,7 +549,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -555,10 +557,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#c8e6c9',
+    borderColor: 'rgba(200, 235, 225, 1)',
     borderRadius: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#f1f8e9',
+    backgroundColor: 'rgba(240, 250, 248, 1)',
     marginBottom: 12,
   },
   modalInput: {
@@ -575,14 +577,14 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    backgroundColor: '#2e7d32',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginLeft: 8,
   },
   modalCancel: {
-    backgroundColor: '#a5d6a7',
+    backgroundColor: 'rgba(100, 200, 180, 0.8)',
     marginLeft: 0,
     marginRight: 8,
   },
@@ -592,7 +594,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   modalSuccessText: {
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
     textAlign: 'center',
     marginBottom: 8,
   },

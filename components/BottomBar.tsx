@@ -186,8 +186,8 @@ export default function BottomBar({
             />
             <TouchableOpacity
               style={{
-                backgroundColor: chatText.trim() ? 'rgba(55, 116, 69, 1)' : 'rgba(200, 200, 200, 0.5)',
-                borderRadius: 15,
+                backgroundColor: chatText.trim() ? "rgba(10, 145, 104, 0.4)" : 'rgba(200, 200, 200, 0.5)',
+                borderRadius: 25,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 opacity: chatText.trim() ? 1 : 0.6,

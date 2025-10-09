@@ -3,11 +3,11 @@ import { styles } from '@/styles/appStyles';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -33,7 +33,10 @@ export default function ConversationDetail() {
   // Synchroniser avec l'état global du layout
   const [isLayoutSynced, setIsLayoutSynced] = useState(false);
 
-  const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
+  // Utilise le proxy local pour éviter CORS en développement web
+  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? "http://localhost:3001"
+    : "https://reseausocial-production.up.railway.app";
   
   const scrollViewRef = useRef<ScrollView>(null);
 

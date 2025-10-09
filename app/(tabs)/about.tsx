@@ -7,7 +7,10 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const API_BASE_URL = "https://reseausocial-production.up.railway.app";
+// Utilise le proxy local pour éviter CORS en développement web
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? "http://localhost:3001"
+  : "https://reseausocial-production.up.railway.app";
 
 interface ProfileStats {
   total_connexions: number;
@@ -107,10 +110,10 @@ export default function ProfileScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Hero Header */}
-      <LinearGradient colors={['#e8f5e9', '#c8e6c9']} style={styles.hero} start={{x:0, y:0}} end={{x:1, y:1}}>
+      <LinearGradient colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)']} style={styles.hero} start={{x:0, y:0}} end={{x:1, y:1}}>
         <View style={styles.heroTopRow}>
           <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
-            <Ionicons name="log-out-outline" size={22} color="#2e7d32" />
+            <Ionicons name="log-out-outline" size={22} color="rgba(10, 145, 104, 1)" />
           </TouchableOpacity>
         </View>
 
@@ -367,7 +370,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2e7d32',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,

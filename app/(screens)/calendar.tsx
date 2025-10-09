@@ -19,7 +19,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
+// Utilise le proxy local pour éviter CORS en développement web
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? "http://localhost:3001"
+  : "https://reseausocial-production.up.railway.app";
 
 interface CalendarEvent {
   id: number;

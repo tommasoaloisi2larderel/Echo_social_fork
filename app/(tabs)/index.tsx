@@ -81,7 +81,7 @@ export default function HomePage() {
                   <Text style={styles.senderName}>{item.sender}</Text>
                   <Text style={styles.messageText}>{item.message}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#2e7d32" />
+                <Ionicons name="chevron-forward" size={18} color="rgba(10, 145, 104, 1)" />
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   cardTouchable: { paddingVertical: 2 },
   row: { flexDirection: 'row', alignItems: 'center' },
   senderAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e6eee6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  senderInitial: { color: '#2e7d32', fontWeight: '800' },
+  senderInitial: { color: 'rgba(10, 145, 104, 1)', fontWeight: '800' },
   senderName: { color: '#365a3a', fontWeight: '700', marginBottom: 2 },
   messageText: { color: '#55685a', lineHeight: 22 },
 });

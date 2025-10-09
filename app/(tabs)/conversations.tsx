@@ -3,15 +3,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../../components/DefaultAvatar';
@@ -67,7 +67,7 @@ const ConversationSquare = ({
     style={[
       styles.conversationSquare,
       {
-        shadowColor: unread ? "rgba(55, 116, 69, 1)" : "#777",
+        shadowColor: unread ? "rgba(10, 145, 104, 0.8)" : "#777",
         shadowOpacity: 0.6,
       },
     ]}
@@ -94,7 +94,10 @@ export default function ConversationsScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<'direct' | 'group'>('direct');
-  const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
+  // Utilise le proxy local pour éviter CORS en développement web
+  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? "http://localhost:3001"
+    : "https://reseausocial-production.up.railway.app";
 
   // Fonction pour récupérer les conversations
   const fetchConversations = async (isRefresh = false) => {
@@ -146,7 +149,7 @@ export default function ConversationsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="rgba(55, 116, 69, 1)" />
+        <ActivityIndicator size="large" color="rgba(10, 145, 104, 1)" />
         <Text style={{ marginTop: 10, color: '#666' }}>Chargement...</Text>
       </View>
     );
@@ -156,7 +159,7 @@ export default function ConversationsScreen() {
   if (conversations.length === 0) {
     return (
       <View style={styles.container}>
-        <Ionicons name="chatbubbles-outline" size={80} color="rgba(55, 116, 69, 1)" />
+        <Ionicons name="chatbubbles-outline" size={80} color="rgba(10, 145, 104, 1)" />
         <Text style={{ fontSize: 20, marginTop: 16 }}>Aucune conversation</Text>
         <TouchableOpacity onPress={() => fetchConversations()}>
           <Text>Actualiser</Text>
@@ -190,7 +193,7 @@ export default function ConversationsScreen() {
           onPress={() => setViewMode('direct')}
           activeOpacity={0.8}
         >
-          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : '#2e7d32'} />
+          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : 'rgba(10, 145, 104, 1)'} />
           <Text style={[localStyles.toggleLabel, viewMode === 'direct' && localStyles.toggleLabelActive]}>Privé</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -198,7 +201,7 @@ export default function ConversationsScreen() {
           onPress={() => setViewMode('group')}
           activeOpacity={0.8}
         >
-          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : '#2e7d32'} />
+          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : 'rgba(10, 145, 104, 1)'} />
           <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
         </TouchableOpacity>
       </View>
@@ -234,7 +237,7 @@ const localStyles = StyleSheet.create({
   toggleContainer: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: '#e8f5e9',
+    backgroundColor: 'rgba(235, 248, 245, 1)',
     padding: 6,
     borderRadius: 999,
     marginTop: 66,
@@ -250,11 +253,11 @@ const localStyles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   toggleActive: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
   },
   toggleLabel: {
     marginLeft: 6,
-    color: '#2e7d32',
+    color: 'rgba(10, 145, 104, 1)',
     fontWeight: '700',
   },
   toggleLabelActive: {
