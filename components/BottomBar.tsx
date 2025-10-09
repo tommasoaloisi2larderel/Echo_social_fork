@@ -168,11 +168,19 @@ export default function BottomBar({
   // Debug: vérifier que isChat fonctionne
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
   
-  // PanResponder pour gérer le swipe
+  // PanResponder pour gérer le swipe - capture les gestes sur toute la barre
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: (_, g) => {
+        // Capturer uniquement les mouvements verticaux significatifs
+        return Math.abs(g.dy) > 3;
+      },
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        // Capturer les swipes verticaux avant les enfants (TextInput, boutons)
+        return Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx);
+      },
       onPanResponderGrant: () => {
         // @ts-ignore
         dragStartY.current = (sheetY as any)._value ?? MAX_TRANSLATE;
@@ -499,7 +507,7 @@ export default function BottomBar({
           <LinearGradient
             colors={[
               'rgba(10, 145, 104, 0)',
-              'rgba(10, 145, 104, 0.08)',
+              'rgba(10, 145, 104, 0.0)',
               'rgba(10, 145, 104, 0.2)',
               'rgba(10, 145, 104, 0.4)',
             ]}
@@ -574,25 +582,27 @@ export default function BottomBar({
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
         >
-          <View style={styles.bottomBar} onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}>
-        {/* Indicateur de swipe (zone de saisie du geste) - animé */}
-        <View {...panResponder.panHandlers}>
-          <Animated.View style={{
-            width: 44,
-            height: 6,
-            backgroundColor: 'rgba(10, 145, 104, 0.3)',
-            borderRadius: 3,
-            alignSelf: 'center',
-            marginBottom: 5,
-            opacity: glowOpacity,
-            transform: [{ scaleX: glowScale }],
-            shadowColor: 'rgba(10, 145, 104, 0.5)',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
-            shadowRadius: 6,
-            elevation: 3,
-          }} />
-        </View>
+          <View 
+            style={styles.bottomBar} 
+            onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+            {...panResponder.panHandlers}
+          >
+        {/* Indicateur de swipe - animé */}
+        <Animated.View style={{
+          width: 44,
+          height: 6,
+          backgroundColor: 'rgba(10, 145, 104, 0.3)',
+          borderRadius: 3,
+          alignSelf: 'center',
+          marginBottom: 5,
+          opacity: glowOpacity,
+          transform: [{ scaleX: glowScale }],
+          shadowColor: 'rgba(10, 145, 104, 0.5)',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 6,
+          elevation: 3,
+        }} />
         
         {/* Champ de saisie avec bouton d'envoi */}
         <View style={styles.chatSection}>

@@ -1,19 +1,18 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,19 +30,17 @@ interface ConversationMember {
   is_ai?: boolean;
 }
 
-interface AIAgent {
-  uuid: string;
-  name: string;
-  description: string;
-  photo_url?: string;
-}
-
 interface ConversationDetails {
   uuid: string;
   is_group: boolean;
   name?: string;
+  description?: string;
+  created_at?: string;
   members: ConversationMember[];
   other_participant?: ConversationMember;
+  media_count?: number;
+  link_count?: number;
+  document_count?: number;
 }
 
 export default function ConversationManagement() {
@@ -53,14 +50,12 @@ export default function ConversationManagement() {
   
   const [loading, setLoading] = useState(true);
   const [conversation, setConversation] = useState<ConversationDetails | null>(null);
-  const [aiAgents, setAiAgents] = useState<AIAgent[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [addMode, setAddMode] = useState<'person' | 'ai'>('person');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [ephemeralMessages, setEphemeralMessages] = useState(false);
 
   useEffect(() => {
     loadConversationDetails();
-    loadAvailableAIAgents();
   }, [conversationId]);
 
   const loadConversationDetails = async () => {
@@ -75,81 +70,51 @@ export default function ConversationManagement() {
       }
     } catch (error) {
       console.error('Erreur chargement détails:', error);
-      Alert.alert('Erreur', 'Impossible de charger les détails de la conversation');
+      Alert.alert('Erreur', 'Impossible de charger les détails');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAvailableAIAgents = async () => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/api/ai-agents/available/`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAiAgents(data.results || data);
-      }
-    } catch (error) {
-      console.error('Erreur chargement agents IA:', error);
-    }
-  };
-
-  const handleAddMember = async (memberUuid: string, isAI: boolean) => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/add-member/`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            member_uuid: memberUuid,
-            is_ai: isAI
-          })
-        }
-      );
-
-      if (response.ok) {
-        Alert.alert('Succès', 'Membre ajouté avec succès');
-        setShowAddModal(false);
-        loadConversationDetails();
-      } else {
-        Alert.alert('Erreur', 'Impossible d\'ajouter ce membre');
-      }
-    } catch (error) {
-      console.error('Erreur ajout membre:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-    }
-  };
-
-  const handleRemoveMember = async (memberUuid: string) => {
+  const handleDeleteConversation = () => {
     Alert.alert(
-      'Retirer le membre',
-      'Voulez-vous vraiment retirer ce membre de la conversation ?',
+      'Supprimer la conversation',
+      'Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Retirer',
+          text: 'Supprimer',
           style: 'destructive',
           onPress: async () => {
             try {
               const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/messaging/conversations/${conversationId}/remove-member/`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ member_uuid: memberUuid })
-                }
+                `${API_BASE_URL}/messaging/conversations/${conversationId}/`,
+                { method: 'DELETE' }
               );
-
               if (response.ok) {
-                Alert.alert('Succès', 'Membre retiré');
-                loadConversationDetails();
+                router.back();
               }
             } catch (error) {
-              console.error('Erreur retrait membre:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer');
             }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      'Quitter le groupe',
+      'Voulez-vous quitter ce groupe ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Quitter',
+          style: 'destructive',
+          onPress: async () => {
+            // API call to leave group
+            router.back();
           }
         }
       ]
@@ -165,17 +130,61 @@ export default function ConversationManagement() {
   }
 
   const isGroup = conversation?.is_group || false;
-  const members = isGroup ? conversation?.members || [] : conversation?.other_participant ? [conversation.other_participant] : [];
+  const members = isGroup ? conversation?.members || [] : [];
+  const contact = conversation?.other_participant;
+
+  // Composant pour une ligne de paramètre
+  const SettingRow = ({ 
+    icon, 
+    title, 
+    subtitle, 
+    onPress, 
+    showArrow = true, 
+    rightElement,
+    danger = false,
+    first = false,
+    last = false,
+  }: {
+    icon: string;
+    title: string;
+    subtitle?: string;
+    onPress?: () => void;
+    showArrow?: boolean;
+    rightElement?: React.ReactNode;
+    danger?: boolean;
+    first?: boolean;
+    last?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[
+        styles.settingRow,
+        first && styles.settingRowFirst,
+        last && styles.settingRowLast,
+      ]}
+      onPress={onPress}
+      disabled={!onPress && !rightElement}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconContainer, danger && styles.iconDanger]}>
+        <Ionicons name={icon as any} size={22} color={danger ? '#ff6b6b' : 'rgba(10, 145, 104, 1)'} />
+      </View>
+      <View style={styles.settingContent}>
+        <Text style={[styles.settingTitle, danger && styles.settingTitleDanger]}>{title}</Text>
+        {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+      </View>
+      {rightElement || (showArrow && (
+        <Ionicons name="chevron-forward" size={20} color="#ccc" />
+      ))}
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Bouton retour flottant */}
       <TouchableOpacity onPress={() => router.back()} style={styles.floatingBackButton}>
         <LinearGradient
           colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
           style={styles.backButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </LinearGradient>
@@ -185,194 +194,293 @@ export default function ConversationManagement() {
       <LinearGradient
         colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
         style={styles.floatingHeader}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
       >
-        <Ionicons name={isGroup ? "people" : "person"} size={20} color="#fff" />
+        <Ionicons name="settings-outline" size={20} color="#fff" />
         <Text style={styles.headerTitle}>
-          {isGroup ? 'Gestion du groupe' : 'Détails du contact'}
+          {isGroup ? 'Paramètres du groupe' : 'Infos du contact'}
         </Text>
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Section membres/contact */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="people-outline" size={22} color="rgba(10, 145, 104, 1)" />
-            <Text style={styles.sectionTitle}>
-              {isGroup ? `Membres (${members.length})` : 'Contact'}
-            </Text>
+        {/* Section Photo/Avatar */}
+        <View style={styles.profileSection}>
+          <View style={styles.avatarWrapper}>
+            {contact?.photo_profil_url ? (
+              <Image
+                source={{ uri: contact.photo_profil_url }}
+                style={styles.largeAvatar}
+                contentFit="cover"
+              />
+            ) : (
+              <DefaultAvatar 
+                name={contact?.surnom || contact?.username || (isGroup ? 'Groupe' : 'Contact')} 
+                size={120} 
+              />
+            )}
           </View>
+          <Text style={styles.profileName}>
+            {contact?.surnom || contact?.username || conversation?.name || 'Groupe'}
+          </Text>
+          {contact?.is_ai && (
+            <View style={styles.aiBadgeLarge}>
+              <Ionicons name="flash" size={16} color="#fff" />
+              <Text style={styles.aiBadgeTextLarge}>Agent IA</Text>
+            </View>
+          )}
+          {isGroup && conversation?.description && (
+            <Text style={styles.groupDesc}>{conversation.description}</Text>
+          )}
+        </View>
 
-          <View style={styles.membersList}>
-            {members.map((member) => (
-              <View key={member.uuid} style={styles.memberCard}>
+        {/* Section Actions rapides */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickAction}>
+            <LinearGradient
+              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
+              style={styles.quickActionGradient}
+            >
+              <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.quickActionText}>Rechercher</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickAction}>
+            <LinearGradient
+              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
+              style={styles.quickActionGradient}
+            >
+              <Ionicons name="volume-high-outline" size={24} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.quickActionText}>Appeler</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickAction}>
+            <LinearGradient
+              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
+              style={styles.quickActionGradient}
+            >
+              <Ionicons name="videocam-outline" size={24} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.quickActionText}>Vidéo</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Membres (si groupe) */}
+        {isGroup && members.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{members.length} membres</Text>
+              <TouchableOpacity>
+                <Ionicons name="add-circle" size={24} color="rgba(10, 145, 104, 1)" />
+              </TouchableOpacity>
+            </View>
+            
+            {members.slice(0, 5).map((member) => (
+              <TouchableOpacity key={member.uuid} style={styles.memberRow}>
+                <DefaultAvatar name={member.surnom || member.username} size={44} />
                 <View style={styles.memberInfo}>
-                  {member.photo_profil_url ? (
-                    <View style={styles.avatar} />
-                  ) : (
-                    <DefaultAvatar name={member.surnom || member.username} size={50} />
+                  <Text style={styles.memberName}>{member.surnom || member.username}</Text>
+                  {member.is_ai && (
+                    <View style={styles.aiBadgeSmall}>
+                      <Ionicons name="flash" size={10} color="#fff" />
+                      <Text style={styles.aiBadgeTextSmall}>IA</Text>
+                    </View>
                   )}
-                  
-                  <View style={styles.memberDetails}>
-                    <Text style={styles.memberName}>
-                      {member.surnom || member.username}
-                    </Text>
-                    {member.is_ai && (
-                      <View style={styles.aiBadge}>
-                        <Ionicons name="flash" size={12} color="#fff" />
-                        <Text style={styles.aiBadgeText}>Agent IA</Text>
-                      </View>
-                    )}
-                  </View>
                 </View>
-
-                {isGroup && (
-                  <TouchableOpacity
-                    onPress={() => handleRemoveMember(member.uuid)}
-                    style={styles.removeButton}
-                  >
-                    <Ionicons name="close-circle" size={24} color="#ff6b6b" />
-                  </TouchableOpacity>
-                )}
-              </View>
+              </TouchableOpacity>
             ))}
+            
+            {members.length > 5 && (
+              <TouchableOpacity style={styles.viewAllButton}>
+                <Text style={styles.viewAllText}>Voir tous les membres</Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(10, 145, 104, 1)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Section Médias, liens et documents */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Médias, liens et documents</Text>
+          
+          <View style={styles.mediaGrid}>
+            <TouchableOpacity style={styles.mediaItem}>
+              <Ionicons name="image-outline" size={28} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.mediaCount}>{conversation?.media_count || 0}</Text>
+              <Text style={styles.mediaLabel}>Médias</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mediaItem}>
+              <Ionicons name="link-outline" size={28} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.mediaCount}>{conversation?.link_count || 0}</Text>
+              <Text style={styles.mediaLabel}>Liens</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mediaItem}>
+              <Ionicons name="document-outline" size={28} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.mediaCount}>{conversation?.document_count || 0}</Text>
+              <Text style={styles.mediaLabel}>Fichiers</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Section agents IA */}
-        {isGroup && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="flash-outline" size={22} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.sectionTitle}>Agents IA disponibles</Text>
-            </View>
-
-            <View style={styles.aiGrid}>
-              {aiAgents.slice(0, 4).map((agent) => (
-                <TouchableOpacity
-                  key={agent.uuid}
-                  style={styles.aiCard}
-                  onPress={() => handleAddMember(agent.uuid, true)}
-                >
-                  <LinearGradient
-                    colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
-                    style={styles.aiCardGradient}
-                  >
-                    <Ionicons name="flash" size={32} color="rgba(10, 145, 104, 1)" />
-                    <Text style={styles.aiCardName} numberOfLines={1}>{agent.name}</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Bouton ajouter */}
-        {isGroup && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <LinearGradient
-              colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.9)']}
-              style={styles.addButtonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="add-circle" size={24} color="#fff" />
-              <Text style={styles.addButtonText}>Ajouter un membre</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {/* Modal d'ajout */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter un membre</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={28} color="#666" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalTabs}>
-              <TouchableOpacity
-                style={[styles.modalTab, addMode === 'person' && styles.modalTabActive]}
-                onPress={() => setAddMode('person')}
-              >
-                <Ionicons
-                  name="person"
-                  size={20}
-                  color={addMode === 'person' ? '#fff' : 'rgba(10, 145, 104, 1)'}
+        {/* Section Paramètres */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Paramètres</Text>
+          
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="notifications-outline"
+              title="Notifications"
+              subtitle={notificationsEnabled ? "Activées" : "Désactivées"}
+              rightElement={
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={setNotificationsEnabled}
+                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
+                  thumbColor={notificationsEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
                 />
-                <Text style={[styles.modalTabText, addMode === 'person' && styles.modalTabTextActive]}>
-                  Personne
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalTab, addMode === 'ai' && styles.modalTabActive]}
-                onPress={() => setAddMode('ai')}
-              >
-                <Ionicons
-                  name="flash"
-                  size={20}
-                  color={addMode === 'ai' ? '#fff' : 'rgba(10, 145, 104, 1)'}
+              }
+              showArrow={false}
+              first
+            />
+            
+            <SettingRow
+              icon="volume-high-outline"
+              title="Son des notifications"
+              subtitle={soundEnabled ? "Activé" : "Désactivé"}
+              rightElement={
+                <Switch
+                  value={soundEnabled}
+                  onValueChange={setSoundEnabled}
+                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
+                  thumbColor={soundEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
                 />
-                <Text style={[styles.modalTabText, addMode === 'ai' && styles.modalTabTextActive]}>
-                  Agent IA
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#999" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder={addMode === 'person' ? 'Rechercher un contact...' : 'Rechercher un agent IA...'}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            <FlatList
-              data={addMode === 'ai' ? aiAgents : []}
-              keyExtractor={(item) => item.uuid}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => handleAddMember(item.uuid, addMode === 'ai')}
-                >
-                  <Ionicons
-                    name={addMode === 'ai' ? 'flash' : 'person'}
-                    size={24}
-                    color="rgba(10, 145, 104, 1)"
-                  />
-                  <View style={styles.modalItemInfo}>
-                    <Text style={styles.modalItemName}>{item.name}</Text>
-                    {item.description && (
-                      <Text style={styles.modalItemDesc} numberOfLines={1}>
-                        {item.description}
-                      </Text>
-                    )}
-                  </View>
-                  <Ionicons name="add-circle-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                </TouchableOpacity>
-              )}
-              style={styles.modalList}
+              }
+              showArrow={false}
+            />
+            
+            <SettingRow
+              icon="time-outline"
+              title="Messages éphémères"
+              subtitle={ephemeralMessages ? "Activés - 24h" : "Désactivés"}
+              rightElement={
+                <Switch
+                  value={ephemeralMessages}
+                  onValueChange={setEphemeralMessages}
+                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
+                  thumbColor={ephemeralMessages ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
+                />
+              }
+              showArrow={false}
+              last
             />
           </View>
         </View>
-      </Modal>
+
+        {/* Section Personnalisation */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personnalisation</Text>
+          
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="color-palette-outline"
+              title="Fond d'écran"
+              subtitle="Personnaliser l'arrière-plan"
+              onPress={() => Alert.alert('Fond d\'écran', 'Fonctionnalité à venir')}
+              first
+            />
+            
+            <SettingRow
+              icon="star-outline"
+              title="Messages importants"
+              subtitle="0 messages marqués"
+              onPress={() => Alert.alert('Messages importants', 'Aucun message marqué')}
+              last
+            />
+          </View>
+        </View>
+
+        {/* Section Actions */}
+        <View style={styles.section}>
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="lock-closed-outline"
+              title="Cryptage"
+              subtitle="Conversation cryptée de bout en bout"
+              showArrow={false}
+              first
+            />
+            
+            <SettingRow
+              icon="archive-outline"
+              title="Archiver la conversation"
+              onPress={() => Alert.alert('Archiver', 'Conversation archivée')}
+            />
+            
+            <SettingRow
+              icon="export-outline"
+              title="Exporter la conversation"
+              onPress={() => Alert.alert('Exporter', 'Export en cours...')}
+              last
+            />
+          </View>
+        </View>
+
+        {/* Section Danger Zone */}
+        <View style={styles.section}>
+          <View style={styles.settingsGroup}>
+            {!isGroup && (
+              <SettingRow
+                icon="ban-outline"
+                title="Bloquer le contact"
+                onPress={() => Alert.alert('Bloquer', 'Contact bloqué')}
+                danger
+                first={!isGroup}
+              />
+            )}
+            
+            <SettingRow
+              icon="trash-outline"
+              title="Supprimer la conversation"
+              subtitle="Supprimer tout l'historique"
+              onPress={handleDeleteConversation}
+              danger
+            />
+            
+            {isGroup && (
+              <SettingRow
+                icon="exit-outline"
+                title="Quitter le groupe"
+                onPress={handleLeaveGroup}
+                danger
+                last
+              />
+            )}
+            
+            {!isGroup && (
+              <SettingRow
+                icon="flag-outline"
+                title="Signaler"
+                subtitle="Signaler ce contact"
+                onPress={() => Alert.alert('Signaler', 'Contact signalé aux modérateurs')}
+                danger
+                last
+              />
+            )}
+          </View>
+        </View>
+
+        {/* Informations supplémentaires */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoText}>
+            {isGroup 
+              ? `Groupe créé le ${conversation?.created_at ? new Date(conversation.created_at).toLocaleDateString('fr-FR') : 'N/A'}`
+              : 'Les messages et appels sont cryptés de bout en bout.'
+            }
+          </Text>
+        </View>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -380,7 +488,7 @@ export default function ConversationManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(245, 245, 245, 0.9)',
+    backgroundColor: '#f5f5f5',
   },
   floatingBackButton: {
     position: 'absolute',
@@ -426,221 +534,243 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingTop: 80,
+    paddingTop: 120,
   },
-  section: {
-    marginTop: 20,
-    marginHorizontal: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
+  
+  // Section Profil
+  profileSection: {
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  membersList: {
-    gap: 12,
-  },
-  memberCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 30,
+    paddingHorizontal: 20,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+    marginBottom: 10,
+  },
+  avatarWrapper: {
+    marginBottom: 15,
     shadowColor: 'rgba(10, 145, 104, 0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#e0e0e0',
-  },
-  memberDetails: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  aiBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  removeButton: {
-    padding: 4,
-  },
-  aiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  aiCard: {
-    width: '48%',
-    aspectRatio: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  aiCardGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(10, 145, 104, 0.2)',
-    borderRadius: 16,
-  },
-  aiCardName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(10, 145, 104, 1)',
-    textAlign: 'center',
-  },
-  addButton: {
-    margin: 16,
-    marginTop: 24,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: 'rgba(10, 145, 104, 0.4)',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 5,
   },
-  addButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
+  largeAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
+  profileName: {
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 5,
   },
-  modalTabs: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  modalTab: {
-    flex: 1,
+  aiBadgeLarge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(235, 248, 245, 1)',
-    borderWidth: 1,
-    borderColor: 'rgba(200, 235, 225, 1)',
-  },
-  modalTabActive: {
+    gap: 6,
     backgroundColor: 'rgba(10, 145, 104, 1)',
-    borderColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
   },
-  modalTabText: {
+  aiBadgeTextLarge: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(10, 145, 104, 1)',
   },
-  modalTabTextActive: {
-    color: '#fff',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(245, 245, 245, 1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 20,
-    marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  modalList: {
-    maxHeight: 400,
-  },
-  modalItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  groupDesc: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
     paddingHorizontal: 20,
+  },
+
+  // Actions rapides
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+  quickAction: {
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  quickActionGradient: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 16,
+    borderRadius: 16,
+  },
+  quickActionText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: 'rgba(10, 145, 104, 1)',
+    fontWeight: '600',
+  },
+
+  // Sections
+  section: {
+    backgroundColor: '#fff',
+    marginBottom: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  // Membres
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  modalItemInfo: {
+  memberInfo: {
+    flex: 1,
+    marginLeft: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  memberName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  aiBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  aiBadgeTextSmall: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  viewAllText: {
+    color: 'rgba(10, 145, 104, 1)',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Médias
+  mediaGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  mediaItem: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#fafafa',
+    borderRadius: 12,
+    minWidth: 90,
+  },
+  mediaCount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  mediaLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+
+  // Paramètres
+  settingsGroup: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fafafa',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingRowFirst: {
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  settingRowLast: {
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    borderBottomWidth: 0,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(10, 145, 104, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  iconDanger: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+  },
+  settingContent: {
     flex: 1,
   },
-  modalItemName: {
+  settingTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
-    marginBottom: 4,
   },
-  modalItemDesc: {
+  settingTitleDanger: {
+    color: '#ff6b6b',
+  },
+  settingSubtitle: {
     fontSize: 13,
-    color: '#666',
+    color: '#999',
+    marginTop: 2,
+  },
+
+  // Info Section
+  infoSection: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
-

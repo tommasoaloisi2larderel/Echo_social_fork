@@ -67,7 +67,7 @@ export const styles = StyleSheet.create({
     opacity: 0.6,
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 12,
-    paddingVertical: 4,
+    paddingVertical: 2,
     paddingHorizontal: 8,
     zIndex: 10,
     shadowColor: WHITE,
