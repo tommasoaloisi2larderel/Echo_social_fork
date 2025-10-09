@@ -204,127 +204,228 @@ export default function ConversationManagement() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Section Photo/Avatar */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarWrapper}>
-            {contact?.photo_profil_url ? (
-              <Image
-                source={{ uri: contact.photo_profil_url }}
-                style={styles.largeAvatar}
-                contentFit="cover"
-              />
-            ) : (
-              <DefaultAvatar 
-                name={contact?.surnom || contact?.username || (isGroup ? 'Groupe' : 'Contact')} 
-                size={120} 
-              />
-            )}
-          </View>
-          <Text style={styles.profileName}>
-            {contact?.surnom || contact?.username || conversation?.name || 'Groupe'}
-          </Text>
-          {contact?.is_ai && (
-            <View style={styles.aiBadgeLarge}>
-              <Ionicons name="flash" size={16} color="#fff" />
-              <Text style={styles.aiBadgeTextLarge}>Agent IA</Text>
+          <LinearGradient
+            colors={['rgba(10, 145, 104, 0.03)', 'rgba(10, 145, 104, 0.01)']}
+            style={styles.profileGradient}
+          >
+            <View style={styles.avatarWrapper}>
+              {isGroup ? (
+                <View style={styles.groupAvatarContainer}>
+                  <LinearGradient
+                    colors={['rgba(10, 145, 104, 0.9)', 'rgba(10, 145, 104, 0.7)']}
+                    style={styles.largeAvatar}
+                  >
+                    <Ionicons name="people" size={50} color="#fff" />
+                  </LinearGradient>
+                </View>
+              ) : contact?.photo_profil_url ? (
+                <Image
+                  source={{ uri: contact.photo_profil_url }}
+                  style={styles.largeAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <DefaultAvatar 
+                  name={contact?.surnom || contact?.username || 'Contact'} 
+                  size={120} 
+                />
+              )}
             </View>
-          )}
-          {isGroup && conversation?.description && (
-            <Text style={styles.groupDesc}>{conversation.description}</Text>
-          )}
+            <Text style={styles.profileName}>
+              {isGroup 
+                ? conversation?.name || 'Groupe' 
+                : contact?.surnom || contact?.username || 'Contact'
+              }
+            </Text>
+            {contact?.is_ai && !isGroup && (
+              <View style={styles.aiBadgeLarge}>
+                <Ionicons name="flash" size={16} color="#fff" />
+                <Text style={styles.aiBadgeTextLarge}>Agent IA</Text>
+              </View>
+            )}
+            {isGroup && conversation?.description && (
+              <Text style={styles.groupDesc}>{conversation.description}</Text>
+            )}
+            {!isGroup && contact?.username && (
+              <Text style={styles.username}>@{contact.username}</Text>
+            )}
+          </LinearGradient>
         </View>
 
-        {/* Section Actions rapides */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickAction}>
-            <LinearGradient
-              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
-              style={styles.quickActionGradient}
-            >
-              <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.quickActionText}>Rechercher</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickAction}>
-            <LinearGradient
-              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
-              style={styles.quickActionGradient}
-            >
-              <Ionicons name="volume-high-outline" size={24} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.quickActionText}>Appeler</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+        {/* Section Actions rapides - seulement pour conversations privées */}
+        {!isGroup && (
+          <View style={styles.quickActionsContainer}>
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Rechercher</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="call-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Appeler</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-          <TouchableOpacity style={styles.quickAction}>
-            <LinearGradient
-              colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
-              style={styles.quickActionGradient}
-            >
-              <Ionicons name="videocam-outline" size={24} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.quickActionText}>Vidéo</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="videocam-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Vidéo</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Section Membres (si groupe) */}
         {isGroup && members.length > 0 && (
-          <View style={styles.section}>
+          <View style={styles.floatingCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{members.length} membres</Text>
-              <TouchableOpacity>
-                <Ionicons name="add-circle" size={24} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="people" size={16} color="rgba(10, 145, 104, 1)" /> {members.length} membres
+              </Text>
+              <TouchableOpacity style={styles.addButton}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.2)', 'rgba(10, 145, 104, 0.1)']}
+                  style={styles.addButtonGradient}
+                >
+                  <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
+                </LinearGradient>
               </TouchableOpacity>
             </View>
             
-            {members.slice(0, 5).map((member) => (
-              <TouchableOpacity key={member.uuid} style={styles.memberRow}>
-                <DefaultAvatar name={member.surnom || member.username} size={44} />
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{member.surnom || member.username}</Text>
-                  {member.is_ai && (
-                    <View style={styles.aiBadgeSmall}>
-                      <Ionicons name="flash" size={10} color="#fff" />
-                      <Text style={styles.aiBadgeTextSmall}>IA</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.membersList}>
+              {members.slice(0, 5).map((member, index) => (
+                <TouchableOpacity 
+                  key={member.uuid} 
+                  style={[
+                    styles.memberRow,
+                    index === members.slice(0, 5).length - 1 && styles.memberRowLast
+                  ]}
+                >
+                  <DefaultAvatar name={member.surnom || member.username} size={44} />
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>{member.surnom || member.username}</Text>
+                    {member.is_ai && (
+                      <View style={styles.aiBadgeSmall}>
+                        <Ionicons name="flash" size={10} color="#fff" />
+                        <Text style={styles.aiBadgeTextSmall}>IA</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                </TouchableOpacity>
+              ))}
+            </View>
             
             {members.length > 5 && (
               <TouchableOpacity style={styles.viewAllButton}>
-                <Text style={styles.viewAllText}>Voir tous les membres</Text>
-                <Ionicons name="chevron-forward" size={16} color="rgba(10, 145, 104, 1)" />
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
+                  style={styles.viewAllGradient}
+                >
+                  <Text style={styles.viewAllText}>Voir tous les membres</Text>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(10, 145, 104, 1)" />
+                </LinearGradient>
               </TouchableOpacity>
             )}
           </View>
         )}
+        
+        {/* Actions pour groupes */}
+        {isGroup && (
+          <View style={styles.quickActionsContainer}>
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Rechercher</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="create-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Modifier</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickAction}>
+                <LinearGradient
+                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
+                  style={styles.quickActionGradient}
+                >
+                  <Ionicons name="image-outline" size={24} color="rgba(10, 145, 104, 1)" />
+                  <Text style={styles.quickActionText}>Photo</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Section Médias, liens et documents */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Médias, liens et documents</Text>
+        <View style={styles.floatingCard}>
+          <Text style={styles.sectionTitle}>
+            <Ionicons name="folder-outline" size={16} color="rgba(10, 145, 104, 1)" /> Médias, liens et documents
+          </Text>
           
           <View style={styles.mediaGrid}>
             <TouchableOpacity style={styles.mediaItem}>
-              <Ionicons name="image-outline" size={28} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.mediaCount}>{conversation?.media_count || 0}</Text>
-              <Text style={styles.mediaLabel}>Médias</Text>
+              <LinearGradient
+                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
+                style={styles.mediaItemGradient}
+              >
+                <Ionicons name="image-outline" size={32} color="rgba(10, 145, 104, 1)" />
+                <Text style={styles.mediaCount}>{conversation?.media_count || 0}</Text>
+                <Text style={styles.mediaLabel}>Médias</Text>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity style={styles.mediaItem}>
-              <Ionicons name="link-outline" size={28} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.mediaCount}>{conversation?.link_count || 0}</Text>
-              <Text style={styles.mediaLabel}>Liens</Text>
+              <LinearGradient
+                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
+                style={styles.mediaItemGradient}
+              >
+                <Ionicons name="link-outline" size={32} color="rgba(10, 145, 104, 1)" />
+                <Text style={styles.mediaCount}>{conversation?.link_count || 0}</Text>
+                <Text style={styles.mediaLabel}>Liens</Text>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity style={styles.mediaItem}>
-              <Ionicons name="document-outline" size={28} color="rgba(10, 145, 104, 1)" />
-              <Text style={styles.mediaCount}>{conversation?.document_count || 0}</Text>
-              <Text style={styles.mediaLabel}>Fichiers</Text>
+              <LinearGradient
+                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
+                style={styles.mediaItemGradient}
+              >
+                <Ionicons name="document-outline" size={32} color="rgba(10, 145, 104, 1)" />
+                <Text style={styles.mediaCount}>{conversation?.document_count || 0}</Text>
+                <Text style={styles.mediaLabel}>Fichiers</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Section Paramètres */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Paramètres</Text>
+        <View style={styles.floatingCard}>
+          <Text style={styles.sectionTitle}>
+            <Ionicons name="settings-outline" size={16} color="rgba(10, 145, 104, 1)" /> Paramètres
+          </Text>
           
           <View style={styles.settingsGroup}>
             <SettingRow
@@ -377,8 +478,10 @@ export default function ConversationManagement() {
         </View>
 
         {/* Section Personnalisation */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personnalisation</Text>
+        <View style={styles.floatingCard}>
+          <Text style={styles.sectionTitle}>
+            <Ionicons name="brush-outline" size={16} color="rgba(10, 145, 104, 1)" /> Personnalisation
+          </Text>
           
           <View style={styles.settingsGroup}>
             <SettingRow
@@ -400,7 +503,11 @@ export default function ConversationManagement() {
         </View>
 
         {/* Section Actions */}
-        <View style={styles.section}>
+        <View style={styles.floatingCard}>
+          <Text style={styles.sectionTitle}>
+            <Ionicons name="shield-checkmark-outline" size={16} color="rgba(10, 145, 104, 1)" /> Sécurité & Actions
+          </Text>
+          
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="lock-closed-outline"
@@ -417,7 +524,7 @@ export default function ConversationManagement() {
             />
             
             <SettingRow
-              icon="export-outline"
+              icon="share-outline"
               title="Exporter la conversation"
               onPress={() => Alert.alert('Exporter', 'Export en cours...')}
               last
@@ -426,7 +533,7 @@ export default function ConversationManagement() {
         </View>
 
         {/* Section Danger Zone */}
-        <View style={styles.section}>
+        <View style={styles.floatingCard}>
           <View style={styles.settingsGroup}>
             {!isGroup && (
               <SettingRow
@@ -488,44 +595,44 @@ export default function ConversationManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f2f5',
   },
   floatingBackButton: {
     position: 'absolute',
     top: 70,
     left: 20,
     zIndex: 20,
-    shadowColor: 'rgba(10, 145, 104, 0.4)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: 'rgba(10, 145, 104, 0.5)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
   },
   backButtonGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   floatingHeader: {
     position: 'absolute',
     top: 70,
-    left: 80,
+    left: 84,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 22,
+    borderRadius: 24,
     zIndex: 10,
-    shadowColor: 'rgba(10, 145, 104, 0.4)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: 'rgba(10, 145, 104, 0.5)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
   },
   headerTitle: {
     fontSize: 16,
@@ -539,45 +646,70 @@ const styles = StyleSheet.create({
   
   // Section Profil
   profileSection: {
+    marginBottom: 16,
+    marginHorizontal: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: 'rgba(10, 145, 104, 0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+    backgroundColor: '#fff',
+  },
+  profileGradient: {
     alignItems: 'center',
     paddingVertical: 30,
     paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    marginBottom: 10,
   },
   avatarWrapper: {
     marginBottom: 15,
-    shadowColor: 'rgba(10, 145, 104, 0.3)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  groupAvatarContainer: {
+    borderRadius: 60,
   },
   largeAvatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileName: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  username: {
+    fontSize: 15,
+    color: '#666',
+    marginTop: 4,
   },
   aiBadgeLarge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 20,
     marginTop: 8,
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
   },
   aiBadgeTextLarge: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   groupDesc: {
     fontSize: 15,
@@ -585,192 +717,246 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
     paddingHorizontal: 20,
+    lineHeight: 22,
   },
 
-  // Actions rapides
+  // Actions rapides - Container flottant
+  quickActionsContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: 'rgba(10, 145, 104, 0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+    backgroundColor: '#fff',
+  },
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    marginBottom: 10,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
   },
   quickAction: {
     flex: 1,
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   quickActionGradient: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 18,
+    borderRadius: 18,
+    shadowColor: 'rgba(10, 145, 104, 0.15)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
   quickActionText: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 13,
     color: 'rgba(10, 145, 104, 1)',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
-  // Sections
-  section: {
+  // Cards flottantes
+  floatingCard: {
     backgroundColor: '#fff',
-    marginBottom: 10,
+    marginHorizontal: 16,
+    marginBottom: 16,
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 18,
+    borderRadius: 20,
+    shadowColor: 'rgba(10, 145, 104, 0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555',
     textTransform: 'uppercase',
-    marginBottom: 12,
-    letterSpacing: 0.5,
+    marginBottom: 16,
+    letterSpacing: 0.8,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  addButton: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: 'rgba(10, 145, 104, 0.2)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addButtonGradient: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Membres
+  membersList: {
+    marginTop: 8,
+  },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#f5f5f5',
+  },
+  memberRowLast: {
+    borderBottomWidth: 0,
   },
   memberInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   memberName: {
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    color: '#1a1a1a',
+    fontWeight: '600',
   },
   aiBadgeSmall: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 10,
   },
   aiBadgeTextSmall: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   viewAllButton: {
+    marginTop: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  viewAllGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    marginTop: 8,
+    paddingVertical: 14,
   },
   viewAllText: {
     color: 'rgba(10, 145, 104, 1)',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   // Médias
   mediaGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 8,
   },
   mediaItem: {
+    flex: 1,
+  },
+  mediaItemGradient: {
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#fafafa',
-    borderRadius: 12,
-    minWidth: 90,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    borderRadius: 16,
   },
   mediaCount: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
-    marginTop: 8,
+    color: '#1a1a1a',
+    marginTop: 10,
   },
   mediaLabel: {
     fontSize: 12,
     color: '#666',
-    marginTop: 4,
+    marginTop: 6,
+    fontWeight: '600',
   },
 
   // Paramètres
   settingsGroup: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#fafafa',
+    marginTop: 8,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#f5f5f5',
   },
   settingRowFirst: {
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   settingRowLast: {
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     borderBottomWidth: 0,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(10, 145, 104, 0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(10, 145, 104, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   iconDanger: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'rgba(255, 107, 107, 0.12)',
   },
   settingContent: {
     flex: 1,
   },
   settingTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: '600',
+    color: '#1a1a1a',
   },
   settingTitleDanger: {
     color: '#ff6b6b',
   },
   settingSubtitle: {
     fontSize: 13,
-    color: '#999',
-    marginTop: 2,
+    color: '#888',
+    marginTop: 3,
   },
 
   // Info Section
   infoSection: {
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
+    marginHorizontal: 16,
   },
   infoText: {
     fontSize: 13,
     color: '#999',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });
