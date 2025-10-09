@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -188,7 +188,7 @@ export default function ConversationDetail() {
     return (
       <View style={styles.chatContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="rgba(55, 116, 69, 1)" />
           <Text style={{ marginTop: 10, color: '#666' }}>Chargement des messages...</Text>
         </View>
@@ -202,7 +202,7 @@ export default function ConversationDetail() {
       <TouchableOpacity
         style={{
           position: 'absolute',
-          top: 30,
+          top: 60,
           left: 20,
           zIndex: 20,
           backgroundColor: 'rgba(10, 145, 104, 0.9)',

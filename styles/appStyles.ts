@@ -89,7 +89,7 @@ export const styles = StyleSheet.create({
   },
   chatHeader: {
     position: "absolute",
-    top: 30,
+    top: 60,
     left: 70,
     right: 20,
     backgroundColor: "rgba(230,230,230,0.7)",
