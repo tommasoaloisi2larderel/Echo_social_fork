@@ -202,10 +202,10 @@ export default function ConversationDetail() {
       <TouchableOpacity
         style={{
           position: 'absolute',
-          top: 60,
+          top: 63,
           left: 20,
           zIndex: 20,
-          backgroundColor: 'rgba(10, 145, 104, 0.9)',
+          backgroundColor: 'rgba(10, 145, 104, 0.7)',
           borderRadius: 20,
           width: 40,
           height: 40,

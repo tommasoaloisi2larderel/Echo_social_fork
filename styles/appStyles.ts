@@ -19,9 +19,10 @@ export const styles = StyleSheet.create({
     borderRadius: 25, 
     shadowColor: WHITE, 
     shadowOpacity: 0.9, 
-    elevation: 3, 
+    elevation: 5, 
     paddingHorizontal: 15, 
     paddingVertical: 5, 
+    zIndex : 10,
   },
   searchInput: {
     fontSize: 16,
@@ -29,7 +30,7 @@ export const styles = StyleSheet.create({
     color: DARK_GRAY,
   },
   conversationGrid: {
-    paddingTop: 150,
+    paddingTop: 105,
     paddingBottom: 180,
     paddingHorizontal: 10,
   },

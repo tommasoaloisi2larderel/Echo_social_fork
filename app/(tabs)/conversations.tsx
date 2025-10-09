@@ -3,15 +3,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../../components/DefaultAvatar';
@@ -193,7 +193,7 @@ export default function ConversationsScreen() {
           onPress={() => setViewMode('direct')}
           activeOpacity={0.8}
         >
-          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : 'rgba(10, 145, 104, 1)'} />
+          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : '#666'} />
           <Text style={[localStyles.toggleLabel, viewMode === 'direct' && localStyles.toggleLabelActive]}>Privé</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -201,7 +201,7 @@ export default function ConversationsScreen() {
           onPress={() => setViewMode('group')}
           activeOpacity={0.8}
         >
-          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : 'rgba(10, 145, 104, 1)'} />
+          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : '#666'} />
           <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
         </TouchableOpacity>
       </View>
@@ -235,36 +235,51 @@ export default function ConversationsScreen() {
 
 const localStyles = StyleSheet.create({
   toggleContainer: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(235, 248, 245, 1)',
-    padding: 6,
-    borderRadius: 999,
-    marginTop: 66,
-    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    padding: 3,
+    borderRadius: 25,
+    zIndex: 10,
+    shadowColor: 'rgba(255, 255, 255, 0.75)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+    elevation: 5,
   },
   toggleButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    marginHorizontal: 2,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 25,
     backgroundColor: 'transparent',
   },
   toggleActive: {
-    backgroundColor: 'rgba(10, 145, 104, 1)',
+    backgroundColor: 'rgba(10, 145, 104, 0.65)',
+    shadowColor: 'rgba(10, 145, 104, 0.7)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   toggleLabel: {
     marginLeft: 6,
-    color: 'rgba(10, 145, 104, 1)',
-    fontWeight: '700',
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 14,
   },
   toggleLabelActive: {
     color: '#fff',
+    fontWeight: '700',
   },
   gridCompact: {
-    paddingTop: 0,
-    marginTop: 8,
+    paddingTop: 145,
+    marginTop: 0,
   },
 });
