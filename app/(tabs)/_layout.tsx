@@ -1,97 +1,96 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useLocalSearchParams, usePathname } from "expo-router";
-import { useState } from "react";
-import BottomBar from "../../components/BottomBar";
+import { Tabs, useLocalSearchParams, usePathname } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import BottomBar from '../../components/BottomBar';
+import SwipeableContainer from '../../components/SwipeableContainer';
 
-
+// Import the actual screen components
+import AboutScreen from './about';
+import ConversationsScreen from './conversations';
+import IndexScreen from './index';
 
 export default function TabsLayout() {
   const [chatText, setChatText] = useState("");
   const pathname = usePathname();
   const { conversationId } = useLocalSearchParams();
-  
-  // Fonction pour envoyer un message (sera utilisée par la BottomBar en mode chat)
-  const handleSendMessage = () => {
-    // Cette fonction sera appelée par la BottomBar quand on est en mode chat
-    console.log("Envoi du message:", chatText);
-    // La logique d'envoi sera gérée par le composant conversation-detail
-    // On ne vide pas le champ ici car c'est géré par le composant
+
+  const deriveIndexFromPath = (p: string) => {
+    if (p.includes('/conversations')) return 0;
+    if (p.includes('/about')) return 2;
+    return 1; // index/home
   };
-  
-  return (
-    <>
-      <Tabs screenOptions={{
-        tabBarActiveTintColor: "#da913eff",
-        tabBarStyle: { display: 'none' }, // Masquer la tab bar native
-        headerShown : false
-      }}>
-        <Tabs.Screen 
-          name="index" 
-          options={{
-            headerTitle: "So fun",
-            tabBarIcon: ({focused, color}) => (
-              <Ionicons 
-                name={focused ? "home-sharp" : "home-outline"} 
-                color={color}  
-                size={24}
-              />
-            )
-          }}
-        /> 
+  // Capture the initial index exactly once to avoid remounting or shifting when pathname changes later
+  const initialSwipeIndexRef = useRef<number>(deriveIndexFromPath(pathname));
 
-        <Tabs.Screen 
-          name="conversations" 
-          options={{
-            headerTitle: "Messages",
-            tabBarIcon: ({focused, color}) => (
-              <Ionicons 
-                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
-                color={color}  
-                size={24}
-              />
-            )
-          }}
-        />
-        
-        <Tabs.Screen 
-          name="about"
-          options={{
-            headerTitle: "Let's talk about us !",
-            tabBarIcon: ({focused, color}) => (
-              <Ionicons 
-                name={focused ? "information-circle" : "information-circle-outline"} 
-                color={color}  
-                size={24}
-              />
-            )
-          }}
-        />
+  // Determine if we're showing a detail route
+  const isInConversationDetail = pathname.includes('conversation-detail');
 
-        <Tabs.Screen 
-          name="conversation-detail"
-          options={{
-            headerTitle: "Conversation",
+  const handleSendMessage = () => {
+    console.log("Envoi du message:", chatText);
+  };
+
+  if (isInConversationDetail) {
+    // Render the real Tabs navigator only for the detail flow
+    return (
+      <>
+        <Tabs
+          screenOptions={{
+            tabBarActiveTintColor: "#da913eff",
+            tabBarStyle: { display: 'none' },
             headerShown: false,
-            tabBarIcon: ({focused, color}) => (
-              <Ionicons 
-                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
-                color={color}  
-                size={24}
-              />
-            )
           }}
+        >
+          {/* Hide the regular tabs from the tab bar/deeplinks here */}
+          <Tabs.Screen name="index" options={{ href: null }} />
+          <Tabs.Screen name="conversations" options={{ href: null }} />
+          <Tabs.Screen name="about" options={{ href: null }} />
+          <Tabs.Screen
+            name="conversation-detail"
+            options={{
+              headerTitle: "Conversation",
+              headerShown: false,
+            }}
+          />
+        </Tabs>
+
+        <BottomBar
+          currentRoute={pathname}
+          chatText={chatText}
+          setChatText={setChatText}
+          chatRecipient="Contact"
+          onSendMessage={handleSendMessage}
+          conversationId={conversationId as string}
         />
-      </Tabs>
-      
-      {/* BottomBar personnalisé */}
-      <BottomBar 
+      </>
+    );
+  }
+
+  // Main 3-screen swipe experience (no hidden Tabs mounted here)
+  console.log('Layout rendered with path:', pathname);
+  return (
+    <View style={styles.container}>
+      <SwipeableContainer
+        initialIndex={deriveIndexFromPath(pathname)}
+      >
+        <ConversationsScreen />
+        <IndexScreen />
+        <AboutScreen />
+      </SwipeableContainer>
+
+      <BottomBar
         currentRoute={pathname}
         chatText={chatText}
         setChatText={setChatText}
-        chatRecipient={pathname.includes('conversation-detail') ? "Contact" : ""}
-        onSendMessage={pathname.includes('conversation-detail') ? handleSendMessage : undefined}
-        conversationId={pathname.includes('conversation-detail') ? conversationId as string : undefined}
+        chatRecipient=""
+        onSendMessage={undefined}
+        conversationId={undefined}
       />
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
