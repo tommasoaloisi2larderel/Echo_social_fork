@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -50,6 +51,88 @@ export default function BottomBar({
 
   const [barHeight, setBarHeight] = useState(96); // default, will be measured
   
+  // Animations pour l'effet WOW
+  const particleAnim1 = useRef(new Animated.Value(0)).current;
+  const particleAnim2 = useRef(new Animated.Value(0)).current;
+  const particleAnim3 = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Animation des particules en boucle
+  useEffect(() => {
+    const particle1Loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(particleAnim1, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(particleAnim1, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    
+    const particle2Loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(particleAnim2, {
+          toValue: 1,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(particleAnim2, {
+          toValue: 0,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    
+    const particle3Loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(particleAnim3, {
+          toValue: 1,
+          duration: 5000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(particleAnim3, {
+          toValue: 0,
+          duration: 5000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    particle1Loop.start();
+    particle2Loop.start();
+    particle3Loop.start();
+    glowLoop.start();
+
+    return () => {
+      particle1Loop.stop();
+      particle2Loop.stop();
+      particle3Loop.stop();
+      glowLoop.stop();
+    };
+  }, []);
+  
   // Debug: vérifier que isChat fonctionne
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
   
@@ -76,14 +159,48 @@ export default function BottomBar({
     })
   ).current;
 
-  // Fonctions pour ouvrir/fermer le panneau
+  // Fonctions pour ouvrir/fermer le panneau avec effet WOW
   const openPanel = () => {
     isPanelOpen.current = true;
-    Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    Animated.parallel([
+      Animated.spring(sheetY, { 
+        toValue: 0, 
+        useNativeDriver: true, 
+        tension: 50, 
+        friction: 8 
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1.02,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 7,
+      }),
+    ]).start(() => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }).start();
+    });
   };
+  
   const closePanel = () => {
     isPanelOpen.current = false;
-    Animated.spring(sheetY, { toValue: MAX_TRANSLATE, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    Animated.parallel([
+      Animated.spring(sheetY, { 
+        toValue: MAX_TRANSLATE, 
+        useNativeDriver: true, 
+        tension: 60, 
+        friction: 10 
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+    ]).start();
   };
 
   // Fonction pour envoyer un message
@@ -129,20 +246,171 @@ export default function BottomBar({
     }
   };
 
-  // Calcul de l'opacité du blur en fonction de la position du panneau
+  // Calcul de l'opacité et autres interpolations
   const blurOpacity = sheetY.interpolate({
     inputRange: [0, MAX_TRANSLATE],
-    outputRange: [1, 0], // 1 = complètement visible quand panneau ouvert, 0 = invisible quand fermé
+    outputRange: [1, 0],
     extrapolate: 'clamp',
+  });
+
+  const overlayOpacity = sheetY.interpolate({
+    inputRange: [0, MAX_TRANSLATE],
+    outputRange: [0.6, 0],
+    extrapolate: 'clamp',
+  });
+
+  const blurIntensity = sheetY.interpolate({
+    inputRange: [0, MAX_TRANSLATE],
+    outputRange: [20, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Animations des particules
+  const particle1Y = particleAnim1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -100],
+  });
+
+  const particle2Y = particleAnim2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -150],
+  });
+
+  const particle3Y = particleAnim3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -80],
+  });
+
+  const particle1Opacity = particleAnim1.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 1, 0],
+  });
+
+  const particle2Opacity = particleAnim2.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 0.8, 0],
+  });
+
+  const particle3Opacity = particleAnim3.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 0.9, 0],
+  });
+
+  const glowScale = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.3],
+  });
+
+  const glowOpacity = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
   });
 
   return (
     <>
+      {/* Overlay sombre avec blur - couvre tout l'écran */}
+      <Animated.View
+        pointerEvents={isPanelOpen.current ? 'auto' : 'none'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          opacity: overlayOpacity,
+          zIndex: 998,
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={closePanel}
+          style={{ flex: 1 }}
+        >
+          <BlurView
+            intensity={Platform.OS === 'web' ? 0 : 15}
+            tint="dark"
+            style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+          />
+        </TouchableOpacity>
+      </Animated.View>
+
       <View
         style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999 }}
       >
+        {/* Particules lumineuses mystérieuses - seulement visibles quand le panneau est ouvert */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: '20%',
+            bottom: 150,
+            opacity: Animated.multiply(blurOpacity, particle1Opacity),
+            transform: [{ translateY: particle1Y }],
+          }}
+        >
+          <View
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: 'rgba(10, 145, 104, 0.4)',
+              shadowColor: 'rgba(10, 145, 104, 1)',
+              shadowOpacity: 0.8,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          />
+        </Animated.View>
 
-        {/* Effet de blur/gradient mystérieux qui couvre la bottomBar */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            right: '15%',
+            bottom: 180,
+            opacity: Animated.multiply(blurOpacity, particle2Opacity),
+            transform: [{ translateY: particle2Y }],
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(10, 145, 104, 0.5)',
+              shadowColor: 'rgba(10, 145, 104, 1)',
+              shadowOpacity: 0.9,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          />
+        </Animated.View>
+
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: '60%',
+            bottom: 200,
+            opacity: Animated.multiply(blurOpacity, particle3Opacity),
+            transform: [{ translateY: particle3Y }],
+          }}
+        >
+          <View
+            style={{
+              width: 50,
+              height: 50,
+              borderRadius: 25,
+              backgroundColor: 'rgba(10, 145, 104, 0.35)',
+              shadowColor: 'rgba(10, 145, 104, 1)',
+              shadowOpacity: 0.7,
+              shadowRadius: 18,
+              elevation: 10,
+            }}
+          />
+        </Animated.View>
+
+        {/* Effet de lueur pulsante derrière le panneau */}
         <Animated.View
           pointerEvents="none"
           style={{
@@ -150,7 +418,41 @@ export default function BottomBar({
             left: 0,
             right: 0,
             bottom: 0,
-            height: 180,
+            height: 250,
+            opacity: blurOpacity,
+            zIndex: 500,
+          }}
+        >
+          <Animated.View
+            style={{
+              flex: 1,
+              opacity: glowOpacity,
+              transform: [{ scale: glowScale }],
+            }}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(10, 145, 104, 0)',
+                'rgba(10, 145, 104, 0.1)',
+                'rgba(10, 145, 104, 0.3)',
+                'rgba(10, 145, 104, 0.5)',
+              ]}
+              style={{ flex: 1 }}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+          </Animated.View>
+        </Animated.View>
+
+        {/* Gradient principal mystérieux */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 200,
             opacity: blurOpacity,
             zIndex: 1000,
           }}
@@ -158,9 +460,9 @@ export default function BottomBar({
           <LinearGradient
             colors={[
               'rgba(10, 145, 104, 0)',
-              'rgba(10, 145, 104, 0.05)',
-              'rgba(10, 145, 104, 0.15)',
-              'rgba(10, 145, 104, 0.3)',
+              'rgba(10, 145, 104, 0.08)',
+              'rgba(10, 145, 104, 0.2)',
+              'rgba(10, 145, 104, 0.4)',
             ]}
             style={{ flex: 1 }}
             start={{ x: 0, y: 0 }}
@@ -168,7 +470,7 @@ export default function BottomBar({
           />
         </Animated.View>
 
-        {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
+        {/* Panneau coulissant pour la gestion des agents IA - avec effet de profondeur */}
         <Animated.View
           style={{
             position: 'absolute',
@@ -177,29 +479,79 @@ export default function BottomBar({
             bottom: 0,
             height: MAX_TRANSLATE,
             backgroundColor: 'white',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 10,
-            elevation: 10,
-            transform: [{ translateY: sheetY }],
+            shadowColor: 'rgba(10, 145, 104, 0.6)',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.5,
+            shadowRadius: 20,
+            elevation: 15,
+            transform: [
+              { translateY: sheetY },
+              { scale: scaleAnim },
+            ],
           }}
         >
+          {/* Bordure lumineuse en haut du panneau - effet dimension parallèle */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              opacity: blurOpacity,
+              zIndex: 1,
+            }}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(10, 145, 104, 1)',
+                'rgba(10, 145, 104, 0.6)',
+                'rgba(10, 145, 104, 1)',
+              ]}
+              style={{ flex: 1 }}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+          </Animated.View>
+
+          {/* Gradient de fond subtil pour donner de la profondeur */}
+          <LinearGradient
+            colors={[
+              'rgba(240, 250, 248, 0.95)',
+              'rgba(255, 255, 255, 1)',
+            ]}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
+
           {/* BottomBar - toujours visible en haut du conteneur (fait aussi office de header) */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
         >
           <View style={styles.bottomBar} onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}>
-        {/* Indicateur de swipe (zone de saisie du geste) */}
+        {/* Indicateur de swipe (zone de saisie du geste) - animé */}
         <View {...panResponder.panHandlers}>
-          <View style={{
+          <Animated.View style={{
             width: 44,
             height: 6,
-            backgroundColor: 'rgba(200, 200, 200, 0.65)',
+            backgroundColor: 'rgba(10, 145, 104, 0.3)',
             borderRadius: 3,
             alignSelf: 'center',
             marginBottom: 5,
+            opacity: glowOpacity,
+            transform: [{ scaleX: glowScale }],
+            shadowColor: 'rgba(10, 145, 104, 0.5)',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.8,
+            shadowRadius: 6,
+            elevation: 3,
           }} />
         </View>
         
@@ -346,25 +698,97 @@ export default function BottomBar({
           </View>
         </KeyboardAvoidingView>
 
-          {/* Contenu du panneau */}
+          {/* Contenu du panneau - Monde parallèle des agents IA */}
           <View style={{ flex: 1, padding: 20 }}>
             
-            <Text style={{ fontSize: 16, color: '#666', marginBottom: 20 }}>
-              Configurez vos agents IA pour personnaliser leurs comportements et interactions.
-            </Text>
-            
-            {/* Liste des agents IA (à implémenter) */}
-            <View style={{ 
-              backgroundColor: '#f5f5f5', 
-              padding: 15, 
-              borderRadius: 10,
-              marginBottom: 15,
-            }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>Agent Jarvis</Text>
-              <Text style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
-                Assistant personnel intelligent
+            <View style={{ alignItems: 'center', marginBottom: 25, marginTop: 10 }}>
+              <Animated.View
+                style={{
+                  opacity: glowOpacity,
+                  transform: [{ scale: glowScale }],
+                }}
+              >
+                <Ionicons name="flash" size={40} color="rgba(10, 145, 104, 0.8)" />
+              </Animated.View>
+              <Text style={{ 
+                fontSize: 22, 
+                fontWeight: 'bold', 
+                color: 'rgba(10, 145, 104, 1)', 
+                marginTop: 10,
+                textAlign: 'center',
+              }}>
+                Agents IA
+              </Text>
+              <Text style={{ fontSize: 14, color: '#666', marginTop: 5, textAlign: 'center' }}>
+                Vos assistants intelligents
               </Text>
             </View>
+            
+            {/* Carte Agent Jarvis avec effet de profondeur */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={{ marginBottom: 15 }}
+            >
+              <LinearGradient
+                colors={[
+                  'rgba(10, 145, 104, 0.08)',
+                  'rgba(10, 145, 104, 0.03)',
+                ]}
+                style={{
+                  padding: 18,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(10, 145, 104, 0.2)',
+                  shadowColor: 'rgba(10, 145, 104, 0.3)',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: 'rgba(10, 145, 104, 0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="flash" size={24} color="rgba(10, 145, 104, 1)" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>
+                      Agent Jarvis
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      Assistant personnel intelligent
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="rgba(10, 145, 104, 0.6)" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Message mystérieux */}
+            <Animated.View
+              style={{
+                opacity: glowOpacity,
+                marginTop: 10,
+              }}
+            >
+              <Text style={{ 
+                fontSize: 13, 
+                color: 'rgba(10, 145, 104, 0.7)', 
+                textAlign: 'center',
+                fontStyle: 'italic',
+              }}>
+                ✨ Swipez pour découvrir d'autres agents IA ✨
+              </Text>
+            </Animated.View>
           </View>
         </Animated.View>
       </View>
