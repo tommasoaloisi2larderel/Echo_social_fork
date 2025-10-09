@@ -1,18 +1,19 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import { FONTS } from '@/constants/fonts';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
@@ -636,7 +637,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: FONTS.bold,
     color: '#fff',
   },
   content: {
@@ -682,7 +683,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: FONTS.bold,
     color: '#1a1a1a',
     marginBottom: 4,
   },
@@ -690,6 +691,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     marginTop: 4,
+    fontFamily: FONTS.regular,
   },
   aiBadgeLarge: {
     flexDirection: 'row',
@@ -709,7 +711,7 @@ const styles = StyleSheet.create({
   aiBadgeTextLarge: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bold,
   },
   groupDesc: {
     fontSize: 15,
