@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useRef, useState } from "react";
@@ -128,11 +129,44 @@ export default function BottomBar({
     }
   };
 
+  // Calcul de l'opacité du blur en fonction de la position du panneau
+  const blurOpacity = sheetY.interpolate({
+    inputRange: [0, MAX_TRANSLATE],
+    outputRange: [1, 0], // 1 = complètement visible quand panneau ouvert, 0 = invisible quand fermé
+    extrapolate: 'clamp',
+  });
+
   return (
     <>
       <View
         style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999 }}
       >
+
+        {/* Effet de blur/gradient mystérieux qui couvre la bottomBar */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 180,
+            opacity: blurOpacity,
+            zIndex: 1000,
+          }}
+        >
+          <LinearGradient
+            colors={[
+              'rgba(10, 145, 104, 0)',
+              'rgba(10, 145, 104, 0.05)',
+              'rgba(10, 145, 104, 0.15)',
+              'rgba(10, 145, 104, 0.3)',
+            ]}
+            style={{ flex: 1 }}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        </Animated.View>
 
         {/* Panneau coulissant pour la gestion des agents IA - en dessous de la barre */}
         <Animated.View
@@ -165,8 +199,7 @@ export default function BottomBar({
             backgroundColor: 'rgba(200, 200, 200, 0.65)',
             borderRadius: 3,
             alignSelf: 'center',
-            marginBottom: 6,
-            marginTop: 6,
+            marginBottom: 5,
           }} />
         </View>
         
@@ -182,13 +215,12 @@ export default function BottomBar({
               value={chatText}
               onChangeText={setChatText}
               onSubmitEditing={handleSendMessage}
-              multiline
             />
             <TouchableOpacity
               style={{
-                backgroundColor: chatText.trim() ? "rgba(10, 145, 104, 0.4)" : 'rgba(200, 200, 200, 0.5)',
+                backgroundColor: chatText.trim() ? "rgba(10, 145, 104, 0.)" : 'rgba(200, 200, 200, 0.)',
                 borderRadius: 25,
-                paddingHorizontal: 12,
+                paddingHorizontal: 8,
                 paddingVertical: 8,
                 opacity: chatText.trim() ? 1 : 0.6,
               }}

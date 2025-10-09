@@ -1,5 +1,6 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { styles } from '@/styles/appStyles';
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -186,7 +187,7 @@ export default function ConversationDetail() {
   if (loading) {
     return (
       <View style={styles.chatContainer}>
-        <Stack.Screen options={{ title: 'Chargement...', headerShown: true }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="rgba(55, 116, 69, 1)" />
           <Text style={{ marginTop: 10, color: '#666' }}>Chargement des messages...</Text>
@@ -201,31 +202,41 @@ export default function ConversationDetail() {
       <TouchableOpacity
         style={{
           position: 'absolute',
-          top: 10,
-          left: 15,
-          zIndex: 1000,
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          top: 30,
+          left: 20,
+          zIndex: 20,
+          backgroundColor: 'rgba(10, 145, 104, 0.9)',
           borderRadius: 20,
-          padding: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
+          width: 40,
+          height: 40,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: 'rgba(10, 145, 104, 0.4)',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.5,
+          shadowRadius: 8,
+          elevation: 8,
         }}
         onPress={() => router.push('/(tabs)/conversations')}
       >
-        <Text style={{ fontSize: 18, color: 'rgba(55, 116, 69, 1)' }}>←</Text>
+        <Ionicons name="chevron-back" size={24} color="#fff" />
       </TouchableOpacity>
 
       {/* Header flottant avec avatar et nom */}
-      <View style={styles.chatHeader}>
+      <TouchableOpacity 
+        style={styles.chatHeader}
+        onPress={() => router.push({
+          pathname: '/(tabs)/conversation-management',
+          params: { conversationId }
+        })}
+        activeOpacity={0.8}
+      >
         <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
         <Text style={styles.chatHeaderName}>Conversation</Text>
         <View style={styles.chatHeaderStatus}>
           <Text style={styles.statusDot}>•</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Liste des messages */}
       <ScrollView

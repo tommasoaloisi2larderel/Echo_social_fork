@@ -122,16 +122,20 @@ const styles = StyleSheet.create({
 
   // CARD
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: BACKGROUND_GRAY,
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 16,
     marginTop: 14,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 10, elevation: 2,
+    shadowColor: "#fff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 7,
+    elevation: 3,
   },
   cardTouchable: { paddingVertical: 2 },
   row: { flexDirection: 'row', alignItems: 'center' },
-  senderAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e6eee6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  senderAvatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#e6eee6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   senderInitial: { color: 'rgba(10, 145, 104, 1)', fontWeight: '800' },
   senderName: { color: '#365a3a', fontWeight: '700', marginBottom: 2 },
   messageText: { color: '#55685a', lineHeight: 22 },
