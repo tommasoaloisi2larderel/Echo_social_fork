@@ -1,16 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, View } from 'react-native';
 
 interface SwipeableContainerProps {
   children: [React.ReactNode, React.ReactNode, React.ReactNode]; // Exactly 3 children
   initialIndex?: number;
   onIndexChange?: (index: number) => void;
+  controlRef?: React.RefObject<SwipeableContainerHandle>;
+}
+
+export interface SwipeableContainerHandle {
+  scrollToIndex: (index: number) => void;
 }
 
 export default function SwipeableContainer({
   children,
   initialIndex = 1,
   onIndexChange,
+  controlRef,
 }: SwipeableContainerProps) {
   const pageCount = children.length;
   const [width, setWidth] = useState<number>(0);
@@ -42,6 +48,19 @@ export default function SwipeableContainer({
       onIndexChange?.(idx);
     }
   };
+
+  // Exposer la méthode scrollToIndex via le ref
+  useImperativeHandle(controlRef, () => ({
+    scrollToIndex: (index: number) => {
+      if (scrollRef.current && width > 0) {
+        const clampedIndex = Math.min(Math.max(index, 0), pageCount - 1);
+        const x = clampedIndex * width;
+        scrollRef.current.scrollTo({ x, y: 0, animated: true });
+        setCurrentIndex(clampedIndex);
+        onIndexChange?.(clampedIndex);
+      }
+    },
+  }));
 
   return (
     <View style={styles.container} onLayout={onLayout}>

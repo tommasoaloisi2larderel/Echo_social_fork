@@ -1,21 +1,22 @@
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../../components/DefaultAvatar';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTransition } from '../../contexts/TransitionContext';
 
 // Import type pour forcer TypeScript à reconnaître la route
 
@@ -56,14 +57,17 @@ const ConversationSquare = ({
   name, 
   unread, 
   onPress,
-  photoUrl 
+  photoUrl,
+  squareRef
 }: { 
   name: string; 
   unread: boolean; 
   onPress: () => void;
   photoUrl?: string;
+  squareRef?: React.RefObject<TouchableOpacity>;
 }) => (
   <TouchableOpacity
+    ref={squareRef}
     style={[
       styles.conversationSquare,
       {
@@ -91,9 +95,12 @@ export default function ConversationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { makeAuthenticatedRequest, user } = useAuth(); // Utiliser la nouvelle fonction
+  const { setTransitionPosition } = useTransition();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<'direct' | 'group'>('direct');
+  const squareRefs = useRef<Map<string, React.RefObject<TouchableOpacity>>>(new Map());
+  
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? "http://localhost:3001"
@@ -209,19 +216,32 @@ export default function ConversationsScreen() {
       <FlatList
         data={filteredConversations}
         keyExtractor={(item) => item.uuid}
-        renderItem={({ item }) => (
-          <ConversationSquare
-            name={item.other_participant?.surnom || item.other_participant?.username || 'Unknown'}
-            unread={item.unread_count > 0}
-            photoUrl={item.other_participant?.photo_profil_url}
-            onPress={() => {
-              router.push({
-                pathname: '/(tabs)/conversation-detail',
-                params: { conversationId: item.uuid }
-              });
-            }}
-          />
-        )}
+        renderItem={({ item }) => {
+          // Créer ou récupérer une ref pour ce carré
+          if (!squareRefs.current.has(item.uuid)) {
+            squareRefs.current.set(item.uuid, React.createRef<TouchableOpacity>());
+          }
+          const squareRef = squareRefs.current.get(item.uuid)!;
+          
+          return (
+            <ConversationSquare
+              name={item.other_participant?.surnom || item.other_participant?.username || 'Unknown'}
+              unread={item.unread_count > 0}
+              photoUrl={item.other_participant?.photo_profil_url}
+              squareRef={squareRef}
+              onPress={() => {
+                // Capturer la position avant la navigation
+                squareRef.current?.measure((x, y, width, height, pageX, pageY) => {
+                  setTransitionPosition({ x: pageX, y: pageY, width, height });
+                  router.push({
+                    pathname: '/(tabs)/conversation-detail',
+                    params: { conversationId: item.uuid }
+                  });
+                });
+              }}
+            />
+          );
+        }}
         numColumns={3}
         columnWrapperStyle={styles.row}
         contentContainerStyle={[styles.conversationGrid, localStyles.gridCompact]}

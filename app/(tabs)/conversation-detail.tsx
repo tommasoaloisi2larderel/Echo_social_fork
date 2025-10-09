@@ -5,12 +5,17 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTransition } from '../../contexts/TransitionContext';
 
 interface Message {
   id: number;
@@ -25,6 +30,7 @@ interface Message {
 export default function ConversationDetail() {
   const { conversationId } = useLocalSearchParams();
   const { accessToken, user, logout } = useAuth();
+  const { transitionPosition, setTransitionPosition } = useTransition();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +39,10 @@ export default function ConversationDetail() {
   
   // Synchroniser avec l'état global du layout
   const [isLayoutSynced, setIsLayoutSynced] = useState(false);
+  
+  // Animation de zoom
+  const screenDimensions = Dimensions.get('window');
+  const zoomAnim = useRef(new Animated.Value(0)).current;
 
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -171,6 +181,24 @@ export default function ConversationDetail() {
     }
   };
 
+  // Animation de zoom au montage
+  useEffect(() => {
+    if (transitionPosition) {
+      Animated.spring(zoomAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 10,
+      }).start(() => {
+        // Nettoyer la position de transition après l'animation
+        setTransitionPosition(null);
+      });
+    } else {
+      // Si pas de transition, afficher directement
+      zoomAnim.setValue(1);
+    }
+  }, []);
+
   useEffect(() => {
     if (conversationId && accessToken) {
       fetchMessages();
@@ -196,8 +224,39 @@ export default function ConversationDetail() {
     );
   }
 
+  // Calcul des styles d'animation
+  const animatedStyle = transitionPosition ? {
+    transform: [
+      {
+        translateX: zoomAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [
+            transitionPosition.x + transitionPosition.width / 2 - screenDimensions.width / 2,
+            0
+          ],
+        }),
+      },
+      {
+        translateY: zoomAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [
+            transitionPosition.y + transitionPosition.height / 2 - screenDimensions.height / 2,
+            0
+          ],
+        }),
+      },
+      {
+        scale: zoomAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [transitionPosition.width / screenDimensions.width, 1],
+        }),
+      },
+    ],
+    opacity: zoomAnim,
+  } : {};
+
   return (
-    <View style={styles.chatContainer}>
+    <Animated.View style={[styles.chatContainer, animatedStyle]}>
       {/* Bouton de retour flottant */}
       <TouchableOpacity
         style={{
@@ -217,7 +276,7 @@ export default function ConversationDetail() {
           shadowRadius: 8,
           elevation: 8,
         }}
-        onPress={() => router.push('/(tabs)/conversations')}
+        onPress={() => router.back()}
       >
         <Ionicons name="chevron-back" size={24} color="#fff" />
       </TouchableOpacity>
@@ -237,46 +296,71 @@ export default function ConversationDetail() {
           <Text style={styles.statusDot}>•</Text>
         </View>
       </TouchableOpacity>
-
-      {/* Liste des messages */}
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={styles.messagesContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {messages.map((msg) => {
-          const isMe = msg.sender_username === user?.username;
-          return (
-            <View
-              key={msg.uuid}
-              style={[
-                styles.messageBubble,
-                isMe ? styles.myMessage : styles.theirMessage
-              ]}
-            >
-              <Text style={[
-                styles.messageText,
-                isMe ? styles.myMessageText : styles.theirMessageText
-              ]}>
-                {msg.content}
-              </Text>
-              <View style={styles.messageMeta}>
-                <Text style={styles.timestampText}>
-                  {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+      
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        {/* Liste des messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.messagesContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.map((msg, index) => {
+            const isMe = msg.sender_username === user?.username;
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
+            
+            // Vérifier si le message précédent/suivant est du même utilisateur
+            const isSameSenderAsPrev = prevMsg && prevMsg.sender_username === msg.sender_username;
+            const isSameSenderAsNext = nextMsg && nextMsg.sender_username === msg.sender_username;
+            
+            // Déterminer si c'est le premier ou dernier message d'un groupe
+            const isFirstInGroup = !isSameSenderAsPrev;
+            const isLastInGroup = !isSameSenderAsNext;
+            const isFirstMessageOverall = index === 0;
+            
+            return (
+              <View
+                key={msg.uuid}
+                style={[
+                  styles.messageBubble,
+                  isMe ? styles.myMessage : styles.theirMessage,
+                  // Réduire l'espacement pour le premier message
+                  isFirstMessageOverall && styles.firstMessageOverall,
+                  // Réduire l'espacement pour les messages groupés
+                  !isFirstInGroup && styles.messageGrouped,
+                  // Modifier les bordures pour les messages du milieu
+                  !isFirstInGroup && !isLastInGroup && (isMe ? styles.myMessageMiddle : styles.theirMessageMiddle),
+                  isFirstInGroup && isSameSenderAsNext && (isMe ? styles.myMessageFirst : styles.theirMessageFirst),
+                  isLastInGroup && isSameSenderAsPrev && (isMe ? styles.myMessageLast : styles.theirMessageLast),
+                ]}
+              >
+                <Text style={[
+                  styles.messageText,
+                  isMe ? styles.myMessageText : styles.theirMessageText
+                ]}>
+                  {msg.content}
                 </Text>
-                {isMe && (
-                  <Text style={styles.readStatus}>
-                    {msg.is_read ? "Lu" : "Envoyé"}
-                  </Text>
+                {/* Afficher l'heure seulement sur le dernier message du groupe */}
+                {isLastInGroup && (
+                  <View style={styles.messageMeta}>
+                    <Text style={styles.timestampText}>
+                      {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </Text>
+                    {isMe && (
+                      <Text style={styles.readStatus}>
+                        {msg.is_read ? "Lu" : "Envoyé"}
+                      </Text>
+                    )}
+                  </View>
                 )}
               </View>
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
+            );
+          })}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 }

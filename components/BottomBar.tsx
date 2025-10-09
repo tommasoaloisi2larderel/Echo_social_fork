@@ -1,22 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  PanResponder,
-  Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Keyboard,
+    KeyboardAvoidingView,
+    PanResponder,
+    Platform,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
+import { useNavigation } from "../contexts/NavigationContext";
 import { styles } from "../styles/appStyles";
 
 interface BottomBarProps {
@@ -39,6 +39,7 @@ export default function BottomBar({
   
   const isChat = currentRoute.includes("conversation-detail");
   const { accessToken, makeAuthenticatedRequest } = useAuth();
+  const { navigateToScreen } = useNavigation();
   
   // Dimensions de l'écran
   const screenHeight = Dimensions.get('window').height;
@@ -358,7 +359,7 @@ export default function BottomBar({
           right: 0,
           bottom: 0,
           opacity: overlayOpacity,
-          zIndex: 998,
+          zIndex: 9998,
         }}
       >
         <TouchableOpacity
@@ -380,7 +381,7 @@ export default function BottomBar({
           bottom: 0, 
           left: 0, 
           right: 0, 
-          zIndex: 999,
+          zIndex: 9999,
           transform: [{ translateY: keyboardOffset }],
         }}
       >
@@ -697,7 +698,7 @@ export default function BottomBar({
           <View style={styles.navBar}>
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => router.push("/(tabs)/conversations")}
+              onPress={() => navigateToScreen('conversations')}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView
@@ -713,7 +714,7 @@ export default function BottomBar({
 
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => router.push("/(tabs)")}
+              onPress={() => navigateToScreen('home')}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView
@@ -729,7 +730,7 @@ export default function BottomBar({
 
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => router.push("/(tabs)/about")}
+              onPress={() => navigateToScreen('profile')}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView

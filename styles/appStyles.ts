@@ -174,7 +174,8 @@ export const styles = StyleSheet.create({
   messageMeta: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 0,
     gap: 8,
   },
 
@@ -186,6 +187,48 @@ export const styles = StyleSheet.create({
   readStatus: {
     fontSize: 10,
     color: "#aaa",
+  },
+
+  // Styles pour les messages groupés
+  firstMessageOverall: {
+    marginTop: 0,  // Réduire l'espace en haut du premier message
+  },
+
+  messageGrouped: {
+    marginTop: 2,  // Réduire l'espace entre les messages groupés
+    marginBottom: 2,
+  },
+
+  // Messages de l'utilisateur (à droite) - Premier du groupe
+  myMessageFirst: {
+    borderBottomRightRadius: 8,  // Réduire le rayon en bas à droite
+  },
+
+  // Messages de l'utilisateur (à droite) - Milieu du groupe
+  myMessageMiddle: {
+    borderTopRightRadius: 8,     // Réduire le rayon en haut à droite
+    borderBottomRightRadius: 8,  // Réduire le rayon en bas à droite
+  },
+
+  // Messages de l'utilisateur (à droite) - Dernier du groupe
+  myMessageLast: {
+    borderTopRightRadius: 8,     // Réduire le rayon en haut à droite
+  },
+
+  // Messages des autres (à gauche) - Premier du groupe
+  theirMessageFirst: {
+    borderBottomLeftRadius: 8,   // Réduire le rayon en bas à gauche
+  },
+
+  // Messages des autres (à gauche) - Milieu du groupe
+  theirMessageMiddle: {
+    borderTopLeftRadius: 8,      // Réduire le rayon en haut à gauche
+    borderBottomLeftRadius: 8,   // Réduire le rayon en bas à gauche
+  },
+
+  // Messages des autres (à gauche) - Dernier du groupe
+  theirMessageLast: {
+    borderTopLeftRadius: 8,      // Réduire le rayon en haut à gauche
   },
 
   ///////////////////////////////////////// STYLES FOR HOME PAGE
