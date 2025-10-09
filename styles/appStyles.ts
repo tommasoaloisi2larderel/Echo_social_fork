@@ -130,14 +130,14 @@ export const styles = StyleSheet.create({
   },
   messagesContainer: {
     paddingTop: 140,
-    paddingBottom: 200,
+    paddingBottom: 150,
     paddingHorizontal: 20,
   },
   messageBubble: {
     marginVertical: 8,
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 30,
+    borderRadius: 25,
     maxWidth: "80%",
     shadowColor: WHITE,
     shadowOpacity: 0.4,
