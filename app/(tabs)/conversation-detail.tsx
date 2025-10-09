@@ -15,6 +15,7 @@ import {
   View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
 
 interface Message {
@@ -31,11 +32,11 @@ export default function ConversationDetail() {
   const { conversationId } = useLocalSearchParams();
   const { accessToken, user, logout } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
+  const { setWebsocket, setSendMessage, setCurrentConversationId } = useChat();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [websocket, setWebsocket] = useState<WebSocket | null>(null);
-  const [newMessage, setNewMessage] = useState<string>('');
+  const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   
   // Synchroniser avec l'état global du layout
   const [isLayoutSynced, setIsLayoutSynced] = useState(false);
@@ -65,7 +66,9 @@ export default function ConversationDetail() {
 
       ws.onopen = () => {
         console.log("✅ WebSocket connecté");
-        setWebsocket(ws);
+        setLocalWebsocket(ws);
+        setWebsocket(ws); // Exposer au contexte global
+        setCurrentConversationId(conversationId as string);
 
         // Marquer la conversation comme vue dès la connexion
         ws.send(
@@ -98,6 +101,12 @@ export default function ConversationDetail() {
                 m.uuid === newMsg.uuid ? { ...m, ...newMsg } : m
               );
             }
+            
+            // Scroll vers le bas pour les nouveaux messages
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+            
             return [...prev, newMsg];
           });
         } else if (data.type === "error") {
@@ -111,25 +120,34 @@ export default function ConversationDetail() {
 
       ws.onclose = () => {
         console.log("🔌 WebSocket fermé");
-        setWebsocket(null);
+        setLocalWebsocket(null);
+        setWebsocket(null); // Nettoyer le contexte global
+        setCurrentConversationId(null);
       };
     } catch (error) {
       console.error("❌ Erreur connexion WebSocket:", error);
     }
   };
 
-  const sendMessage = () => {
-    if (!newMessage.trim() || !websocket) return;
+  const sendMessageHandler = (messageText: string) => {
+    if (!messageText.trim() || !localWebsocket) {
+      console.warn("⚠️ Impossible d'envoyer: message vide ou pas de websocket");
+      return;
+    }
 
     const messageData = {
       type: "chat_message",
       conversation_uuid: conversationId,
-      message: newMessage.trim(),
+      message: messageText.trim(),
     };
 
     console.log("📤 Envoi message:", messageData);
-    websocket.send(JSON.stringify(messageData));
-    setNewMessage("");
+    localWebsocket.send(JSON.stringify(messageData));
+    
+    // Scroll vers le bas après envoi
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   const fetchMessages = async () => {
@@ -199,6 +217,15 @@ export default function ConversationDetail() {
     }
   }, []);
 
+  // Exposer la fonction sendMessage au contexte
+  useEffect(() => {
+    setSendMessage(() => sendMessageHandler);
+    
+    return () => {
+      setSendMessage(null);
+    };
+  }, [localWebsocket, conversationId]);
+
   useEffect(() => {
     if (conversationId && accessToken) {
       fetchMessages();
@@ -206,8 +233,8 @@ export default function ConversationDetail() {
     }
 
     return () => {
-      if (websocket) {
-        websocket.close();
+      if (localWebsocket) {
+        localWebsocket.close();
       }
     };
   }, [conversationId, accessToken]);

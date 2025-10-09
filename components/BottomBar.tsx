@@ -4,18 +4,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Keyboard,
-    KeyboardAvoidingView,
-    PanResponder,
-    Platform,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
+import { useChat } from "../contexts/ChatContext";
 import { useNavigation } from "../contexts/NavigationContext";
 import { styles } from "../styles/appStyles";
 
@@ -40,6 +41,7 @@ export default function BottomBar({
   const isChat = currentRoute.includes("conversation-detail");
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
+  const { sendMessage: sendChatMessage, websocket } = useChat();
   
   // Dimensions de l'écran
   const screenHeight = Dimensions.get('window').height;
@@ -246,20 +248,22 @@ export default function BottomBar({
 
   // Fonction pour envoyer un message
   const handleSendMessage = async () => {
-    if (!chatText.trim()) return;
+    if (!chatText.trim()) {
+      console.log("⚠️ Message vide, pas d'envoi");
+      return;
+    }
 
     try {
-      if (isChat && conversationId) {
-        // Envoi de message dans une conversation existante
-        console.log("Envoi message à conversation:", conversationId);
-        // Ici vous pouvez ajouter la logique WebSocket ou API pour envoyer le message
-        // Pour l'instant, on utilise la fonction onSendMessage si elle existe
-        if (onSendMessage) {
-          onSendMessage();
-        }
-      } else {
+      if (isChat && sendChatMessage) {
+        // Envoi de message dans une conversation existante via WebSocket
+        console.log("📤 Envoi message via WebSocket:", chatText);
+        sendChatMessage(chatText);
+        
+        // Vider le champ après envoi
+        setChatText("");
+      } else if (!isChat) {
         // Envoi de message à l'IA Jarvis
-        console.log("Envoi message à Jarvis:", chatText);
+        console.log("🤖 Envoi message à Jarvis:", chatText);
         const response = await makeAuthenticatedRequest(
           'https://reseausocial-production.up.railway.app/ai/chat/',
           {
@@ -274,16 +278,16 @@ export default function BottomBar({
         );
         
         if (response.ok) {
-          console.log("Message envoyé à Jarvis avec succès");
+          console.log("✅ Message envoyé à Jarvis avec succès");
+          setChatText("");
         } else {
-          console.error("Erreur envoi message à Jarvis:", response.status);
+          console.error("❌ Erreur envoi message à Jarvis:", response.status);
         }
+      } else {
+        console.warn("⚠️ Pas de fonction d'envoi disponible");
       }
-      
-      // Vider le champ après envoi
-      setChatText("");
     } catch (error) {
-      console.error("Erreur lors de l'envoi du message:", error);
+      console.error("❌ Erreur lors de l'envoi du message:", error);
     }
   };
 
@@ -611,12 +615,15 @@ export default function BottomBar({
             <TextInput
               style={[styles.chatInput, { flex: 1, marginRight: 8 }]}
               placeholder={
-                isChat ? `Message to ${chatRecipient}` : "Ask Jarvis anything"
+                isChat 
+                  ? (websocket ? `Message...` : "Connexion...") 
+                  : "Ask Jarvis anything"
               }
               placeholderTextColor="rgba(105, 105, 105, 0.8)"
               value={chatText}
               onChangeText={setChatText}
               onSubmitEditing={handleSendMessage}
+              editable={isChat ? !!websocket : true}
             />
             <TouchableOpacity
               style={{
