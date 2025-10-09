@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   PanResponder,
   Platform,
@@ -50,6 +51,7 @@ export default function BottomBar({
   const dragStartY = useRef(0);
 
   const [barHeight, setBarHeight] = useState(96); // default, will be measured
+  const keyboardOffset = useRef(new Animated.Value(0)).current;
   
   // Animations pour l'effet WOW
   const particleAnim1 = useRef(new Animated.Value(0)).current;
@@ -57,6 +59,36 @@ export default function BottomBar({
   const particleAnim3 = useRef(new Animated.Value(0)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Gestion du clavier - monte la bottomBar au-dessus
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(keyboardOffset, {
+          toValue: -e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? 250 : 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.timing(keyboardOffset, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? 250 : 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   // Animation des particules en boucle
   useEffect(() => {
@@ -334,8 +366,15 @@ export default function BottomBar({
         </TouchableOpacity>
       </Animated.View>
 
-      <View
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999 }}
+      <Animated.View
+        style={{ 
+          position: 'absolute', 
+          bottom: 0, 
+          left: 0, 
+          right: 0, 
+          zIndex: 999,
+          transform: [{ translateY: keyboardOffset }],
+        }}
       >
         {/* Particules lumineuses mystérieuses - seulement visibles quand le panneau est ouvert */}
         <Animated.View
@@ -791,7 +830,7 @@ export default function BottomBar({
             </Animated.View>
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
     </>
   );
 }

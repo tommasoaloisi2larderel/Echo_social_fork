@@ -99,6 +99,8 @@ const styles = StyleSheet.create({
 
   // HEADER
   hero: {
+    top : 30,
+    marginBottom: 20,
     padding: 20,
     borderRadius: 28,
     overflow: 'hidden',
