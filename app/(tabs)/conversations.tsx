@@ -16,6 +16,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CreateGroupModal } from '../../components/CreateGroupModal';
 import DefaultAvatar from '../../components/DefaultAvatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTransition } from '../../contexts/TransitionContext';
@@ -61,6 +62,54 @@ interface Connection {
   last_name?: string;
   photo_profil_url?: string;
   statut_relation?: string;
+}
+
+// Type pour les groupes
+interface Group {
+  id: number;
+  uuid: string;
+  name: string;
+  description?: string;
+  avatar?: string | null;
+  member_count: number;
+  my_role?: 'owner' | 'moderator' | 'member';
+  unread_messages?: number;
+  created_at: string;
+  conversation_uuid?: string;
+}
+
+// Type pour les membres de groupe
+interface GroupMember {
+  id: number;
+  user: number;
+  username: string;
+  user_uuid: string;
+  surnom?: string;
+  role: 'owner' | 'moderator' | 'member';
+  photo_profil_url?: string | null;
+  joined_at: string;
+}
+
+// Type pour les invitations de groupe
+interface GroupInvitation {
+  id: number;
+  uuid: string;
+  group: {
+    uuid: string;
+    name: string;
+    description?: string;
+    member_count: number;
+  };
+  created_by: {
+    uuid: string;
+    username: string;
+    photo_profil_url?: string | null;
+  };
+  invitation_type: 'official' | 'member_request';
+  status: 'sent' | 'viewed' | 'pending' | 'accepted' | 'declined' | 'expired';
+  message?: string;
+  created_at: string;
+  expires_at: string;
 }
 
 const SearchBar = ({ query, setQuery }: { query: string; setQuery: (q: string) => void }) => (
@@ -144,6 +193,46 @@ const UserSquare = ({
   </TouchableOpacity>
 );
 
+const GroupSquare = ({ 
+  group, 
+  onPress,
+}: { 
+  group: Group; 
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.conversationSquare,
+      {
+        shadowColor: "#777",
+        shadowOpacity: 0.4,
+      },
+    ]}
+    onPress={onPress}
+  >
+    {group.avatar ? (
+      <Image source={{ uri: group.avatar }} style={styles.avatar} />
+    ) : (
+      <View style={[styles.avatar, { backgroundColor: 'rgba(10, 145, 104, 0.2)', justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="people" size={40} color="rgba(10, 145, 104, 1)" />
+      </View>
+    )}
+    {group.unread_messages && group.unread_messages > 0 && (
+      <View style={styles.unreadBadge}>
+        <Text style={styles.unreadText}>{group.unread_messages}</Text>
+      </View>
+    )}
+    <View style={styles.conversationNameBadge}>
+      <Text style={styles.conversationName} numberOfLines={1}>
+        {group.name}
+      </Text>
+      <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+        {group.member_count} membre{group.member_count > 1 ? 's' : ''}
+      </Text>
+    </View>
+  </TouchableOpacity>
+);
+
 export default function ConversationsScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,6 +248,11 @@ export default function ConversationsScreen() {
   const [searchResults, setSearchResults] = useState<{ friends: User[], strangers: User[] }>({ friends: [], strangers: [] });
   const [isSearching, setIsSearching] = useState(false);
   const [myConnections, setMyConnections] = useState<Connection[]>([]);
+  
+  // États pour les groupes
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
   
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -270,11 +364,99 @@ export default function ConversationsScreen() {
     }
   };
 
+  // Fonction pour récupérer les groupes
+  const fetchGroups = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/groups/my-groups/`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setGroups(data);
+        console.log('👥 Groupes chargés:', data.length, data.map((g: Group) => g.name));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des groupes:', error);
+    }
+  };
+
+  // Fonction pour récupérer les invitations de groupe
+  const fetchGroupInvitations = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/groups/invitations/received/`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setGroupInvitations(data);
+        console.log('📨 Invitations de groupe:', data.length);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des invitations:', error);
+    }
+  };
+
+  // Fonction pour créer un nouveau groupe
+  const createGroup = async (name: string, description: string) => {
+    try {
+      console.log('🆕 Création groupe:', name);
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/groups/create/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim() || undefined,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erreur création groupe:', errorData);
+        throw new Error(errorData.detail || errorData.error || `Erreur ${response.status}`);
+      }
+
+      const newGroup = await response.json();
+      console.log('✅ Groupe créé:', newGroup.name, 'UUID:', newGroup.uuid);
+      
+      // Ajouter le nouveau groupe à la liste
+      setGroups(prev => [newGroup, ...prev]);
+      
+      Alert.alert(
+        'Succès',
+        `Le groupe "${name}" a été créé avec succès !`
+      );
+
+      // Si le groupe a une conversation, on peut l'ouvrir
+      if (newGroup.conversation_uuid) {
+        router.push({
+          pathname: '/(tabs)/conversation-detail',
+          params: { conversationId: newGroup.conversation_uuid }
+        });
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du groupe:', error);
+      throw error;
+    }
+  };
+
   // Charger les conversations et connexions au montage du composant
   useEffect(() => {
     fetchConversations();
     fetchConnections();
   }, []); // Supprimer accessToken des dépendances
+
+  // Charger les groupes quand on passe en mode Groupe
+  useEffect(() => {
+    if (viewMode === 'group') {
+      fetchGroups();
+      fetchGroupInvitations();
+    }
+  }, [viewMode]);
 
   // Déclencher la recherche quand la query change (seulement en mode Privé)
   useEffect(() => {
@@ -439,14 +621,17 @@ export default function ConversationsScreen() {
       };
     });
   } else {
-    // Mode Groupe : afficher uniquement les conversations de groupe
-    displayItems = modeFiltered.map(conv => ({
-      uuid: conv.uuid,
-      name: 'Groupe',  // Les groupes n'ont pas de other_participant
-      photoUrl: undefined,
-      unread: conv.unread_count > 0,
-      conversationId: conv.uuid,
-      hasConversation: true,
+    // Mode Groupe : afficher les groupes depuis l'API /groups/my-groups/
+    displayItems = groups.map(group => ({
+      uuid: group.uuid,
+      name: group.name,
+      photoUrl: group.avatar || undefined,
+      unread: false, // L'unread sera géré via group.unread_messages
+      conversationId: group.conversation_uuid,
+      hasConversation: !!group.conversation_uuid,
+      isGroup: true,
+      memberCount: group.member_count,
+      unreadMessages: group.unread_messages || 0,
     }));
   }
 
@@ -482,8 +667,24 @@ export default function ConversationsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Header Créer un groupe (en mode Groupe avec recherche) */}
+      {viewMode === 'group' && query.trim().length > 0 && (
+        <TouchableOpacity
+          style={[localStyles.categoryHeaderSearch, { marginTop: 160 }]}
+          onPress={() => {
+            console.log('🆕 Création groupe depuis header');
+            setShowCreateGroupModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle" size={18} color="rgba(10, 145, 104, 1)" />
+          <Text style={localStyles.categoryTitleSearch}>Créer un groupe</Text>
+          <Ionicons name="chevron-forward" size={18} color="rgba(10, 145, 104, 1)" />
+        </TouchableOpacity>
+      )}
+
       {/* Grille de conversations avec section "Autres utilisateurs" si recherche */}
-      {filteredFriends.length === 0 && !showStrangers ? (
+      {filteredFriends.length === 0 && !showStrangers && !(viewMode === 'group' && query.trim().length > 0) ? (
         <View style={localStyles.emptyConversationsContainer}>
           <Ionicons 
             name={viewMode === 'direct' ? "person-outline" : "people-outline"} 
@@ -608,7 +809,6 @@ export default function ConversationsScreen() {
             ListFooterComponent={
               showStrangers ? (
                 <View>
-                  {/* Header Autres utilisateurs */}
                   <View style={localStyles.categoryHeaderSearch}>
                     <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
                     <Text style={localStyles.categoryTitleSearch}>Autres utilisateurs</Text>
@@ -638,7 +838,7 @@ export default function ConversationsScreen() {
           />
 
           {/* Message si aucun résultat avec recherche */}
-          {query.trim() && filteredFriends.length === 0 && searchResults.strangers.length === 0 && !isSearching && (
+          {query.trim() && filteredFriends.length === 0 && searchResults.strangers.length === 0 && !isSearching && viewMode === 'direct' && (
             <View style={localStyles.noResultsContainer}>
               <Ionicons name="search-outline" size={64} color="#ccc" />
               <Text style={localStyles.noResultsTitle}>Aucun résultat</Text>
@@ -649,6 +849,13 @@ export default function ConversationsScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Modal de création de groupe */}
+      <CreateGroupModal
+        visible={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        onCreate={createGroup}
+      />
     </View>
   );
 }
