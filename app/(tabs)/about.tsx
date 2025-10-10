@@ -34,6 +34,7 @@ const isDerniereReponse = (val: any): val is DerniereReponse => {
 export default function ProfileScreen() {
   const { user, accessToken, logout, makeAuthenticatedRequest } = useAuth();
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [friendsCount, setFriendsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,12 +47,21 @@ export default function ProfileScreen() {
         return;
       }
 
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`);
-      if (response.ok) {
-        const data = await response.json();
+      const [statsResponse, connectionsResponse] = await Promise.all([
+        makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`),
+        makeAuthenticatedRequest(`${API_BASE_URL}/relations/connections/my-connections/`)
+      ]);
+
+      if (statsResponse.ok) {
+        const data = await statsResponse.json();
         setStats(data);
       } else {
-        console.warn('Stats request failed with status', response.status);
+        console.warn('Stats request failed with status', statsResponse.status);
+      }
+
+      if (connectionsResponse.ok) {
+        const connectionsData = await connectionsResponse.json();
+        setFriendsCount(connectionsData.total || connectionsData.connexions?.length || 0);
       }
     } catch (error) {
       console.warn('Error fetching stats:', error);
@@ -140,7 +150,7 @@ export default function ProfileScreen() {
           <View style={styles.quickStatsRow}>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
               <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{(user as any)?.nb_amis ?? 0}</Text>
+              <Text style={styles.quickStatNum}>{friendsCount}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>

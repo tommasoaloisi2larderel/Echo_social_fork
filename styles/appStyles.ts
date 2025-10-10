@@ -31,7 +31,7 @@ export const styles = StyleSheet.create({
   },
   conversationGrid: {
     paddingTop: 105,
-    paddingBottom: 180,
+    paddingBottom: 380,
     paddingHorizontal: 10,
   },
   row: {
