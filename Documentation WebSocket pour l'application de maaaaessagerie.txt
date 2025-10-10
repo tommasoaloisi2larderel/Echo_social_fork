@@ -1,0 +1,1401 @@
+﻿Documentation WebSocket pour l'application de maaaaessagerie
+1. Connexion WebSocket
+URL de connexion :
+wss://reseausocial-production.up.railway.app/ws/chat/
+
+
+https://reseausocial-production.up.railway.app
+
+
+Authentification : La connexion utilise l'authentification JWT via les subprotocols WebSocket :
+javascript
+const websocket = new WebSocket('wss://votre-domaine.com/ws/chat/', ['access_token', 'your_jwt_token_here']);
+Message de connexion réussie :
+json
+{
+  "type": "connection_established",
+  "message": "Connecté en tant que [username]"
+}
+2. Types de messages envoyés par le client (frontend vers backend)
+Envoyer un message
+json
+{
+  "type": "chat_message",
+  "conversation_uuid": "uuid-de-la-conversation",
+  "message": "Contenu du message",
+  "attachment_uuids": ["uuid1", "uuid2"] // Optionnel, pour les fichiers
+}
+Indiquer qu'on commence à écrire
+json
+{
+  "type": "typing_start",
+  "conversation_uuid": "uuid-de-la-conversation"
+}
+Indiquer qu'on arrête d'écrire
+json
+{
+  "type": "typing_stop",
+  "conversation_uuid": "uuid-de-la-conversation"
+}
+Marquer une conversation comme vue
+json
+{
+  "type": "mark_as_seen",
+  "conversation_uuid": "uuid-de-la-conversation"
+}
+Archiver une conversation
+json
+{
+  "type": "archive_conversation",
+  "conversation_uuid": "uuid-de-la-conversation"
+}
+Désarchiver une conversation
+json
+{
+  "type": "unarchive_conversation",
+  "conversation_uuid": "uuid-de-la-conversation"
+}
+3. Types de messages reçus par le client (backend vers frontend)
+Nouveau message dans une conversation
+json
+{
+  "type": "chat_message",
+  "message": {
+    "id": 123,
+    "uuid": "message-uuid",
+    "content": "Contenu du message",
+    "sender_username": "nom_utilisateur",
+    "sender_uuid": "uuid-sender",
+    "conversation_uuid": "uuid-conversation",
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "attachments": [
+      {
+        "id": 456,
+        "uuid": "attachment-uuid",
+        "file_type": "image",
+        "original_filename": "photo.jpg",
+        "file_size": 1048576,
+        "file_url": "/media/attachments/photo.jpg",
+        "thumbnail_url": "/media/thumbnails/photo_thumb.jpg"
+      }
+    ],
+    "has_attachments": true
+  }
+}
+Statut "en train d'écrire"
+json
+{
+  "type": "typing_status",
+  "username": "nom_utilisateur",
+  "conversation_uuid": "uuid-conversation",
+  "is_typing": true // ou false
+}
+Conversation marquée comme vue
+json
+{
+  "type": "conversation_seen",
+  "user_id": 123,
+  "username": "nom_utilisateur",
+  "user_uuid": "uuid-user",
+  "conversation_uuid": "uuid-conversation",
+  "seen_at": "2025-08-28T10:30:00.000Z",
+  "marked_count": 5
+}
+Confirmation d'archivage
+json
+{
+  "type": "conversation_archived",
+  "conversation_uuid": "uuid-conversation",
+  "message": "Conversation archivée"
+}
+Confirmation de désarchivage
+json
+{
+  "type": "conversation_unarchived",
+  "conversation_uuid": "uuid-conversation",
+  "message": "Conversation désarchivée"
+}
+Messages d'erreur
+json
+{
+  "type": "error",
+  "message": "Description de l'erreur"
+}
+4. Gestion des groupes WebSocket (automatique)
+Le système gère automatiquement les groupes :
+* Groupe personnel : user_{user_id} - pour les notifications personnelles
+* Groupes de conversations : conversation_{conversation_uuid} - l'utilisateur est automatiquement ajouté à toutes ses conversations actives
+5. Gestion des attachments
+Les fichiers doivent d'abord être uploadés via l'API REST, puis leurs UUIDs peuvent être utilisés dans les messages WebSocket.
+Types de fichiers supportés :
+* Images : JPEG, PNG, GIF, WebP
+* Vidéos : MP4, WebM, QuickTime, AVI
+* Audio : MP3, WAV, OGG, WebM, MP4
+* Documents : PDF, TXT, DOC, DOCX
+6. Codes d'erreur WebSocket
+* 4001 : Non autorisé (token JWT invalide ou manquant)
+* Autres fermetures : Voir les standards WebSocket
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Documentation API - Réseau Social
+Base URL
+https://reseausocial-production.up.railway.app
+Authentification
+L'API utilise JWT (JSON Web Tokens) pour l'authentification. Incluez le token dans l'en-tête Authorization:
+Authorization: Bearer your_jwt_token_here
+
+
+________________
+
+
+🔐 AUTHENTIFICATION & UTILISATEURS
+1. Inscription
+POST /api/auth/register/
+Envoi :
+{
+  "username": "string",
+  "password": "string",
+  "email": "string",
+  "first_name": "string", // Optionnel
+  "last_name": "string", // Optionnel
+  "bio": "string", // Optionnel
+  "date_naissance": "YYYY-MM-DD", // Optionnel
+  "surnom": "string", // Optionnel
+  "nationalite": "string" // Optionnel
+}
+
+
+Réception :
+{
+  "user": {
+    "id": 123,
+    "uuid": "uuid-string",
+    "username": "string",
+    "email": "string",
+    "first_name": "string",
+    "last_name": "string",
+    "bio": "string",
+    "date_naissance": "YYYY-MM-DD",
+    "date_inscription": "2025-08-28T10:30:00.000Z",
+    "surnom": "string",
+    "nationalite": "string",
+    "photo_profil": "url-ou-null",
+    "photo_profil_url": "url-complete-ou-null",
+    "nb_connexions": 0,
+    "derniere_reponse": null,
+    "prochains_evenements": []
+  },
+  "tokens": {
+    "refresh": "refresh_token_string",
+    "access": "access_token_string"
+  },
+  "message": "Compte créé avec succès !"
+}
+
+
+2. Connexion
+POST /api/auth/login/
+Envoi :
+{
+  "username": "string",
+  "password": "string"
+}
+
+
+Réception :
+{
+  "access": "access_token_string",
+  "refresh": "refresh_token_string",
+  "user": {
+    // Même structure que l'inscription
+  },
+  "message": "Connexion réussie !"
+}
+
+
+3. Déconnexion
+POST /api/auth/logout/
+Envoi :
+{
+  "refresh": "refresh_token_string"
+}
+
+
+Réception :
+{
+  "message": "Déconnexion réussie !"
+}
+
+
+4. Rafraîchir le token
+POST /api/auth/token/refresh/
+Envoi :
+{
+  "refresh": "refresh_token_string"
+}
+
+
+Réception :
+{
+  "access": "new_access_token_string"
+}
+
+
+5. Profil utilisateur connecté
+GET /api/auth/profile/ PUT/PATCH /api/auth/profile/
+Réception (GET) :
+{
+  "id": 123,
+  "uuid": "uuid-string",
+  "username": "string",
+  "email": "string",
+  "first_name": "string",
+  "last_name": "string",
+  "bio": "string",
+  "date_naissance": "YYYY-MM-DD",
+  "date_inscription": "2025-08-28T10:30:00.000Z",
+  "surnom": "string",
+  "nationalite": "string",
+  "photo_profil": "url-ou-null",
+  "photo_profil_url": "url-complete-ou-null",
+  "nb_connexions": 5,
+  "derniere_reponse": {
+    "question": "Quel est ton plat préféré ?",
+    "reponse": "Les pâtes !",
+    "date": "2025-08-28T10:30:00.000Z"
+  },
+  "prochains_evenements": [
+    {
+      "id": 1,
+      "titre": "Réunion équipe",
+      "date_debut": "2025-08-29T14:00:00.000Z",
+      "type": "professionnel"
+    }
+  ]
+}
+
+
+6. Changement de mot de passe
+POST /api/auth/change-password/
+Envoi :
+{
+  "old_password": "ancien_mot_de_passe",
+  "new_password": "nouveau_mot_de_passe"
+}
+
+
+Réception :
+{
+  "message": "Mot de passe modifié avec succès"
+}
+
+
+7. Statistiques du profil
+GET /api/auth/profile/stats/ (profil connecté) GET /api/users/{uuid}/stats/ (autre utilisateur)
+Réception :
+{
+  "total_connexions": 15,
+  "total_evenements": 8,
+  "evenements_ce_mois": 3,
+  "total_reponses": 12,
+  "date_inscription": "2025-06-01T10:00:00.000Z",
+  "derniere_activite": "2025-08-28T09:30:00.000Z"
+}
+
+
+8. Liste des utilisateurs
+GET /api/users/
+Réception :
+[
+  {
+    "id": 123,
+    "uuid": "uuid-string",
+    "username": "string",
+    "surnom": "string",
+    "first_name": "string",
+    "last_name": "string",
+    "statut_relation": "aucune|en_attente|acceptee|refusee|self",
+    "photo_profil_url": "url-complete-ou-null"
+  }
+]
+
+
+9. Détail d'un utilisateur
+GET /api/users/{uuid}/
+Réception :
+{
+  // Même structure que le profil utilisateur connecté
+}
+
+
+________________
+
+
+👥 RELATIONS/CONNEXIONS
+1. Liste des relations
+GET /relations/connections/ GET /relations/connections/?statut=en_attente (filtrer par statut)
+Réception :
+[
+  {
+    "id": 1,
+    "demandeur": 123,
+    "destinataire": 456,
+    "demandeur_info": {
+      "id": 123,
+      "uuid": "uuid-string",
+      "username": "string",
+      "surnom": "string",
+      "first_name": "string",
+      "last_name": "string",
+      "statut_relation": "en_attente",
+      "photo_profil_url": "url-ou-null"
+    },
+    "destinataire_info": {
+      // Même structure
+    },
+    "statut": "en_attente|acceptee|refusee",
+    "message": "Message de la demande",
+    "date_demande": "2025-08-28T10:30:00.000Z",
+    "date_reponse": "2025-08-28T11:00:00.000Z"
+  }
+]
+
+
+2. Créer une demande de connexion
+POST /relations/connections/
+Envoi :
+{
+  "destinataire_uuid": "uuid-du-destinataire",
+  "message": "Message de la demande"
+}
+
+
+Réception :
+{
+  "id": 1,
+  "demandeur": 123,
+  "destinataire": 456,
+  "statut": "en_attente",
+  "message": "Message de la demande",
+  "date_demande": "2025-08-28T10:30:00.000Z",
+  "date_reponse": null
+}
+
+
+3. Répondre à une demande
+PUT/PATCH /relations/connections/{id}/
+Envoi :
+{
+  "statut": "acceptee|refusee"
+}
+
+
+Réception :
+{
+  // Structure complète de la relation mise à jour
+}
+
+
+4. Mes connexions acceptées
+GET /relations/connections/my-connections/
+Réception :
+{
+  "connexions": [
+    {
+      "id": 123,
+      "uuid": "uuid-string",
+      "username": "string",
+      "surnom": "string",
+      "first_name": "string",
+      "last_name": "string",
+      "statut_relation": "acceptee",
+      "photo_profil_url": "url-ou-null"
+    }
+  ],
+  "total": 5
+}
+
+
+5. Demandes reçues en attente
+GET /relations/connections/pending/
+Réception :
+{
+  "demandes": [
+    // Même structure que la liste des relations
+  ],
+  "total": 3
+}
+
+
+6. Demandes envoyées
+GET /relations/connections/sent/
+Réception :
+{
+  "demandes": [
+    // Même structure que la liste des relations
+  ],
+  "total": 2
+}
+
+
+________________
+
+
+💬 MESSAGING
+Pour les llm : à savoir les endpoints qui servent à envoyer des messages / marquer comme vu / statut en train d’écrire    sont maintenant gérés par les websockets
+1. Liste des conversations
+GET /messaging/conversations/
+Réception :
+[
+  {
+    "id": 1,
+    "uuid": "conversation-uuid",
+    "last_message": {
+      "content": "Dernier message...",
+      "sender_username": "Alice",
+      "created_at": "2025-08-28T10:30:00.000Z"
+    },
+    "other_participant": {
+      "id": 456,
+      "uuid": "uuid-string",
+      "username": "Alice",
+      "surnom": "string",
+      "photo_profil_url": "url-ou-null"
+    },
+    "unread_count": 3,
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "updated_at": "2025-08-28T10:30:00.000Z"
+  }
+]
+
+
+2. Créer une conversation
+POST /messaging/conversations/
+Envoi :
+{
+  "other_user_uuid": "uuid-de-l-autre-utilisateur"
+}
+
+
+Réception :
+{
+  "id": 1,
+  "uuid": "conversation-uuid",
+  "participants": [
+    {
+      "user": 123,
+      "username": "string",
+      "user_uuid": "uuid-string",
+      "surnom": "string",
+      "last_seen": null,
+      "is_typing": false,
+      "joined_at": "2025-08-28T10:30:00.000Z"
+    }
+  ],
+  "messages": [],
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "updated_at": "2025-08-28T10:30:00.000Z"
+}
+
+
+3. Détail d'une conversation
+GET /messaging/conversations/{uuid}/
+Réception :
+{
+  "id": 1,
+  "uuid": "conversation-uuid",
+  "participants": [
+    {
+      "user": 123,
+      "username": "Alice",
+      "user_uuid": "uuid-string",
+      "surnom": "string",
+      "last_seen": "2025-08-28T10:30:00.000Z",
+      "is_typing": false,
+      "joined_at": "2025-08-28T10:30:00.000Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": 1,
+      "uuid": "message-uuid",
+      "sender": 123,
+      "sender_username": "Alice",
+      "sender_uuid": "uuid-string",
+      "content": "Salut !",
+      "is_ai_generated": false,
+      "is_read": true,
+      "read_at": "2025-08-28T10:35:00.000Z",
+      "created_at": "2025-08-28T10:30:00.000Z",
+      "updated_at": "2025-08-28T10:30:00.000Z",
+      "attachments": []
+    }
+  ],
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "updated_at": "2025-08-28T10:30:00.000Z"
+}
+
+
+4. Messages d'une conversation
+GET /messaging/conversations/{uuid}/messages/
+Réception :
+[
+  {
+    "id": 1,
+    "uuid": "message-uuid",
+    "sender": 123,
+    "sender_username": "Alice",
+    "sender_uuid": "uuid-string",
+    "content": "Salut !",
+    "is_ai_generated": false,
+    "is_read": true,
+    "read_at": "2025-08-28T10:35:00.000Z",
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "updated_at": "2025-08-28T10:30:00.000Z",
+    "attachments": [
+      {
+        "id": 1,
+        "uuid": "attachment-uuid",
+        "file_type": "image",
+        "original_filename": "photo.jpg",
+        "file_size": 1048576,
+        "file_url": "/media/attachments/photo.jpg",
+        "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
+        "created_at": "2025-08-28T10:30:00.000Z"
+      }
+    ]
+  }
+]
+
+
+5. Envoyer un message
+POST /messaging/conversations/{uuid}/messages/create/
+Envoi :
+{
+  "content": "Contenu du message",
+  "is_ai_generated": false
+}
+
+
+Réception :
+{
+  "id": 1,
+  "uuid": "message-uuid",
+  "sender": 123,
+  "sender_username": "Alice",
+  "sender_uuid": "uuid-string",
+  "content": "Contenu du message",
+  "is_ai_generated": false,
+  "is_read": false,
+  "read_at": null,
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "updated_at": "2025-08-28T10:30:00.000Z"
+}
+
+
+6. Upload d'un attachment
+POST /messaging/attachments/upload/
+Envoi (multipart/form-data) :
+file: [fichier binaire]
+
+
+Réception :
+{
+  "id": 1,
+  "uuid": "attachment-uuid",
+  "file_type": "image",
+  "original_filename": "photo.jpg",
+  "file_size": 1048576,
+  "file_url": "/media/attachments/photo.jpg",
+  "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
+  "created_at": "2025-08-28T10:30:00.000Z"
+}
+
+
+7. Envoyer un message avec attachments
+POST /messaging/conversations/{uuid}/messages/create-with-attachments/
+Envoi :
+{
+  "content": "Message avec fichier joint",
+  "attachment_uuids": ["attachment-uuid-1", "attachment-uuid-2"],
+  "is_ai_generated": false
+}
+
+
+Réception :
+{
+  "id": 1,
+  "uuid": "message-uuid",
+  "sender": 123,
+  "sender_username": "Alice",
+  "sender_uuid": "uuid-string",
+  "content": "Message avec fichier joint",
+  "is_ai_generated": false,
+  "is_read": false,
+  "read_at": null,
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "updated_at": "2025-08-28T10:30:00.000Z",
+  "attachments": [
+    {
+      "id": 1,
+      "uuid": "attachment-uuid-1",
+      "file_type": "image",
+      "original_filename": "photo.jpg",
+      "file_size": 1048576,
+      "file_url": "/media/attachments/photo.jpg",
+      "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
+      "created_at": "2025-08-28T10:30:00.000Z"
+    }
+  ]
+}
+
+
+8. Marquer comme vu
+POST /messaging/conversations/{uuid}/mark-as-seen/
+Envoi :
+{}
+
+
+Réception :
+{
+  "message": "Conversation marquée comme vue",
+  "marked_count": 5
+}
+
+
+9. Participants d'une conversation
+GET /messaging/conversations/{uuid}/participants/
+Réception :
+{
+  "conversation_uuid": "conversation-uuid",
+  "participants": [
+    {
+      "user_id": 123,
+      "user_uuid": "uuid-string",
+      "username": "Alice",
+      "surnom": "string",
+      "last_seen": "2025-08-28T10:30:00.000Z",
+      "is_typing": false,
+      "joined_at": "2025-08-28T10:00:00.000Z",
+      "unread_count": 0
+    }
+  ]
+}
+
+
+10. Archiver une conversation
+POST /messaging/conversations/{uuid}/archive/
+Envoi :
+{
+  "action": "archive"
+}
+
+
+Réception :
+{
+  "message": "Conversation archivée avec succès"
+}
+
+
+11. Désarchiver une conversation
+POST /messaging/conversations/{uuid}/archive/
+Envoi :
+{
+  "action": "unarchive"
+}
+
+
+Réception :
+{
+  "message": "Conversation désarchivée avec succès"
+}
+
+
+12. Conversations archivées
+GET /messaging/conversations/archived/
+Réception :
+[
+  {
+    // Même structure que la liste des conversations
+    "archived_at": "2025-08-28T10:30:00.000Z"
+  }
+]
+
+
+________________
+
+
+👤 PROFILS & QUESTIONS
+1. Liste des questions disponibles
+GET /profiles/questions/ GET /profiles/questions/?categorie=alimentation (filtrer par catégorie)
+Réception :
+[
+  {
+    "id": 1,
+    "question": "Quel est ton plat préféré ?",
+    "categorie": "alimentation",
+    "is_active": true,
+    "date_creation": "2025-08-28T10:30:00.000Z"
+  }
+]
+
+
+2. Mes réponses
+GET /profiles/responses/
+Réception :
+[
+  {
+    "id": 1,
+    "utilisateur": 123,
+    "question": {
+      "id": 1,
+      "question": "Quel est ton plat préféré ?",
+      "categorie": "alimentation"
+    },
+    "reponse": "Les pâtes carbonara !",
+    "date_reponse": "2025-08-28T10:30:00.000Z",
+    "date_modification": "2025-08-28T10:35:00.000Z"
+  }
+]
+
+
+3. Créer une réponse
+POST /profiles/responses/
+Envoi :
+{
+  "question_id": 1,
+  "reponse": "Les pâtes carbonara !"
+}
+
+
+Réception :
+{
+  "id": 1,
+  "utilisateur": 123,
+  "question": 1,
+  "reponse": "Les pâtes carbonara !",
+  "date_reponse": "2025-08-28T10:30:00.000Z",
+  "date_modification": "2025-08-28T10:30:00.000Z"
+}
+
+
+4. Modifier/supprimer une réponse
+PUT/PATCH/DELETE /profiles/responses/{id}/
+Envoi (PUT/PATCH) :
+{
+  "reponse": "Nouvelle réponse modifiée"
+}
+
+
+Réception :
+{
+  // Même structure qu'à la création, avec les données mises à jour
+}
+
+
+5. Réponses d'un autre utilisateur
+GET /profiles/users/{uuid}/responses/
+Réception :
+[
+  {
+    // Même structure que "Mes réponses"
+  }
+]
+
+
+________________
+
+
+📅 CALENDRIER
+1. Liste de mes événements
+GET /calendrier/events/ GET /calendrier/events/?date_debut=2025-08-28 (filtrer par date) GET /calendrier/events/?type=anniversaire (filtrer par type)
+Réception :
+[
+  {
+    "id": 1,
+    "titre": "Réunion équipe",
+    "description": "Réunion hebdomadaire",
+    "date_debut": "2025-08-29T14:00:00.000Z",
+    "date_fin": "2025-08-29T15:00:00.000Z",
+    "type": "professionnel",
+    "lieu": "Salle de conférence",
+    "is_all_day": false,
+    "rappel_minutes": 15,
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "updated_at": "2025-08-28T10:30:00.000Z"
+  }
+]
+
+
+2. Créer un événement
+POST /calendrier/events/
+Envoi :
+{
+  "titre": "Réunion équipe",
+  "description": "Réunion hebdomadaire",
+  "date_debut": "2025-08-29T14:00:00.000Z",
+  "date_fin": "2025-08-29T15:00:00.000Z",
+  "type": "professionnel",
+  "lieu": "Salle de conférence",
+  "is_all_day": false,
+  "rappel_minutes": 15
+}
+
+
+Réception :
+{
+  "id": 1,
+  "titre": "Réunion équipe",
+  "description": "Réunion hebdomadaire",
+  "date_debut": "2025-08-29T14:00:00.000Z",
+  "date_fin": "2025-08-29T15:00:00.000Z",
+  "type": "professionnel",
+  "lieu": "Salle de conférence",
+  "is_all_day": false,
+  "rappel_minutes": 15,
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "updated_at": "2025-08-28T10:30:00.000Z"
+}
+
+
+3. Détail/Modifier/Supprimer un événement
+GET/PUT/PATCH/DELETE /calendrier/events/{id}/
+Réception (GET) :
+{
+  // Même structure que la création
+}
+
+
+4. Événements du jour
+GET /calendrier/day/?date=2025-08-28
+Réception :
+{
+  "date": "2025-08-28",
+  "events": [
+    {
+      // Structure des événements
+    }
+  ],
+  "total": 3
+}
+
+
+5. Événements du mois
+GET /calendrier/month/?year=2025&month=8
+Réception :
+{
+  "year": 2025,
+  "month": 8,
+  "events": [
+    {
+      // Structure des événements
+    }
+  ],
+  "total": 15
+}
+
+
+6. Événements à venir
+GET /calendrier/upcoming/
+Réception :
+{
+  "upcoming_events": [
+    {
+      // Structure des événements
+    }
+  ],
+  "total": 8
+}
+
+
+________________
+
+
+🔍 RECHERCHE
+1. Rechercher des conversations
+GET /messaging/conversations/search/?q=mot_recherche
+Réception :
+[
+  {
+    // Structure des conversations avec correspondances trouvées
+  }
+]
+
+
+________________
+
+
+❌ CODES D'ERREUR
+Codes de statut HTTP courants :
+* 200 : Succès
+* 201 : Créé avec succès
+* 400 : Erreur de validation des données
+* 401 : Non authentifié (token manquant/invalide)
+* 403 : Interdit (pas d'autorisation)
+* 404 : Ressource non trouvée
+* 500 : Erreur serveur
+Format des erreurs :
+{
+  "error": "Description de l'erreur",
+  "details": "Détails supplémentaires optionnels"
+}
+
+
+________________
+
+
+📝 NOTES IMPORTANTES
+Types de fichiers supportés :
+* Images : JPEG, PNG, GIF, WebP
+* Vidéos : MP4, WebM, QuickTime, AVI
+* Audio : MP3, WAV, OGG, WebM, MP4
+* Documents : PDF, TXT, DOC, DOCX
+Pagination :
+La plupart des endpoints de liste supportent la pagination standard de Django REST Framework.
+Filtrage :
+Beaucoup d'endpoints supportent des paramètres de requête pour filtrer les résultats (voir exemples dans chaque section).
+WebSocket :
+Voir la documentation WebSocket séparée pour les fonctionnalités temps réel (messages, statut typing, etc.).
+
+
+
+
+👥 GROUPES
+1. Mes groupes
+GET /groups/my-groups/
+Réception :
+json
+[
+  {
+    "id": 1,
+    "uuid": "group-uuid",
+    "name": "Mon Groupe",
+    "description": "Description du groupe",
+    "avatar": "url-ou-null",
+    "parent": null, // UUID du groupe parent si sous-groupe
+    "member_count": 15,
+    "my_role": "owner|moderator|member",
+    "subgroups_count": 3,
+    "unread_messages": 5,
+    "created_at": "2025-08-28T10:30:00.000Z"
+  }
+]
+2. Créer un groupe
+POST /groups/create/
+Envoi :
+json
+{
+  "name": "Mon Nouveau Groupe",
+  "description": "Description du groupe",
+  "parent_uuid": null, // UUID du groupe parent pour créer un sous-groupe
+  "max_members": 50, // Optionnel
+  "avatar": null // Optionnel
+}
+Réception :
+json
+{
+  "id": 1,
+  "uuid": "group-uuid",
+  "name": "Mon Nouveau Groupe",
+  "description": "Description du groupe",
+  "avatar": null,
+  "invite_code": "ABC12345",
+  "parent": null,
+  "max_members": 50,
+  "member_count": 1,
+  "created_by": 123,
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "members": [
+    {
+      "id": 1,
+      "user": 123,
+      "username": "Alice",
+      "user_uuid": "user-uuid",
+      "surnom": "string",
+      "role": "owner",
+      "is_muted": false,
+      "is_banned": false,
+      "joined_at": "2025-08-28T10:30:00.000Z",
+      "photo_profil_url": "url-ou-null"
+    }
+  ],
+  "subgroups": [],
+  "conversation_uuid": "conversation-uuid"
+}
+3. Détail d'un groupe
+GET /groups/{uuid}/
+Réception :
+json
+{
+  "id": 1,
+  "uuid": "group-uuid",
+  "name": "Mon Groupe",
+  "description": "Description du groupe",
+  "avatar": "url-ou-null",
+  "invite_code": "ABC12345",
+  "parent": null,
+  "max_members": 50,
+  "member_count": 15,
+  "created_by": 123,
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "members": [
+    {
+      "id": 1,
+      "user": 123,
+      "username": "Alice",
+      "user_uuid": "user-uuid",
+      "surnom": "string",
+      "role": "owner",
+      "is_muted": false,
+      "is_banned": false,
+      "joined_at": "2025-08-28T10:30:00.000Z",
+      "photo_profil_url": "url-ou-null"
+    }
+  ],
+  "subgroups": [
+    {
+      "id": 2,
+      "uuid": "subgroup-uuid",
+      "name": "Sous-groupe",
+      "description": "Description",
+      "member_count": 5
+    }
+  ],
+  "my_membership": {
+    "id": 1,
+    "role": "owner",
+    "is_muted": false,
+    "is_banned": false,
+    "joined_at": "2025-08-28T10:30:00.000Z"
+  },
+  "conversation_uuid": "conversation-uuid"
+}
+4. Modifier un groupe
+PUT/PATCH /groups/{uuid}/
+Envoi :
+json
+{
+  "name": "Nouveau nom",
+  "description": "Nouvelle description",
+  "max_members": 100
+}
+Réception :
+json
+{
+  // Structure complète du groupe mis à jour
+}
+5. Supprimer un groupe
+DELETE /groups/{uuid}/
+Réception :
+json
+{
+  "message": "Groupe supprimé avec succès"
+}
+6. Membres d'un groupe
+GET /groups/{group_uuid}/members/
+Réception :
+json
+[
+  {
+    "id": 1,
+    "user": 123,
+    "username": "Alice",
+    "user_uuid": "user-uuid",
+    "surnom": "string",
+    "role": "owner|moderator|member",
+    "is_muted": false,
+    "is_banned": false,
+    "joined_at": "2025-08-28T10:30:00.000Z",
+    "photo_profil_url": "url-ou-null",
+    "invited_by": 456
+  }
+]
+7. Modérer un membre
+PUT/PATCH /groups/{group_uuid}/members/{user_uuid}/
+Envoi :
+json
+{
+  "role": "moderator|member", // Ne peut pas changer vers owner
+  "is_muted": true,
+  "muted_until": "2025-08-30T10:30:00.000Z", // Optionnel
+  "is_banned": false,
+  "ban_reason": "Raison du ban" // Si is_banned=true
+}
+Réception :
+json
+{
+  // Structure complète du membre mis à jour
+}
+8. Quitter un groupe
+POST /groups/{group_uuid}/leave/
+Envoi :
+json
+{}
+Réception :
+json
+{
+  "message": "Vous avez quitté le groupe avec succès"
+}
+9. Transférer la propriété
+POST /groups/{group_uuid}/transfer-ownership/
+Envoi :
+json
+{
+  "new_owner_uuid": "uuid-du-nouveau-proprietaire"
+}
+Réception :
+json
+{
+  "message": "Propriété transférée avec succès",
+  "new_owner": {
+    "uuid": "user-uuid",
+    "username": "Bob"
+  }
+}
+10. Inviter quelqu'un dans un groupe
+POST /groups/{group_uuid}/invite/
+Envoi :
+json
+{
+  "user_uuid": "uuid-de-l-utilisateur",
+  "message": "Message d'invitation personnalisé"
+}
+Réception :
+json
+{
+  "id": 1,
+  "uuid": "invitation-uuid",
+  "group": "group-uuid",
+  "target_user": "user-uuid",
+  "invitation_type": "official",
+  "status": "sent",
+  "message": "Message d'invitation personnalisé",
+  "created_at": "2025-08-28T10:30:00.000Z",
+  "expires_at": "2025-09-04T10:30:00.000Z"
+}
+11. Mes invitations reçues
+GET /groups/invitations/received/
+Réception :
+json
+[
+  {
+    "id": 1,
+    "uuid": "invitation-uuid",
+    "group": {
+      "uuid": "group-uuid",
+      "name": "Nom du groupe",
+      "description": "Description",
+      "member_count": 15
+    },
+    "created_by": {
+      "uuid": "user-uuid",
+      "username": "Alice",
+      "photo_profil_url": "url-ou-null"
+    },
+    "invitation_type": "official|member_request",
+    "status": "sent|viewed|pending|accepted|declined|expired",
+    "message": "Message d'invitation",
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "expires_at": "2025-09-04T10:30:00.000Z"
+  }
+]
+12. Preview d'un groupe via invitation
+GET /groups/invitations/{invitation_uuid}/preview/
+Réception :
+json
+{
+  "group": {
+    "id": 1,
+    "uuid": "group-uuid",
+    "name": "Nom du groupe",
+    "description": "Description du groupe",
+    "avatar": "url-ou-null",
+    "member_count": 15,
+    "created_by": {
+      "uuid": "user-uuid",
+      "username": "Alice",
+      "photo_profil_url": "url-ou-null"
+    },
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "members": [
+      {
+        // Aperçu des membres (premiers membres visibles)
+      }
+    ],
+    "subgroups": [
+      {
+        "uuid": "subgroup-uuid",
+        "name": "Sous-groupe",
+        "description": "Description",
+        "member_count": 5
+      }
+    ]
+  },
+  "invitation": {
+    // Détails de l'invitation
+  }
+}
+13. Répondre à une invitation
+POST /groups/invitations/{invitation_uuid}/respond/
+Envoi :
+json
+{
+  "action": "accept|decline"
+}
+Réception (si accept) :
+json
+{
+  "message": "Vous avez rejoint le groupe Mon Groupe",
+  "membership": {
+    "id": 15,
+    "user": 123,
+    "role": "member",
+    "joined_at": "2025-08-28T10:30:00.000Z"
+  }
+}
+Réception (si decline) :
+json
+{
+  "message": "Invitation déclinée"
+}
+14. Preview d'un groupe via code d'invitation
+GET /groups/preview/?code=ABC12345
+Réception :
+json
+{
+  "group": {
+    // Même structure que preview via invitation
+  },
+  "can_join": true
+}
+15. Rejoindre un groupe via code
+POST /groups/join-by-code/
+Envoi :
+json
+{
+  "invite_code": "ABC12345",
+  "message": "Message de demande d'adhésion"
+}
+Réception :
+json
+{
+  "message": "Votre demande pour rejoindre Mon Groupe a été envoyée aux modérateurs",
+  "invitation": {
+    "id": 1,
+    "uuid": "invitation-uuid",
+    "invitation_type": "member_request",
+    "status": "pending",
+    "message": "Message de demande d'adhésion",
+    "created_at": "2025-08-28T10:30:00.000Z"
+  }
+}
+16. Demandes d'adhésion en attente (modérateurs)
+GET /groups/{group_uuid}/pending-approvals/
+Réception :
+json
+[
+  {
+    "id": 1,
+    "uuid": "invitation-uuid",
+    "target_user": {
+      "uuid": "user-uuid",
+      "username": "Bob",
+      "photo_profil_url": "url-ou-null"
+    },
+    "invitation_type": "member_request",
+    "status": "pending",
+    "message": "J'aimerais rejoindre votre groupe",
+    "created_at": "2025-08-28T10:30:00.000Z",
+    "expires_at": "2025-09-04T10:30:00.000Z"
+  }
+]
+17. Approuver une demande d'adhésion
+POST /groups/{group_uuid}/approve/{invitation_uuid}/
+Envoi :
+json
+{
+  "action": "approve|reject"
+}
+Réception (si approve) :
+json
+{
+  "message": "Demande approuvée, Bob a rejoint le groupe",
+  "new_member": {
+    "id": 20,
+    "user": 456,
+    "username": "Bob",
+    "role": "member",
+    "joined_at": "2025-08-28T10:30:00.000Z"
+  }
+}
+18. Statistiques d'un groupe
+GET /groups/{group_uuid}/stats/
+Réception :
+json
+{
+  "group_uuid": "group-uuid",
+  "member_count": 25,
+  "subgroups_count": 3,
+  "pending_invitations": 5,
+  "recent_activity": {
+    "new_members_this_week": 3,
+    "messages_today": 12
+  },
+  "top_contributors": [
+    {
+      "username": "Alice",
+      "message_count": 45
+    }
+  ]
+}
+19. Régénérer le code d'invitation
+POST /groups/{uuid}/regenerate-code/
+Envoi :
+json
+{}
+Réception :
+json
+{
+  "message": "Code d'invitation régénéré",
+  "new_invite_code": "XYZ98765"
+}
+20. Historique de modération
+GET /groups/{group_uuid}/moderation-logs/
+Réception :
+json
+[
+  {
+    "id": 1,
+    "action": "member_banned|member_muted|member_promoted|member_demoted",
+    "moderator": {
+      "uuid": "user-uuid",
+      "username": "Admin"
+    },
+    "target_user": {
+      "uuid": "user-uuid",
+      "username": "Bob"
+    },
+    "reason": "Raison de l'action",
+    "created_at": "2025-08-28T10:30:00.000Z"
+  }
+]

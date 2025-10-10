@@ -1,0 +1,637 @@
+import DefaultAvatar from '@/components/DefaultAvatar';
+import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? "http://localhost:3001"
+  : "https://reseausocial-production.up.railway.app";
+
+// Types
+interface UserInfo {
+  id: number;
+  uuid: string;
+  username: string;
+  surnom: string;
+  first_name: string;
+  last_name: string;
+  photo_profil_url?: string;
+}
+
+interface Connection {
+  id: number;
+  uuid: string;
+  username: string;
+  surnom: string;
+  first_name: string;
+  last_name: string;
+  photo_profil_url?: string;
+  statut_relation: string;
+}
+
+interface Invitation {
+  id: number;
+  uuid: string;
+  demandeur_info: UserInfo;
+  destinataire_info: UserInfo;
+  statut: string;
+  message: string;
+  date_demande: string;
+  date_reponse?: string;
+}
+
+export default function FriendsScreen() {
+  const { makeAuthenticatedRequest } = useAuth();
+  const insets = useSafeAreaInsets();
+  
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'friends' | 'invitations'>('friends');
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
+
+  const fetchConnections = useCallback(async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/my-connections/`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setConnections(data.connexions || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des connexions:', error);
+    }
+  }, [makeAuthenticatedRequest]);
+
+  const fetchInvitations = useCallback(async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/pending/`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setInvitations(data.demandes || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des invitations:', error);
+    }
+  }, [makeAuthenticatedRequest]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      await Promise.all([fetchConnections(), fetchInvitations()]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [fetchConnections, fetchInvitations]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  const handleInvitationResponse = async (invitationId: number, action: 'acceptee' | 'refusee', senderName: string) => {
+    setProcessingIds(prev => new Set(prev).add(invitationId));
+    
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/${invitationId}/`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            statut: action,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`);
+      }
+
+      // Retirer l'invitation de la liste
+      setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      
+      // Si acceptée, recharger les connexions
+      if (action === 'acceptee') {
+        await fetchConnections();
+        Alert.alert(
+          'Demande acceptée',
+          `Vous êtes maintenant connecté avec ${senderName} !`
+        );
+      } else {
+        Alert.alert(
+          'Demande refusée',
+          `La demande de ${senderName} a été refusée.`
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la réponse à l\'invitation:', error);
+      Alert.alert(
+        'Erreur',
+        'Impossible de traiter la demande. Veuillez réessayer.'
+      );
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(invitationId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleRemoveFriend = (connectionId: number, userName: string) => {
+    Alert.alert(
+      'Supprimer un ami',
+      `Voulez-vous vraiment supprimer ${userName} de vos amis ?`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel'
+        },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Supprimer la connexion via l'API
+              const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/relations/connections/${connectionId}/`,
+                {
+                  method: 'DELETE',
+                }
+              );
+
+              if (!response.ok) {
+                throw new Error(`Erreur ${response.status}`);
+              }
+
+              // Retirer de la liste locale
+              setConnections(prev => prev.filter(c => c.id !== connectionId));
+              
+              Alert.alert(
+                'Ami supprimé',
+                `${userName} a été retiré de vos amis.`
+              );
+            } catch (error) {
+              console.error('Erreur lors de la suppression:', error);
+              Alert.alert(
+                'Erreur',
+                'Impossible de supprimer cet ami. Veuillez réessayer.'
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={ECHO_COLOR} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <LinearGradient
+        colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={ECHO_COLOR} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Mes Connexions</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      </LinearGradient>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'friends' && styles.tabActive]}
+          onPress={() => setActiveTab('friends')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="people"
+            size={18}
+            color={activeTab === 'friends' ? '#fff' : ECHO_COLOR}
+          />
+          <Text style={[styles.tabText, activeTab === 'friends' && styles.tabTextActive]}>
+            Amis ({connections.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'invitations' && styles.tabActive]}
+          onPress={() => setActiveTab('invitations')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="mail"
+            size={18}
+            color={activeTab === 'invitations' ? '#fff' : ECHO_COLOR}
+          />
+          <Text style={[styles.tabText, activeTab === 'invitations' && styles.tabTextActive]}>
+            Invitations ({invitations.length})
+          </Text>
+          {invitations.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{invitations.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === 'friends' ? (
+          // Liste des amis
+          connections.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyTitle}>Aucun ami</Text>
+              <Text style={styles.emptyText}>
+                Recherchez des personnes dans l'onglet Conversations pour envoyer des demandes de connexion
+              </Text>
+            </View>
+          ) : (
+            connections.map((connection) => (
+              <View key={connection.uuid} style={styles.card}>
+                <View style={styles.cardContent}>
+                  {connection.photo_profil_url ? (
+                    <Image
+                      source={{ uri: connection.photo_profil_url }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <DefaultAvatar
+                      name={connection.surnom || connection.username}
+                      size={56}
+                    />
+                  )}
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName}>
+                      {connection.surnom || connection.username}
+                    </Text>
+                    {connection.surnom && connection.username !== connection.surnom && (
+                      <Text style={styles.cardUsername}>@{connection.username}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleRemoveFriend(connection.id, connection.surnom || connection.username)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )
+        ) : (
+          // Liste des invitations
+          invitations.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="mail-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyTitle}>Aucune invitation</Text>
+              <Text style={styles.emptyText}>
+                Vous n'avez pas de demandes de connexion en attente
+              </Text>
+            </View>
+          ) : (
+            invitations.map((invitation) => {
+              const isProcessing = processingIds.has(invitation.id);
+              const sender = invitation.demandeur_info;
+              
+              return (
+                <View key={invitation.id} style={styles.invitationCard}>
+                  <View style={styles.cardContent}>
+                    {sender.photo_profil_url ? (
+                      <Image
+                        source={{ uri: sender.photo_profil_url }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <DefaultAvatar
+                        name={sender.surnom || sender.username}
+                        size={56}
+                      />
+                    )}
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardName}>
+                        {sender.surnom || sender.username}
+                      </Text>
+                      {sender.surnom && sender.username !== sender.surnom && (
+                        <Text style={styles.cardUsername}>@{sender.username}</Text>
+                      )}
+                      {invitation.message && (
+                        <Text style={styles.invitationMessage} numberOfLines={2}>
+                          {invitation.message}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  
+                  {isProcessing ? (
+                    <View style={styles.actionsContainer}>
+                      <ActivityIndicator size="small" color={ECHO_COLOR} />
+                    </View>
+                  ) : (
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={styles.acceptButton}
+                        onPress={() =>
+                          handleInvitationResponse(
+                            invitation.id,
+                            'acceptee',
+                            sender.surnom || sender.username
+                          )
+                        }
+                      >
+                        <Ionicons name="checkmark" size={20} color="#fff" />
+                        <Text style={styles.acceptButtonText}>Accepter</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={styles.rejectButton}
+                        onPress={() =>
+                          handleInvitationResponse(
+                            invitation.id,
+                            'refusee',
+                            sender.surnom || sender.username
+                          )
+                        }
+                      >
+                        <Ionicons name="close" size={20} color="#666" />
+                        <Text style={styles.rejectButtonText}>Refuser</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: BACKGROUND_GRAY,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: BACKGROUND_GRAY,
+  },
+  header: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1b5e20',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tabActive: {
+    backgroundColor: ECHO_COLOR,
+    shadowColor: ECHO_COLOR,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  tabText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: ECHO_COLOR,
+  },
+  tabTextActive: {
+    color: '#fff',
+  },
+  badge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#ff4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  invitationCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 12,
+  },
+  cardInfo: {
+    flex: 1,
+  },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1b5e20',
+    marginBottom: 2,
+  },
+  cardUsername: {
+    fontSize: 13,
+    color: '#6c8a6e',
+  },
+  invitationMessage: {
+    fontSize: 13,
+    color: '#6c8a6e',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+    justifyContent: 'center',
+  },
+  acceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: ECHO_COLOR,
+  },
+  acceptButtonText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+  },
+  rejectButtonText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6c8a6e',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
+

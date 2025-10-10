@@ -23,8 +23,8 @@ export default function TabsLayout() {
     return 1; // index/home
   };
 
-  // Determine if we're showing a detail route
-  const isInConversationDetail = pathname.includes('conversation-detail') || pathname.includes('conversation-management');
+  // Determine if we're showing a detail route or other full-screen pages
+  const isInConversationDetail = pathname.includes('conversation-detail') || pathname.includes('conversation-management') || pathname.includes('/friends');
 
   const handleSendMessage = () => {
     console.log("Envoi du message:", chatText);
@@ -51,6 +51,7 @@ export default function TabsLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="conversations" />
         <Stack.Screen name="about" />
+        <Stack.Screen name="friends" />
       </Stack>
 
       {/* SwipeableContainer - overlay quand on n'est pas dans detail */}
