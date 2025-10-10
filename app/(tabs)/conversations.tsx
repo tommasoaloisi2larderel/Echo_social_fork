@@ -7,6 +7,7 @@ import {
   Alert,
   FlatList,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -48,6 +49,18 @@ interface User {
   surnom: string;
   photo_profil_url?: string;
   is_friend?: boolean;
+}
+
+// Type pour les connexions (amis)
+interface Connection {
+  id: number;
+  uuid: string;
+  username: string;
+  surnom: string;
+  first_name?: string;
+  last_name?: string;
+  photo_profil_url?: string;
+  statut_relation?: string;
 }
 
 const SearchBar = ({ query, setQuery }: { query: string; setQuery: (q: string) => void }) => (
@@ -145,6 +158,7 @@ export default function ConversationsScreen() {
   // États pour la recherche d'utilisateurs
   const [searchResults, setSearchResults] = useState<{ friends: User[], strangers: User[] }>({ friends: [], strangers: [] });
   const [isSearching, setIsSearching] = useState(false);
+  const [myConnections, setMyConnections] = useState<Connection[]>([]);
   
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -216,16 +230,18 @@ export default function ConversationsScreen() {
         return surnom.includes(query) || username.includes(query);
       });
       
-      // Récupérer les UUIDs des utilisateurs avec qui on a déjà une conversation
-      const existingConversationUuids = new Set(
-        conversations
-          .filter(c => c.other_participant)
-          .map(c => c.other_participant!.uuid)
-      );
+      const connectionUuids = new Set(myConnections.map(c => c.uuid));
       
-      // Séparer les résultats en amis et inconnus
-      const friends = users.filter(u => existingConversationUuids.has(u.uuid));
-      const strangers = users.filter(u => !existingConversationUuids.has(u.uuid));
+      console.log('🔍 Utilisateurs trouvés:', users.length);
+      console.log('📋 Connexions actives:', myConnections.length);
+      console.log('👥 UUIDs des connexions:', Array.from(connectionUuids));
+      
+      // Séparer les résultats en amis (connexions acceptées) et inconnus (tous les autres)
+      const friends = users.filter(u => connectionUuids.has(u.uuid));
+      const strangers = users.filter(u => !connectionUuids.has(u.uuid));
+      
+      console.log('✅ Amis trouvés:', friends.length, friends.map(f => f.surnom || f.username));
+      console.log('🆕 Inconnus trouvés:', strangers.length, strangers.map(s => s.surnom || s.username));
       
       setSearchResults({ friends, strangers });
     } catch (error) {
@@ -236,24 +252,49 @@ export default function ConversationsScreen() {
     }
   };
 
-  // Charger les conversations au montage du composant
+  // Fonction pour récupérer les connexions
+  const fetchConnections = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/my-connections/`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const connections: Connection[] = data.connexions || [];
+        setMyConnections(connections);
+        console.log('📱 Connexions chargées:', connections.length, connections.map(c => c.surnom || c.username));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des connexions:', error);
+    }
+  };
+
+  // Charger les conversations et connexions au montage du composant
   useEffect(() => {
     fetchConversations();
+    fetchConnections();
   }, []); // Supprimer accessToken des dépendances
 
-  // Déclencher la recherche quand la query change
+  // Déclencher la recherche quand la query change (seulement en mode Privé)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      searchAllUsers(query);
-    }, 300); // Debounce de 300ms
-    
-    return () => clearTimeout(timeoutId);
-  }, [query, conversations]);
+    if (viewMode === 'direct') {
+      const timeoutId = setTimeout(() => {
+        searchAllUsers(query);
+      }, 300); // Debounce de 300ms
+      
+      return () => clearTimeout(timeoutId);
+    } else {
+      // En mode Groupe, réinitialiser les résultats de recherche
+      setSearchResults({ friends: [], strangers: [] });
+    }
+  }, [query, myConnections, viewMode]);
 
   // Fonction de rafraîchissement (pull-to-refresh)
   const onRefresh = () => {
     setRefreshing(true);
     fetchConversations(true);
+    fetchConnections();
   };
 
   // Fonction pour créer ou ouvrir une conversation avec un utilisateur
@@ -365,19 +406,6 @@ export default function ConversationsScreen() {
     );
   }
 
-  // Affichage si aucune conversation
-  if (conversations.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Ionicons name="chatbubbles-outline" size={80} color="rgba(10, 145, 104, 1)" />
-        <Text style={{ fontSize: 20, marginTop: 16 }}>Aucune conversation</Text>
-        <TouchableOpacity onPress={() => fetchConversations()}>
-          <Text>Actualiser</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   // Helpers to detect 1-on-1 vs group
   const isDirect = (c: Conversation) => !!c.other_participant;
   const isGroup = (c: Conversation) => !c.other_participant;
@@ -386,126 +414,240 @@ export default function ConversationsScreen() {
     viewMode === 'direct' ? isDirect(c) : isGroup(c)
   );
 
-  // Filtrer selon la recherche (pour les conversations existantes)
-  const filteredConversations = modeFiltered.filter((c) => {
-    const name = c.other_participant?.surnom || c.other_participant?.username || '';
-    return name.toLowerCase().includes(query.toLowerCase());
-  });
+  // Créer une liste selon le mode sélectionné
+  let displayItems: Array<{
+    uuid: string;
+    name: string;
+    photoUrl?: string;
+    unread: boolean;
+    conversationId?: string;
+    hasConversation: boolean;
+  }> = [];
 
-  // Déterminer si on affiche les résultats de recherche ou les conversations normales
-  const showSearchResults = query.trim().length > 0 && (searchResults.friends.length > 0 || searchResults.strangers.length > 0);
+  if (viewMode === 'direct') {
+    // Mode Privé : afficher tous les amis (avec ou sans conversation)
+    displayItems = myConnections.map(friend => {
+      // Trouver la conversation correspondante s'il y en a une
+      const conversation = conversations.find(c => c.other_participant?.uuid === friend.uuid);
+      return {
+        uuid: friend.uuid,
+        name: friend.surnom || friend.username,
+        photoUrl: friend.photo_profil_url,
+        unread: conversation ? conversation.unread_count > 0 : false,
+        conversationId: conversation?.uuid,
+        hasConversation: !!conversation,
+      };
+    });
+  } else {
+    // Mode Groupe : afficher uniquement les conversations de groupe
+    displayItems = modeFiltered.map(conv => ({
+      uuid: conv.uuid,
+      name: 'Groupe',  // Les groupes n'ont pas de other_participant
+      photoUrl: undefined,
+      unread: conv.unread_count > 0,
+      conversationId: conv.uuid,
+      hasConversation: true,
+    }));
+  }
+
+  // Filtrer selon la recherche
+  const filteredFriends = query.trim()
+    ? displayItems.filter(f => f.name.toLowerCase().includes(query.toLowerCase()))
+    : displayItems;
+
+  // Afficher les "autres utilisateurs" seulement si on a une recherche active en mode Privé
+  const showStrangers = viewMode === 'direct' && query.trim().length > 0 && searchResults.strangers.length > 0;
   
   return (
     <View style={[styles.container, { paddingTop: (insets.top || 0) + 0 }]}> 
       <SearchBar query={query} setQuery={setQuery} />
 
-      {/* Toggle 1-on-1 / Groupes - caché pendant la recherche */}
-      {!query.trim() && (
-        <View style={localStyles.toggleContainer}>
-          <TouchableOpacity
-            style={[localStyles.toggleButton, viewMode === 'direct' && localStyles.toggleActive]}
-            onPress={() => setViewMode('direct')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : '#666'} />
-            <Text style={[localStyles.toggleLabel, viewMode === 'direct' && localStyles.toggleLabelActive]}>Privé</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[localStyles.toggleButton, viewMode === 'group' && localStyles.toggleActive]}
-            onPress={() => setViewMode('group')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : '#666'} />
-            <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Affichage des résultats de recherche ou des conversations */}
-      {showSearchResults ? (
-        <ScrollView 
-          style={localStyles.searchResultsContainer}
-          showsVerticalScrollIndicator={false}
+      {/* Toggle 1-on-1 / Groupes */}
+      <View style={localStyles.toggleContainer}>
+        <TouchableOpacity
+          style={[localStyles.toggleButton, viewMode === 'direct' && localStyles.toggleActive]}
+          onPress={() => setViewMode('direct')}
+          activeOpacity={0.8}
         >
-          {/* Catégorie Amis */}
-          {searchResults.friends.length > 0 && (
-            <View style={localStyles.categorySection}>
-              <Text style={localStyles.categoryTitle}>Amis</Text>
-              <FlatList
-                data={searchResults.friends}
-                keyExtractor={(item) => item.uuid}
-                renderItem={({ item }) => (
-                  <UserSquare
-                    user={item}
-                    onPress={() => handleUserPress(item.uuid, item.surnom || item.username)}
-                  />
-                )}
-                numColumns={3}
-                columnWrapperStyle={styles.row}
-                contentContainerStyle={styles.conversationGrid}
-                scrollEnabled={false}
-              />
-            </View>
-          )}
+          <Ionicons name="person-outline" size={16} color={viewMode === 'direct' ? '#fff' : '#666'} />
+          <Text style={[localStyles.toggleLabel, viewMode === 'direct' && localStyles.toggleLabelActive]}>Privé</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[localStyles.toggleButton, viewMode === 'group' && localStyles.toggleActive]}
+          onPress={() => setViewMode('group')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="people-outline" size={16} color={viewMode === 'group' ? '#fff' : '#666'} />
+          <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Catégorie Utilisateurs inconnus */}
-          {searchResults.strangers.length > 0 && (
-            <View style={localStyles.categorySection}>
-              <Text style={localStyles.categoryTitle}>Utilisateurs</Text>
-              <FlatList
-                data={searchResults.strangers}
-                keyExtractor={(item) => item.uuid}
-                renderItem={({ item }) => (
-                  <UserSquare
-                    user={item}
-                    onPress={() => handleUserPress(item.uuid, item.surnom || item.username)}
-                  />
-                )}
-                numColumns={3}
-                columnWrapperStyle={styles.row}
-                contentContainerStyle={styles.conversationGrid}
-                scrollEnabled={false}
-              />
-            </View>
-          )}
-        </ScrollView>
-      ) : (
-        <FlatList
-          data={filteredConversations}
-          keyExtractor={(item) => item.uuid}
-          renderItem={({ item }) => {
-            // Créer ou récupérer une ref pour ce carré
-            if (!squareRefs.current.has(item.uuid)) {
-              squareRefs.current.set(item.uuid, React.createRef() as React.RefObject<ComponentRef<typeof TouchableOpacity>>);
+      {/* Grille de conversations avec section "Autres utilisateurs" si recherche */}
+      {filteredFriends.length === 0 && !showStrangers ? (
+        <View style={localStyles.emptyConversationsContainer}>
+          <Ionicons 
+            name={viewMode === 'direct' ? "person-outline" : "people-outline"} 
+            size={80} 
+            color="rgba(10, 145, 104, 0.3)" 
+          />
+          <Text style={localStyles.emptyConversationsTitle}>
+            {viewMode === 'direct' ? 'Aucun ami' : 'Aucun groupe'}
+          </Text>
+          <Text style={localStyles.emptyConversationsText}>
+            {viewMode === 'direct' 
+              ? 'Utilisez la barre de recherche pour trouver des personnes et commencer à discuter'
+              : 'Vous n\'avez pas encore de conversation de groupe'
             }
-            const squareRef = squareRefs.current.get(item.uuid)!;
-            
-            return (
-              <ConversationSquare
-                name={item.other_participant?.surnom || item.other_participant?.username || 'Unknown'}
-                unread={item.unread_count > 0}
-                photoUrl={item.other_participant?.photo_profil_url}
-                squareRef={squareRef}
-              onPress={() => {
-                // Capturer la position avant la navigation
-                squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+            />
+          }
+        >
+          {/* Grille des amis (toujours affichée) */}
+      <FlatList
+            data={filteredFriends}
+        keyExtractor={(item) => item.uuid}
+        renderItem={({ item }) => {
+          if (!squareRefs.current.has(item.uuid)) {
+                squareRefs.current.set(item.uuid, React.createRef() as React.RefObject<ComponentRef<typeof TouchableOpacity>>);
+          }
+          const squareRef = squareRefs.current.get(item.uuid)!;
+          
+          return (
+            <ConversationSquare
+                  name={item.name}
+                  unread={item.unread}
+                  photoUrl={item.photoUrl}
+              squareRef={squareRef}
+                  onPress={async () => {
+                    if (item.hasConversation) {
+                      // Si conversation existe, ouvrir la conversation directement
+                      squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                        setTransitionPosition({ x: pageX, y: pageY, width, height });
+                        router.push({
+                          pathname: '/(tabs)/conversation-detail',
+                          params: { conversationId: item.conversationId }
+                        });
+                      });
+                    } else {
+                      // Si ami sans conversation, vérifier d'abord si une conversation existe
+                      try {
+                        console.log('🔍 Recherche conversation avec UUID:', item.uuid);
+                        
+                        // Vérifier dans toutes les conversations (même celles filtrées)
+                        const existingConv = conversations.find(c => c.other_participant?.uuid === item.uuid);
+                        
+                        if (existingConv) {
+                          console.log('✅ Conversation trouvée:', existingConv.uuid);
+                          squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                            setTransitionPosition({ x: pageX, y: pageY, width, height });
+                            router.push({
+                              pathname: '/(tabs)/conversation-detail',
+                              params: { conversationId: existingConv.uuid }
+                            });
+                          });
+                          return;
+                        }
+                        
+                        console.log('🆕 Création nouvelle conversation pour:', item.uuid);
+                        const response = await makeAuthenticatedRequest(
+                          `${API_BASE_URL}/messaging/conversations/`,
+                          {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              recipient_uuid: item.uuid,
+                            }),
+                          }
+                        );
+
+                        if (!response.ok) {
+                          const errorData = await response.json().catch(() => ({}));
+                          console.error('❌ Erreur création conversation:', errorData);
+                          throw new Error(errorData.detail || errorData.error || `Erreur ${response.status}`);
+                        }
+
+                        const newConversation = await response.json();
+                        console.log('✅ Conversation créée:', newConversation.uuid);
+                        
+                        // Ajouter la nouvelle conversation et l'ouvrir
+                        setConversations(prev => [newConversation, ...prev]);
+                        
+                        squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                   setTransitionPosition({ x: pageX, y: pageY, width, height });
                   router.push({
                     pathname: '/(tabs)/conversation-detail',
-                    params: { conversationId: item.uuid }
+                            params: { conversationId: newConversation.uuid }
                   });
                 });
+                      } catch (error) {
+                        console.error('❌ Erreur lors de la création de la conversation:', error);
+                        Alert.alert(
+                          'Erreur',
+                          'Impossible de créer la conversation.'
+                        );
+                      }
+                    }
               }}
-              />
-            );
-          }}
-          numColumns={3}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={[styles.conversationGrid, localStyles.gridCompact]}
-          showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-        />
+            />
+          );
+        }}
+        numColumns={3}
+        columnWrapperStyle={styles.row}
+        contentContainerStyle={[styles.conversationGrid, localStyles.gridCompact]}
+            scrollEnabled={false}
+            ListFooterComponent={
+              showStrangers ? (
+                <View>
+                  {/* Header Autres utilisateurs */}
+                  <View style={localStyles.categoryHeaderSearch}>
+                    <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
+                    <Text style={localStyles.categoryTitleSearch}>Autres utilisateurs</Text>
+                    <View style={localStyles.categoryBadge}>
+                      <Text style={localStyles.categoryBadgeText}>{searchResults.strangers.length}</Text>
+                    </View>
+                  </View>
+                  
+                  {/* Grille des autres utilisateurs */}
+                  <FlatList
+                    data={searchResults.strangers}
+                    keyExtractor={(item) => item.uuid}
+                    renderItem={({ item }) => (
+                      <UserSquare
+                        user={item}
+                        onPress={() => handleUserPress(item.uuid, item.surnom || item.username)}
+                      />
+                    )}
+                    numColumns={3}
+                    columnWrapperStyle={styles.row}
+                    contentContainerStyle={{ paddingHorizontal: 10 }}
+                    scrollEnabled={false}
+                  />
+                </View>
+              ) : null
+            }
+          />
+
+          {/* Message si aucun résultat avec recherche */}
+          {query.trim() && filteredFriends.length === 0 && searchResults.strangers.length === 0 && !isSearching && (
+            <View style={localStyles.noResultsContainer}>
+              <Ionicons name="search-outline" size={64} color="#ccc" />
+              <Text style={localStyles.noResultsTitle}>Aucun résultat</Text>
+              <Text style={localStyles.noResultsText}>
+                Aucun utilisateur ne correspond à "{query}"
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       )}
     </View>
   );
@@ -560,19 +702,101 @@ const localStyles = StyleSheet.create({
     paddingTop: 145,
     marginTop: 0,
   },
-  searchResultsContainer: {
-    flex: 1,
-    paddingTop: 120,
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(240, 250, 248, 1)',
+    borderRadius: 16,
+    marginBottom: 4,
+    marginHorizontal: 20,
+    shadowColor: 'rgba(10, 145, 104, 0.2)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  categorySection: {
-    marginBottom: 20,
+  categoryHeaderSearch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 15,
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 25,
+    shadowColor: '#fff',
+    shadowOpacity: 0.9,
+    elevation: 5,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    zIndex: 5,
+  },
+  categoryTitleSearch: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(10, 145, 104, 1)',
+    marginLeft: 10,
+    flex: 1,
   },
   categoryTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: 'rgba(10, 145, 104, 1)',
-    marginLeft: 20,
-    marginBottom: 10,
-    marginTop: 10,
+    marginLeft: 10,
+    flex: 1,
+  },
+  categoryBadge: {
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  categoryBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  noResultsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  noResultsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#6c8a6e',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyConversationsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 120,
+  },
+  emptyConversationsTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  emptyConversationsText: {
+    fontSize: 15,
+    color: '#6c8a6e',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

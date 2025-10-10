@@ -258,7 +258,8 @@ export const styles = StyleSheet.create({
   },
   logoutButton: {
     backgroundColor: "#ff6b6b",
-    borderRadius: 8,
+    borderRadius: 10,
+    marginTop: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
     alignSelf: 'flex-start',
