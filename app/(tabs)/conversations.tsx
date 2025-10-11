@@ -56,6 +56,7 @@ interface User {
 interface Connection {
   id: number;
   uuid: string;
+  user_uuid?: string; // UUID de l'utilisateur si différent du uuid de la connexion
   username: string;
   surnom: string;
   first_name?: string;
@@ -193,45 +194,56 @@ const UserSquare = ({
   </TouchableOpacity>
 );
 
-const GroupSquare = ({ 
+const GroupSquare = React.memo(({ 
   group, 
   onPress,
 }: { 
   group: Group; 
   onPress: () => void;
-}) => (
-  <TouchableOpacity
-    style={[
-      styles.conversationSquare,
-      {
-        shadowColor: "#777",
-        shadowOpacity: 0.4,
-      },
-    ]}
-    onPress={onPress}
-  >
-    {group.avatar ? (
-      <Image source={{ uri: group.avatar }} style={styles.avatar} />
-    ) : (
-      <View style={[styles.avatar, { backgroundColor: 'rgba(10, 145, 104, 0.2)', justifyContent: 'center', alignItems: 'center' }]}>
-        <Ionicons name="people" size={40} color="rgba(10, 145, 104, 1)" />
+}) => {
+  if (!group) {
+    console.warn('⚠️ GroupSquare reçu un groupe null');
+    return null;
+  }
+
+  const groupName = group.name || 'Groupe';
+  const memberCount = typeof group.member_count === 'number' ? group.member_count : 0;
+  const unreadCount = typeof group.unread_messages === 'number' ? group.unread_messages : 0;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.conversationSquare,
+        {
+          shadowColor: "#777",
+          shadowOpacity: 0.4,
+        },
+      ]}
+      onPress={onPress}
+    >
+      {group.avatar ? (
+        <Image source={{ uri: group.avatar }} style={styles.avatar} />
+      ) : (
+        <View style={[styles.avatar, { backgroundColor: 'rgba(10, 145, 104, 0.2)', justifyContent: 'center', alignItems: 'center' }]}>
+          <Ionicons name="people" size={40} color="rgba(10, 145, 104, 1)" />
+        </View>
+      )}
+      {unreadCount > 0 && (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadText}>{unreadCount}</Text>
+        </View>
+      )}
+      <View style={styles.conversationNameBadge}>
+        <Text style={styles.conversationName} numberOfLines={1}>
+          {groupName}
+        </Text>
+        <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+          {memberCount} membre{memberCount > 1 ? 's' : ''}
+        </Text>
       </View>
-    )}
-    {group.unread_messages && group.unread_messages > 0 && (
-      <View style={styles.unreadBadge}>
-        <Text style={styles.unreadText}>{group.unread_messages}</Text>
-      </View>
-    )}
-    <View style={styles.conversationNameBadge}>
-      <Text style={styles.conversationName} numberOfLines={1}>
-        {group.name}
-      </Text>
-      <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
-        {group.member_count} membre{group.member_count > 1 ? 's' : ''}
-      </Text>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
+});
 
 export default function ConversationsScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -324,7 +336,8 @@ export default function ConversationsScreen() {
         return surnom.includes(query) || username.includes(query);
       });
       
-      const connectionUuids = new Set(myConnections.map(c => c.uuid));
+      // Créer un Set avec les UUIDs des connexions (user_uuid en priorité, sinon uuid)
+      const connectionUuids = new Set(myConnections.map(c => c.user_uuid || c.uuid));
       
       console.log('🔍 Utilisateurs trouvés:', users.length);
       console.log('📋 Connexions actives:', myConnections.length);
@@ -358,6 +371,7 @@ export default function ConversationsScreen() {
         const connections: Connection[] = data.connexions || [];
         setMyConnections(connections);
         console.log('📱 Connexions chargées:', connections.length, connections.map(c => c.surnom || c.username));
+        console.log('📋 Structure première connexion:', JSON.stringify(connections[0], null, 2));
       }
     } catch (error) {
       console.error('Erreur lors du chargement des connexions:', error);
@@ -367,13 +381,79 @@ export default function ConversationsScreen() {
   // Fonction pour récupérer les groupes
   const fetchGroups = async () => {
     try {
+      console.log('📡 Chargement des groupes...');
+      
+      // D'abord récupérer toutes les conversations pour filtrer
+      const conversationsResponse = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/`
+      );
+      
+      const privateConversationUuids = new Set<string>();
+      if (conversationsResponse.ok) {
+        const convList = await conversationsResponse.json();
+        // Marquer toutes les conversations avec other_participant comme privées
+        convList.forEach((c: any) => {
+          if (c.other_participant) {
+            privateConversationUuids.add(c.uuid);
+          }
+        });
+        console.log('🔒 Conversations privées trouvées:', privateConversationUuids.size);
+      }
+      
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/groups/my-groups/`
       );
       if (response.ok) {
         const data = await response.json();
-        setGroups(data);
-        console.log('👥 Groupes chargés:', data.length, data.map((g: Group) => g.name));
+        console.log('📋 Groupes de base récupérés:', data.length);
+        
+        // /groups/my-groups/ ne retourne pas conversation_uuid
+        // Il faut charger les détails de chaque groupe
+        const groupsWithDetails = [];
+        
+        for (const group of data) {
+          try {
+            console.log('🔍 Chargement détails pour:', group.name);
+            const detailsResponse = await makeAuthenticatedRequest(
+              `${API_BASE_URL}/groups/${group.uuid}/`
+            );
+            
+            if (detailsResponse.ok) {
+              const groupDetails = await detailsResponse.json();
+              const convUuid = groupDetails.conversation_uuid;
+              
+              // Ignorer si c'est une conversation privée
+              if (convUuid && privateConversationUuids.has(convUuid)) {
+                console.warn('⚠️ Groupe', group.name, 'a un conversation_uuid qui est une conv privée, ignoré');
+                continue;
+              }
+              
+              console.log('✅ Détails récupérés pour', group.name, '- conversation_uuid:', convUuid);
+              groupsWithDetails.push({
+                ...group,
+                conversation_uuid: convUuid,
+                members: groupDetails.members,
+                my_membership: groupDetails.my_membership,
+                invite_code: groupDetails.invite_code,
+              });
+            } else {
+              console.error('❌ Erreur HTTP pour', group.name, ':', detailsResponse.status);
+              groupsWithDetails.push(group);
+            }
+          } catch (error) {
+            console.error('❌ Erreur chargement détails groupe:', group.name, error);
+            // Garder le groupe même si on ne peut pas charger les détails
+            groupsWithDetails.push(group);
+          }
+        }
+        
+        setGroups(groupsWithDetails);
+        console.log('👥 Groupes chargés:', groupsWithDetails.length, groupsWithDetails.map((g: any) => g.name));
+        console.log('📋 Groupes avec conversation_uuid:', JSON.stringify(groupsWithDetails.map((g: any) => ({
+          name: g.name,
+          uuid: g.uuid,
+          conversation_uuid: g.conversation_uuid
+        })), null, 2));
       }
     } catch (error) {
       console.error('Erreur lors du chargement des groupes:', error);
@@ -421,7 +501,8 @@ export default function ConversationsScreen() {
       }
 
       const newGroup = await response.json();
-      console.log('✅ Groupe créé:', newGroup.name, 'UUID:', newGroup.uuid);
+      console.log('✅ Groupe créé:', newGroup.name, 'UUID:', newGroup.uuid, 'Conversation:', newGroup.conversation_uuid);
+      console.log('📋 Données complètes du groupe:', JSON.stringify(newGroup, null, 2));
       
       // Ajouter le nouveau groupe à la liste
       setGroups(prev => [newGroup, ...prev]);
@@ -433,10 +514,13 @@ export default function ConversationsScreen() {
 
       // Si le groupe a une conversation, on peut l'ouvrir
       if (newGroup.conversation_uuid) {
+        console.log('🎯 Ouverture conversation groupe:', newGroup.conversation_uuid);
         router.push({
           pathname: '/(tabs)/conversation-detail',
           params: { conversationId: newGroup.conversation_uuid }
         });
+      } else {
+        console.warn('⚠️ Le groupe créé n\'a pas de conversation_uuid');
       }
     } catch (error) {
       console.error('❌ Erreur lors de la création du groupe:', error);
@@ -604,15 +688,25 @@ export default function ConversationsScreen() {
     unread: boolean;
     conversationId?: string;
     hasConversation: boolean;
+    isGroup?: boolean;
+    memberCount?: number;
+    unreadMessages?: number;
   }> = [];
 
   if (viewMode === 'direct') {
     // Mode Privé : afficher tous les amis (avec ou sans conversation)
     displayItems = myConnections.map(friend => {
+      // Utiliser user_uuid si disponible, sinon uuid
+      const friendUuid = friend.user_uuid || friend.uuid;
+      
       // Trouver la conversation correspondante s'il y en a une
-      const conversation = conversations.find(c => c.other_participant?.uuid === friend.uuid);
+      const conversation = conversations.find(c => 
+        c.other_participant?.uuid === friendUuid || 
+        c.other_participant?.uuid === friend.uuid
+      );
+      
       return {
-        uuid: friend.uuid,
+        uuid: friendUuid,
         name: friend.surnom || friend.username,
         photoUrl: friend.photo_profil_url,
         unread: conversation ? conversation.unread_count > 0 : false,
@@ -716,6 +810,81 @@ export default function ConversationsScreen() {
             data={filteredFriends}
         keyExtractor={(item) => item.uuid}
         renderItem={({ item }) => {
+          // Si c'est un groupe, utiliser GroupSquare
+          if (item.isGroup) {
+            const group = groups.find(g => g.uuid === item.uuid);
+            if (group) {
+              return (
+                <GroupSquare
+                  group={group}
+                  onPress={async () => {
+                    console.log('🔍 Clic sur groupe:', {
+                      name: group.name,
+                      uuid: group.uuid,
+                      conversation_uuid: group.conversation_uuid
+                    });
+                    
+                    if (group.conversation_uuid) {
+                      console.log('👥 Ouverture groupe:', group.name, 'conversation:', group.conversation_uuid);
+                      router.push({
+                        pathname: '/(tabs)/conversation-detail',
+                        params: { conversationId: group.conversation_uuid }
+                      });
+                    } else {
+                      // Le groupe devrait avoir un conversation_uuid dès la création
+                      // Si ce n'est pas le cas, recharger les données du groupe
+                      console.log('⚠️ Groupe sans conversation_uuid, rechargement...');
+                      try {
+                        const response = await makeAuthenticatedRequest(
+                          `${API_BASE_URL}/groups/${group.uuid}/`
+                        );
+                        
+                        if (!response.ok) {
+                          console.error('❌ Erreur rechargement:', response.status);
+                          throw new Error(`Erreur ${response.status}`);
+                        }
+                        
+                        const updatedGroup = await response.json();
+                        console.log('✅ Groupe rechargé:', {
+                          name: updatedGroup.name,
+                          conversation_uuid: updatedGroup.conversation_uuid
+                        });
+                        
+                        // Mettre à jour le groupe dans la liste
+                        setGroups(prev => prev.map(g => 
+                          g.uuid === group.uuid ? {
+                            ...updatedGroup,
+                            conversation_uuid: updatedGroup.conversation_uuid
+                          } : g
+                        ));
+                        
+                        if (updatedGroup.conversation_uuid) {
+                          // Ouvrir la conversation maintenant
+                          console.log('✅ Ouverture conversation:', updatedGroup.conversation_uuid);
+                          router.push({
+                            pathname: '/(tabs)/conversation-detail',
+                            params: { conversationId: updatedGroup.conversation_uuid }
+                          });
+                        } else {
+                          console.error('❌ Groupe rechargé mais pas de conversation_uuid');
+                          Alert.alert(
+                            'Erreur', 
+                            'Ce groupe n\'a pas encore de conversation associée. Veuillez réessayer plus tard.'
+                          );
+                        }
+                      } catch (error) {
+                        console.error('❌ Erreur lors du rechargement du groupe:', error);
+                        Alert.alert('Erreur', 'Impossible d\'ouvrir le groupe.');
+                      }
+                    }
+                  }}
+                />
+              );
+            }
+            return null;
+          }
+
+          // Sinon, c'est une conversation directe
           if (!squareRefs.current.has(item.uuid)) {
                 squareRefs.current.set(item.uuid, React.createRef() as React.RefObject<ComponentRef<typeof TouchableOpacity>>);
           }
@@ -757,7 +926,9 @@ export default function ConversationsScreen() {
                           return;
                         }
                         
-                        console.log('🆕 Création nouvelle conversation pour:', item.uuid);
+                        console.log('🆕 Création nouvelle conversation pour UUID:', item.uuid);
+                        console.log('📋 Nom de l\'ami:', item.name);
+                        
                         const response = await makeAuthenticatedRequest(
                           `${API_BASE_URL}/messaging/conversations/`,
                           {
@@ -773,7 +944,8 @@ export default function ConversationsScreen() {
 
                         if (!response.ok) {
                           const errorData = await response.json().catch(() => ({}));
-                          console.error('❌ Erreur création conversation:', errorData);
+                          console.error('❌ Erreur création conversation pour UUID:', item.uuid);
+                          console.error('❌ Détails erreur:', errorData);
                           throw new Error(errorData.detail || errorData.error || `Erreur ${response.status}`);
                         }
 

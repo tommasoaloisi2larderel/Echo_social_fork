@@ -24,20 +24,51 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
   : "https://reseausocial-production.up.railway.app";
 
 interface ConversationMember {
-  uuid: string;
-  username: string;
+  id?: number;
+  uuid?: string;
+  user_uuid?: string;
+  username?: string;
   surnom?: string;
   photo_profil_url?: string;
   is_ai?: boolean;
+  role?: 'owner' | 'moderator' | 'member';
+  is_muted?: boolean;
+  is_banned?: boolean;
+  user?: number | {
+    id: number;
+    uuid: string;
+    username: string;
+    surnom?: string;
+    photo_profil_url?: string;
+  };
+  joined_at?: string;
+  last_seen?: string;
+}
+
+interface GroupDetails {
+  uuid: string;
+  name: string;
+  description?: string;
+  avatar?: string;
+  invite_code?: string;
+  member_count: number;
+  members: ConversationMember[];
+  my_membership?: {
+    role: 'owner' | 'moderator' | 'member';
+    is_muted: boolean;
+    is_banned: boolean;
+  };
+  created_at: string;
 }
 
 interface ConversationDetails {
   uuid: string;
-  is_group: boolean;
+  is_group?: boolean;
   name?: string;
   description?: string;
   created_at?: string;
-  members: ConversationMember[];
+  members?: ConversationMember[];
+  participants_detail?: ConversationMember[];
   other_participant?: ConversationMember;
   media_count?: number;
   link_count?: number;
@@ -46,14 +77,16 @@ interface ConversationDetails {
 
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
-  const { makeAuthenticatedRequest } = useAuth();
+  const { makeAuthenticatedRequest, user } = useAuth();
   const insets = useSafeAreaInsets();
   
   const [loading, setLoading] = useState(true);
   const [conversation, setConversation] = useState<ConversationDetails | null>(null);
+  const [groupDetails, setGroupDetails] = useState<GroupDetails | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [ephemeralMessages, setEphemeralMessages] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
   useEffect(() => {
     loadConversationDetails();
@@ -68,6 +101,72 @@ export default function ConversationManagement() {
       if (response.ok) {
         const data = await response.json();
         setConversation(data);
+        console.log('📋 Conversation chargée ID:', conversationId);
+        console.log('📋 Participants count:', data.participants_detail?.length);
+        
+        // D'abord vérifier dans la liste des conversations si c'est un groupe
+        const conversationsResponse = await makeAuthenticatedRequest(
+          `${API_BASE_URL}/messaging/conversations/`
+        );
+        
+        let conversationFromList = null;
+        if (conversationsResponse.ok) {
+          const convList = await conversationsResponse.json();
+          conversationFromList = convList.find((c: any) => c.uuid === conversationId);
+          console.log('📋 Conversation from list - other_participant:', conversationFromList?.other_participant);
+        }
+        
+        // Si la conversation a un other_participant dans la liste, c'est une conversation privée
+        if (conversationFromList?.other_participant) {
+          console.log('✅ C\'est une conversation privée (other_participant présent)');
+          return; // Ne pas charger les détails de groupe
+        }
+        
+        // Sinon, vérifier si c'est un groupe
+        const groupsResponse = await makeAuthenticatedRequest(
+          `${API_BASE_URL}/groups/my-groups/`
+        );
+        
+        let isGroupConv = false;
+        if (groupsResponse.ok) {
+          const groups = await groupsResponse.json();
+          console.log('📋 Vérification si conversation fait partie des groupes...');
+          
+          // Charger les détails de chaque groupe pour obtenir leur conversation_uuid
+          for (const group of groups) {
+            try {
+              const detailsResponse = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/groups/${group.uuid}/`
+              );
+              
+              if (detailsResponse.ok) {
+                const groupData = await detailsResponse.json();
+                console.log('🔍 Vérif groupe:', groupData.name, 'conv_uuid:', groupData.conversation_uuid);
+                
+                // Vérifier si c'est le bon groupe
+                if (groupData.conversation_uuid === conversationId) {
+                  console.log('✅ C\'est un groupe:', groupData.name);
+                  isGroupConv = true;
+                  setGroupDetails(groupData);
+                  console.log('✅ Détails groupe chargés:', {
+                    name: groupData.name,
+                    memberCount: groupData.member_count,
+                    myRole: groupData.my_membership?.role,
+                    membersLength: groupData.members?.length,
+                    membersPreview: groupData.members?.slice(0, 2)
+                  });
+                  break;
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erreur vérification groupe:', group.uuid, error);
+            }
+          }
+        }
+        
+        if (!isGroupConv) {
+          console.log('✅ C\'est une conversation privée (pas de groupe trouvé)');
+        }
       }
     } catch (error) {
       console.error('Erreur chargement détails:', error);
@@ -75,6 +174,13 @@ export default function ConversationManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadGroupDetails = async (conversationData: ConversationDetails) => {
+    // Cette fonction est maintenant appelée depuis loadConversationDetails
+    // avec le groupData déjà trouvé, donc on peut la simplifier
+    // Mais gardons-la pour compatibilité
+    console.log('🔎 loadGroupDetails appelé');
   };
 
   const handleDeleteConversation = () => {
@@ -105,6 +211,8 @@ export default function ConversationManagement() {
   };
 
   const handleLeaveGroup = () => {
+    if (!groupDetails) return;
+    
     Alert.alert(
       'Quitter le groupe',
       'Voulez-vous quitter ce groupe ?',
@@ -114,12 +222,72 @@ export default function ConversationManagement() {
           text: 'Quitter',
           style: 'destructive',
           onPress: async () => {
-            // API call to leave group
-            router.back();
+            try {
+              const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/groups/${groupDetails.uuid}/leave/`,
+                { method: 'POST' }
+              );
+              if (response.ok) {
+                router.back();
+                router.back(); // Retour à la liste des conversations
+              } else {
+                Alert.alert('Erreur', 'Impossible de quitter le groupe');
+              }
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de quitter le groupe');
+            }
           }
         }
       ]
     );
+  };
+
+  const handleRemoveMember = (member: ConversationMember) => {
+    if (!groupDetails) return;
+    
+    Alert.alert(
+      'Retirer du groupe',
+      `Voulez-vous retirer ${member.surnom || member.username} du groupe ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Retirer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const memberUuid = member.user_uuid || member.uuid;
+              const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/groups/${groupDetails.uuid}/members/${memberUuid}/`,
+                { method: 'DELETE' }
+              );
+              
+              if (response.ok) {
+                // Recharger les détails du groupe
+                await loadConversationDetails();
+                Alert.alert('Succès', 'Membre retiré du groupe');
+              } else {
+                Alert.alert('Erreur', 'Impossible de retirer ce membre');
+              }
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de retirer ce membre');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleInviteMember = () => {
+    if (!groupDetails) return;
+    
+    console.log('➕ Ouverture page ajout membres pour:', groupDetails.name);
+    router.push({
+      pathname: '/(screens)/add-group-members',
+      params: {
+        groupUuid: groupDetails.uuid,
+        groupName: groupDetails.name
+      }
+    });
   };
 
   if (loading) {
@@ -130,9 +298,81 @@ export default function ConversationManagement() {
     );
   }
 
-  const isGroup = conversation?.is_group || false;
-  const members = isGroup ? conversation?.members || [] : [];
-  const contact = conversation?.other_participant;
+  // Détecter si c'est un groupe : se baser sur groupDetails ou is_group
+  const isGroup = !!groupDetails || conversation?.is_group === true;
+  
+  console.log('🎯 Détection groupe:', {
+    hasGroupDetails: !!groupDetails,
+    groupDetailsValue: groupDetails ? {
+      name: groupDetails.name,
+      uuid: groupDetails.uuid,
+      membersCount: groupDetails.members?.length
+    } : null,
+    isGroup
+  });
+  
+  // Normaliser les membres : parfois user est un objet, parfois juste un ID
+  const rawMembers = groupDetails?.members || [];
+  console.log('🔄 Normalisation membres:', {
+    rawMembersCount: rawMembers.length,
+    firstMember: rawMembers[0]
+  });
+  
+  const members = rawMembers.map(member => {
+    // Si user est un objet, extraire les infos
+    if (member.user && typeof member.user === 'object') {
+      const normalized = {
+        ...member,
+        user_uuid: member.user.uuid,
+        username: member.user.username || member.username,
+        surnom: member.user.surnom || member.surnom,
+        photo_profil_url: member.user.photo_profil_url || member.photo_profil_url,
+      };
+      return normalized;
+    }
+    return member;
+  });
+  
+  console.log('✅ Membres normalisés:', {
+    count: members.length,
+    preview: members.slice(0, 2).map(m => ({
+      username: m.username,
+      surnom: m.surnom,
+      role: m.role
+    }))
+  });
+  
+  // Pour les conversations privées, trouver l'autre participant
+  const contact = conversation?.participants_detail?.find(
+    p => p.user_uuid !== user?.uuid
+  );
+  
+  const isAdmin = groupDetails?.my_membership?.role === 'owner' || groupDetails?.my_membership?.role === 'moderator';
+  const currentUserRole = groupDetails?.my_membership?.role;
+  
+  const participantsCount = conversation?.participants_detail?.length || 0;
+  
+  console.log('📊 État affichage:', {
+    isGroup,
+    participantsCount,
+    hasContact: !!contact,
+    contact: contact ? {
+      username: contact.username,
+      surnom: contact.surnom,
+      user_uuid: contact.user_uuid
+    } : null,
+    hasGroupDetails: !!groupDetails,
+    groupDetailsName: groupDetails?.name,
+    memberCount: members.length,
+    membersPreview: members.slice(0, 2).map(m => ({
+      username: m.username,
+      user_uuid: m.user_uuid,
+      role: m.role
+    })),
+    isAdmin,
+    currentUserRole,
+    currentUserUuid: user?.uuid
+  });
 
   // Composant pour une ligne de paramètre
   const SettingRow = ({ 
@@ -219,22 +459,29 @@ export default function ConversationManagement() {
                     <Ionicons name="people" size={50} color="#fff" />
                   </LinearGradient>
                 </View>
-              ) : contact?.photo_profil_url ? (
-                <Image
-                  source={{ uri: contact.photo_profil_url }}
-                  style={styles.largeAvatar}
-                  contentFit="cover"
-                />
+              ) : (!isGroup && contact) ? (
+                contact.photo_profil_url ? (
+                  <Image
+                    source={{ uri: contact.photo_profil_url }}
+                    style={styles.largeAvatar}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <DefaultAvatar 
+                    name={contact.surnom || contact.username || 'Contact'} 
+                    size={120} 
+                  />
+                )
               ) : (
                 <DefaultAvatar 
-                  name={contact?.surnom || contact?.username || 'Contact'} 
+                  name="Contact" 
                   size={120} 
                 />
               )}
             </View>
             <Text style={styles.profileName}>
               {isGroup 
-                ? conversation?.name || 'Groupe' 
+                ? groupDetails?.name || conversation?.name || 'Groupe' 
                 : contact?.surnom || contact?.username || 'Contact'
               }
             </Text>
@@ -244,8 +491,10 @@ export default function ConversationManagement() {
                 <Text style={styles.aiBadgeTextLarge}>Agent IA</Text>
               </View>
             )}
-            {isGroup && conversation?.description && (
-              <Text style={styles.groupDesc}>{conversation.description}</Text>
+            {isGroup && (groupDetails?.description || conversation?.description) && (
+              <Text style={styles.groupDesc}>
+                {groupDetails?.description || conversation?.description}
+              </Text>
             )}
             {!isGroup && contact?.username && (
               <Text style={styles.username}>@{contact.username}</Text>
@@ -291,57 +540,85 @@ export default function ConversationManagement() {
         )}
 
         {/* Section Membres (si groupe) */}
-        {isGroup && members.length > 0 && (
+        {isGroup && (
           <View style={styles.floatingCard}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>
-                <Ionicons name="people" size={16} color="rgba(10, 145, 104, 1)" /> {members.length} membres
+                <Ionicons name="people" size={16} color="rgba(10, 145, 104, 1)" /> {groupDetails?.member_count || members.length} membre{((groupDetails?.member_count || members.length) > 1) ? 's' : ''}
               </Text>
-              <TouchableOpacity style={styles.addButton}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.2)', 'rgba(10, 145, 104, 0.1)']}
-                  style={styles.addButtonGradient}
-                >
-                  <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
-                </LinearGradient>
-              </TouchableOpacity>
+              {isAdmin && (
+                <TouchableOpacity style={styles.addButton} onPress={handleInviteMember}>
+                  <LinearGradient
+                    colors={['rgba(10, 145, 104, 0.2)', 'rgba(10, 145, 104, 0.1)']}
+                    style={styles.addButtonGradient}
+                  >
+                    <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
             
             <View style={styles.membersList}>
-              {members.slice(0, 5).map((member, index) => (
-                <TouchableOpacity 
-                  key={member.uuid} 
-                  style={[
-                    styles.memberRow,
-                    index === members.slice(0, 5).length - 1 && styles.memberRowLast
-                  ]}
-                >
-                  <DefaultAvatar name={member.surnom || member.username} size={44} />
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.surnom || member.username}</Text>
-                    {member.is_ai && (
-                      <View style={styles.aiBadgeSmall}>
-                        <Ionicons name="flash" size={10} color="#fff" />
-                        <Text style={styles.aiBadgeTextSmall}>IA</Text>
+              {members.length === 0 && (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ color: '#888', fontSize: 14 }}>
+                    {groupDetails ? 'Aucun membre' : 'Chargement des membres...'}
+                  </Text>
+                </View>
+              )}
+              {members.map((member, index) => {
+                const memberRole = member.role;
+                const isOwner = memberRole === 'owner';
+                const isModerator = memberRole === 'moderator';
+                const canRemove = isAdmin && !isOwner && member.user_uuid !== user?.uuid;
+                const memberName = member.surnom || member.username || 'Membre';
+                const memberUsername = member.username || 'inconnu';
+                
+                return (
+                  <View 
+                    key={member.user_uuid || member.uuid || member.id} 
+                    style={[
+                      styles.memberRow,
+                      index === members.length - 1 && styles.memberRowLast
+                    ]}
+                  >
+                    <DefaultAvatar name={memberName} size={44} />
+                    <View style={styles.memberInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.memberName}>{memberName}</Text>
+                        {isOwner && (
+                          <View style={styles.roleBadge}>
+                            <Ionicons name="star" size={12} color="#FFD700" />
+                            <Text style={styles.roleBadgeText}>Propriétaire</Text>
+                          </View>
+                        )}
+                        {isModerator && (
+                          <View style={[styles.roleBadge, { backgroundColor: 'rgba(10, 145, 104, 0.15)' }]}>
+                            <Ionicons name="shield" size={12} color="rgba(10, 145, 104, 1)" />
+                            <Text style={[styles.roleBadgeText, { color: 'rgba(10, 145, 104, 1)' }]}>Modérateur</Text>
+                          </View>
+                        )}
+                        {member.is_ai && (
+                          <View style={styles.aiBadgeSmall}>
+                            <Ionicons name="flash" size={10} color="#fff" />
+                            <Text style={styles.aiBadgeTextSmall}>IA</Text>
+                          </View>
+                        )}
                       </View>
+                      <Text style={styles.memberUsername}>@{memberUsername}</Text>
+                    </View>
+                    {canRemove && (
+                      <TouchableOpacity 
+                        style={styles.removeMemberButton}
+                        onPress={() => handleRemoveMember(member)}
+                      >
+                        <Ionicons name="remove-circle" size={24} color="#ff6b6b" />
+                      </TouchableOpacity>
                     )}
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
-                </TouchableOpacity>
-              ))}
+                );
+              })}
             </View>
-            
-            {members.length > 5 && (
-              <TouchableOpacity style={styles.viewAllButton}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.1)', 'rgba(10, 145, 104, 0.05)']}
-                  style={styles.viewAllGradient}
-                >
-                  <Text style={styles.viewAllText}>Voir tous les membres</Text>
-                  <Ionicons name="chevron-forward" size={16} color="rgba(10, 145, 104, 1)" />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
           </View>
         )}
         
@@ -581,10 +858,15 @@ export default function ConversationManagement() {
         <View style={styles.infoSection}>
           <Text style={styles.infoText}>
             {isGroup 
-              ? `Groupe créé le ${conversation?.created_at ? new Date(conversation.created_at).toLocaleDateString('fr-FR') : 'N/A'}`
+              ? `Groupe créé le ${groupDetails?.created_at ? new Date(groupDetails.created_at).toLocaleDateString('fr-FR') : (conversation?.created_at ? new Date(conversation.created_at).toLocaleDateString('fr-FR') : 'N/A')}`
               : 'Les messages et appels sont cryptés de bout en bout.'
             }
           </Text>
+          {isGroup && groupDetails?.invite_code && (
+            <Text style={[styles.infoText, { marginTop: 8, fontWeight: '600' }]}>
+              Code d'invitation : {groupDetails.invite_code}
+            </Text>
+          )}
         </View>
 
         <View style={{ height: 100 }} />
@@ -824,14 +1106,34 @@ const styles = StyleSheet.create({
   memberInfo: {
     flex: 1,
     marginLeft: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   memberName: {
     fontSize: 16,
     color: '#1a1a1a',
     fontWeight: '600',
+  },
+  memberUsername: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 2,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B8860B',
+  },
+  removeMemberButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   aiBadgeSmall: {
     flexDirection: 'row',

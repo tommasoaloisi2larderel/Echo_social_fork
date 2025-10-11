@@ -4,15 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
@@ -28,13 +28,38 @@ interface Message {
 }
 
 
+interface ConversationInfo {
+  other_participant?: {
+    username: string;
+    surnom?: string;
+    photo_profil_url?: string;
+    user_uuid?: string;
+  };
+  participants_detail?: Array<{
+    username: string;
+    surnom?: string;
+    user_uuid: string;
+    user?: number;
+    photo_profil_url?: string;
+  }>;
+  is_group?: boolean;
+}
+
+interface GroupInfo {
+  uuid: string;
+  name: string;
+  avatar?: string;
+}
+
 export default function ConversationDetail() {
   const { conversationId } = useLocalSearchParams();
-  const { accessToken, user, logout } = useAuth();
+  const { accessToken, user, logout, makeAuthenticatedRequest } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
   const { setWebsocket, setSendMessage, setCurrentConversationId } = useChat();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);
+  const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
 
   const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   
@@ -160,6 +185,71 @@ export default function ConversationDetail() {
     try {
       console.log('📨 Récupération messages pour:', conversationId);
 
+      // Récupérer les détails de la conversation d'abord
+      const convResponse = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/${conversationId}/`
+      );
+
+      if (convResponse.ok) {
+        const convData = await convResponse.json();
+        setConversationInfo(convData);
+        
+        // D'abord vérifier dans la liste des conversations si c'est un groupe
+        const conversationsResponse = await makeAuthenticatedRequest(
+          `${API_BASE_URL}/messaging/conversations/`
+        );
+        
+        let conversationFromList = null;
+        if (conversationsResponse.ok) {
+          const convList = await conversationsResponse.json();
+          conversationFromList = convList.find((c: any) => c.uuid === conversationId);
+          console.log('📋 Conv from list - other_participant:', conversationFromList?.other_participant);
+        }
+        
+        // Si la conversation a un other_participant dans la liste, c'est une conversation privée
+        if (conversationFromList?.other_participant) {
+          console.log('✅ Conversation privée détectée');
+          // Ne pas chercher dans les groupes, mais continuer pour charger les messages
+        } else {
+          // Sinon, c'est probablement un groupe, charger les détails
+          console.log('👥 Pas de other_participant, recherche dans les groupes...');
+          const groupsResponse = await makeAuthenticatedRequest(
+            `${API_BASE_URL}/groups/my-groups/`
+          );
+          
+          if (groupsResponse.ok) {
+            const groups = await groupsResponse.json();
+            console.log('📋 Vérification groupes pour conversation:', conversationId);
+            
+            // Itérer sur chaque groupe pour trouver celui avec ce conversation_uuid
+            for (const group of groups) {
+              try {
+                const detailsResponse = await makeAuthenticatedRequest(
+                  `${API_BASE_URL}/groups/${group.uuid}/`
+                );
+                
+                if (detailsResponse.ok) {
+                  const groupData = await detailsResponse.json();
+                  
+                  // Vérifier si c'est le bon groupe
+                  if (groupData.conversation_uuid === conversationId) {
+                    console.log('✅ Groupe trouvé pour header:', groupData.name);
+                    setGroupInfo({
+                      uuid: groupData.uuid,
+                      name: groupData.name,
+                      avatar: groupData.avatar
+                    });
+                    break; // Trouvé, on arrête
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Erreur chargement détails groupe:', group.uuid, error);
+              }
+            }
+          }
+        }
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`,
         {
@@ -178,20 +268,35 @@ export default function ConversationDetail() {
         return;
       }
 
+      if (response.status === 404) {
+        console.error('❌ Conversation 404 - n\'existe pas ou pas de messages');
+        setMessages([]);
+        setLoading(false);
+        Alert.alert(
+          'Conversation introuvable',
+          'Cette conversation n\'existe pas ou vous n\'y avez pas accès.'
+        );
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}`);
       }
 
       const data = await response.json();
       console.log('✅ Messages reçus:', data.length || data.results?.length || 0);
+      console.log('📋 Structure données:', Array.isArray(data) ? 'array' : 'object', 'hasResults:', !!data.results);
 
-      const messagesList = data.results || data;
+      const messagesList = Array.isArray(data) ? data : (data.results || []);
+      console.log('📋 Messages à afficher:', messagesList.length);
+      
       const sortedMessages = messagesList.sort(
         (a: Message, b: Message) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
       setMessages(sortedMessages);
+      console.log('✅ Messages chargés dans l\'état:', sortedMessages.length);
     } catch (error) {
       console.error('❌ Erreur messages:', error);
     } finally {
@@ -317,8 +422,41 @@ export default function ConversationDetail() {
         })}
         activeOpacity={0.8}
       >
-        <DefaultAvatar name="Contact" size={30} style={styles.chatHeaderAvatar} />
-        <Text style={styles.chatHeaderName}>Conversation</Text>
+        {(() => {
+          // Si c'est un groupe, afficher le nom du groupe
+          if (groupInfo) {
+            return (
+              <>
+                <DefaultAvatar name={groupInfo.name} size={30} style={styles.chatHeaderAvatar} />
+                <Text style={styles.chatHeaderName}>{groupInfo.name}</Text>
+              </>
+            );
+          }
+          
+          // Sinon, trouver l'autre participant (celui qui n'est pas moi)
+          if (conversationInfo?.participants_detail) {
+            const otherParticipant = conversationInfo.participants_detail.find(
+              p => p.user_uuid !== user?.uuid
+            );
+            if (otherParticipant) {
+              const name = otherParticipant.surnom || otherParticipant.username;
+              return (
+                <>
+                  <DefaultAvatar name={name} size={30} style={styles.chatHeaderAvatar} />
+                  <Text style={styles.chatHeaderName}>{name}</Text>
+                </>
+              );
+            }
+          }
+          
+          // Par défaut
+          return (
+            <>
+              <DefaultAvatar name="Conversation" size={30} style={styles.chatHeaderAvatar} />
+              <Text style={styles.chatHeaderName}>Conversation</Text>
+            </>
+          );
+        })()}
         <View style={styles.chatHeaderStatus}>
           <Text style={styles.statusDot}>•</Text>
         </View>
