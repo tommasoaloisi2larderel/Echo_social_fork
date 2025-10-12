@@ -2,7 +2,6 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -55,15 +54,36 @@ interface Invitation {
   date_reponse?: string;
 }
 
+interface GroupInvitation {
+  id: number;
+  uuid: string;
+  group: {
+    uuid: string;
+    name: string;
+    description?: string;
+    member_count?: number;
+  };
+  created_by: {
+    uuid: string;
+    username: string;
+    surnom?: string;
+  };
+  status: string;
+  message?: string;
+  created_at: string;
+  is_expired?: boolean;
+}
+
 export default function FriendsScreen() {
   const { makeAuthenticatedRequest } = useAuth();
   const insets = useSafeAreaInsets();
   
   const [connections, setConnections] = useState<Connection[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'friends' | 'invitations'>('friends');
+  const [activeTab, setActiveTab] = useState<'friends' | 'invitations' | 'groupInvitations'>('friends');
   const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
 
   const fetchConnections = useCallback(async () => {
@@ -94,15 +114,37 @@ export default function FriendsScreen() {
     }
   }, [makeAuthenticatedRequest]);
 
+  const fetchGroupInvitations = useCallback(async () => {
+    try {
+      console.log('📨 Chargement invitations de groupe...');
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/groups/invitations/received/`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Invitations de groupe reçues:', data.length);
+        console.log('📋 Invitations détails:', data);
+        // Filtrer les invitations expirées
+        const activeInvitations = data.filter((inv: GroupInvitation) => !inv.is_expired);
+        console.log('✅ Invitations actives:', activeInvitations.length);
+        setGroupInvitations(activeInvitations || []);
+      } else {
+        console.error('❌ Erreur chargement invitations groupe:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des invitations de groupe:', error);
+    }
+  }, [makeAuthenticatedRequest]);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchConnections(), fetchInvitations()]);
+      await Promise.all([fetchConnections(), fetchInvitations(), fetchGroupInvitations()]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchConnections, fetchInvitations]);
+  }, [fetchConnections, fetchInvitations, fetchGroupInvitations]);
 
   useEffect(() => {
     fetchData();
@@ -165,6 +207,69 @@ export default function FriendsScreen() {
     }
   };
 
+  const handleGroupInvitationResponse = async (invitationUuid: string, action: 'accept' | 'decline', groupName: string) => {
+    setProcessingIds(prev => new Set(prev).add(invitationUuid as any));
+    
+    try {
+      console.log(`📨 ${action === 'accept' ? 'Acceptation' : 'Refus'} invitation groupe:`, invitationUuid);
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/groups/invitations/${invitationUuid}/respond/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: action
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erreur réponse invitation:', errorData);
+        throw new Error(`Erreur ${response.status}`);
+      }
+
+      // Retirer l'invitation de la liste
+      setGroupInvitations(prev => prev.filter(inv => inv.uuid !== invitationUuid));
+      
+      if (action === 'accept') {
+        Alert.alert(
+          'Invitation acceptée',
+          `Vous avez rejoint le groupe "${groupName}" !`,
+          [{ 
+            text: 'OK', 
+            onPress: () => {
+              // Retourner à la page conversations pour voir le nouveau groupe
+              console.log('🔄 Navigation vers conversations pour recharger les groupes');
+              router.push('/(tabs)/conversations');
+            }
+          }]
+        );
+      } else {
+        Alert.alert(
+          'Invitation refusée',
+          `L'invitation au groupe "${groupName}" a été refusée.`
+        );
+      }
+      
+      console.log('✅ Invitation traitée avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de la réponse à l\'invitation de groupe:', error);
+      Alert.alert(
+        'Erreur',
+        'Impossible de traiter l\'invitation. Veuillez réessayer.'
+      );
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(invitationUuid as any);
+        return newSet;
+      });
+    }
+  };
+
   const handleRemoveFriend = (connectionId: number, userName: string) => {
     Alert.alert(
       'Supprimer un ami',
@@ -221,21 +326,15 @@ export default function FriendsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <LinearGradient
-        colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)']}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={ECHO_COLOR} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mes Connexions</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-      </LinearGradient>
+      {/* Header harmonisé */}
+      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <Ionicons name="chevron-back" size={24} color="#fff" />
+      </TouchableOpacity>
+      
+      <View style={styles.header}>
+        <Ionicons name="people" size={20} color="#fff" />
+        <Text style={styles.headerTitle}>Mes Connexions</Text>
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
@@ -270,6 +369,26 @@ export default function FriendsScreen() {
           {invitations.length > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{invitations.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'groupInvitations' && styles.tabActive]}
+          onPress={() => setActiveTab('groupInvitations')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="people-circle"
+            size={18}
+            color={activeTab === 'groupInvitations' ? '#fff' : ECHO_COLOR}
+          />
+          <Text style={[styles.tabText, activeTab === 'groupInvitations' && styles.tabTextActive]}>
+            Groupes ({groupInvitations.length})
+          </Text>
+          {groupInvitations.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{groupInvitations.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -325,7 +444,7 @@ export default function FriendsScreen() {
               </View>
             ))
           )
-        ) : (
+        ) : activeTab === 'invitations' ? (
           // Liste des invitations
           invitations.length === 0 ? (
             <View style={styles.emptyState}>
@@ -408,7 +527,97 @@ export default function FriendsScreen() {
               );
             })
           )
-        )}
+        ) : activeTab === 'groupInvitations' ? (
+          // Liste des invitations de groupe
+          groupInvitations.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-circle-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyTitle}>Aucune invitation de groupe</Text>
+              <Text style={styles.emptyText}>
+                Vous n'avez pas d'invitations de groupe en attente
+              </Text>
+            </View>
+          ) : (
+            groupInvitations.map((invitation) => {
+              const isProcessing = processingIds.has(invitation.uuid as any);
+              
+              return (
+                <View key={invitation.uuid} style={styles.invitationCard}>
+                  <View style={styles.cardContent}>
+                    <View style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: 'rgba(10, 145, 104, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <Ionicons name="people" size={28} color="rgba(10, 145, 104, 1)" />
+                    </View>
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardName}>
+                        {invitation.group.name}
+                      </Text>
+                      <Text style={styles.cardUsername}>
+                        Invité par {invitation.created_by?.surnom || invitation.created_by?.username || 'Inconnu'}
+                      </Text>
+                      {invitation.message && (
+                        <Text style={styles.invitationMessage} numberOfLines={2}>
+                          {invitation.message}
+                        </Text>
+                      )}
+                      {invitation.is_expired && (
+                        <Text style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4 }}>
+                          ⚠️ Invitation expirée
+                        </Text>
+                      )}
+                      {invitation.group.member_count !== undefined && (
+                        <Text style={styles.cardUsername}>
+                          {invitation.group.member_count} membre{invitation.group.member_count > 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  
+                  {isProcessing ? (
+                    <View style={styles.actionsContainer}>
+                      <ActivityIndicator size="small" color={ECHO_COLOR} />
+                    </View>
+                  ) : (
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={styles.acceptButton}
+                        onPress={() =>
+                          handleGroupInvitationResponse(
+                            invitation.uuid,
+                            'accept',
+                            invitation.group.name
+                          )
+                        }
+                      >
+                        <Ionicons name="checkmark" size={20} color="#fff" />
+                        <Text style={styles.acceptButtonText}>Accepter</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.rejectButton}
+                        onPress={() =>
+                          handleGroupInvitationResponse(
+                            invitation.uuid,
+                            'decline',
+                            invitation.group.name
+                          )
+                        }
+                      >
+                        <Ionicons name="close" size={20} color="#666" />
+                        <Text style={styles.rejectButtonText}>Refuser</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -425,42 +634,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND_GRAY,
   },
-  header: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   backButton: {
+    position: 'absolute',
+    top: 65,
+    left: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(10, 145, 104, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
+    zIndex: 20,
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  header: {
+    position: 'absolute',
+    top: 65,
+    left: 75,
+    right: 20,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(10, 145, 104, 0.9)',
+    zIndex: 10,
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#1b5e20',
-  },
-  headerSpacer: {
-    width: 40,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
   tabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 105,
+    paddingBottom: 12,
     gap: 8,
   },
   tab: {

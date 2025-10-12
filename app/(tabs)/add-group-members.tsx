@@ -1,18 +1,19 @@
+import { FloatingHeader } from '@/components/FloatingHeader';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
@@ -76,7 +77,11 @@ export default function AddGroupMembers() {
       if (response.ok) {
         const members = await response.json();
         console.log('📋 Membres reçus:', members);
-        const memberUuids = new Set<string>(members.map((m: GroupMember) => m.user_uuid));
+        console.log('📋 Structure premier membre:', members[0]);
+        // Extraire les UUIDs des membres (la structure peut être m.user_uuid ou m.user.uuid)
+        const memberUuids = new Set<string>(
+          members.map((m: any) => m.user_uuid || m.user?.uuid).filter(Boolean)
+        );
         setGroupMembers(memberUuids);
         console.log('👥 Membres actuels du groupe:', memberUuids.size, Array.from(memberUuids));
       } else {
@@ -161,7 +166,7 @@ export default function AddGroupMembers() {
         console.log('📨 Envoi invitation pour:', userUuid);
         
         const payload = {
-          user_uuid: userUuid,
+          target_user_uuid: userUuid,
           message: `Invitation à rejoindre ${groupName}`
         };
         console.log('📨 Payload:', JSON.stringify(payload, null, 2));
@@ -209,19 +214,46 @@ export default function AddGroupMembers() {
         Alert.alert(
           'Invitations envoyées',
           message,
-          [{ text: 'OK', onPress: () => router.back() }]
+          [{ 
+            text: 'OK', 
+            onPress: () => {
+              // Recharger les membres du groupe
+              loadGroupMembers();
+              // Vider la sélection
+              setSelectedUsers(new Set());
+              setQuery('');
+              setSearchResults([]);
+            }
+          }]
         );
       } else {
         const firstError = results.find(r => !r.success);
-        const errorMsg = firstError?.error?.detail || firstError?.error?.error || 
-                        (firstError?.error && typeof firstError.error === 'object' 
-                          ? JSON.stringify(firstError.error) 
-                          : 'Erreur inconnue');
-        console.error('❌ Message d\'erreur final:', errorMsg);
-        Alert.alert(
-          'Erreur', 
-          `Impossible d'envoyer les invitations.\nStatut: ${firstError?.status}\nDétails: ${errorMsg}`
-        );
+        
+        // Gérer les erreurs spécifiques
+        let errorTitle = 'Erreur';
+        let errorMessage = 'Impossible d\'envoyer les invitations.';
+        
+        if (firstError?.error?.non_field_errors) {
+          const errors = firstError.error.non_field_errors;
+          if (Array.isArray(errors) && errors.length > 0) {
+            const errorText = errors[0];
+            if (errorText.includes('déjà en cours')) {
+              errorTitle = 'Invitation déjà envoyée';
+              errorMessage = 'Une invitation a déjà été envoyée à cet utilisateur. Veuillez attendre sa réponse.';
+            } else {
+              errorMessage = errorText;
+            }
+          }
+        } else if (firstError?.error?.detail) {
+          errorMessage = firstError.error.detail;
+        } else if (firstError?.error?.error) {
+          errorMessage = firstError.error.error;
+        } else if (firstError?.error && typeof firstError.error === 'object') {
+          errorMessage = JSON.stringify(firstError.error);
+        }
+        
+        console.error('❌ Message d\'erreur final:', errorMessage);
+        Alert.alert(errorTitle, errorMessage);
       }
     } catch (error) {
       console.error('❌ Erreur globale envoi invitations:', error);
@@ -276,29 +308,8 @@ export default function AddGroupMembers() {
 
   return (
     <View style={[localStyles.container, { paddingTop: (insets.top || 0) }]}>
-      {/* Bouton retour flottant */}
-      <TouchableOpacity
-        style={localStyles.floatingBackButton}
-        onPress={() => router.back()}
-      >
-        <LinearGradient
-          colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
-          style={localStyles.backButtonGradient}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Header flottant */}
-      <LinearGradient
-        colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
-        style={localStyles.floatingHeader}
-      >
-        <Ionicons name="person-add" size={20} color="#fff" />
-        <Text style={localStyles.headerTitle}>
-          Ajouter des membres
-        </Text>
-      </LinearGradient>
+      {/* Header unifié */}
+      <FloatingHeader title="Ajouter des membres" icon="person-add" />
 
       {/* Info groupe */}
       <View style={localStyles.groupInfoBadge}>
@@ -392,51 +403,9 @@ const localStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(245,250,245,0.9)',
   },
-  floatingBackButton: {
-    position: 'absolute',
-    top: 70,
-    left: 20,
-    zIndex: 20,
-    shadowColor: 'rgba(10, 145, 104, 0.5)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  backButtonGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floatingHeader: {
-    position: 'absolute',
-    top: 70,
-    left: 84,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    zIndex: 10,
-    shadowColor: 'rgba(10, 145, 104, 0.5)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
   groupInfoBadge: {
     position: 'absolute',
-    top: 132,
+    top: 120,
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -455,7 +424,7 @@ const localStyles = StyleSheet.create({
   },
   searchContainer: {
     position: 'absolute',
-    top: 178,
+    top: 170,
     left: 20,
     right: 20,
     backgroundColor: 'rgba(255,255,255,0.6)',
@@ -473,7 +442,7 @@ const localStyles = StyleSheet.create({
     color: '#333',
   },
   grid: {
-    paddingTop: 235,
+    paddingTop: 230,
     paddingBottom: 200,
     paddingHorizontal: 10,
   },
@@ -499,7 +468,7 @@ const localStyles = StyleSheet.create({
   },
   floatingInviteButton: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 115,
     left: 20,
     right: 20,
     zIndex: 20,
@@ -556,4 +525,3 @@ const localStyles = StyleSheet.create({
     lineHeight: 22,
   },
 });
-

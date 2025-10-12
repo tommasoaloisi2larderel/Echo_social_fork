@@ -2,7 +2,7 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -206,47 +206,47 @@ export default function ConversationDetail() {
           console.log('📋 Conv from list - other_participant:', conversationFromList?.other_participant);
         }
         
-        // Si la conversation a un other_participant dans la liste, c'est une conversation privée
-        if (conversationFromList?.other_participant) {
-          console.log('✅ Conversation privée détectée');
-          // Ne pas chercher dans les groupes, mais continuer pour charger les messages
-        } else {
-          // Sinon, c'est probablement un groupe, charger les détails
-          console.log('👥 Pas de other_participant, recherche dans les groupes...');
-          const groupsResponse = await makeAuthenticatedRequest(
-            `${API_BASE_URL}/groups/my-groups/`
-          );
+        // Toujours vérifier dans les groupes d'abord
+        console.log('👥 Recherche dans les groupes...');
+        const groupsResponse = await makeAuthenticatedRequest(
+          `${API_BASE_URL}/groups/my-groups/`
+        );
+        
+        let isGroupConversation = false;
+        if (groupsResponse.ok) {
+          const groups = await groupsResponse.json();
+          console.log('📋 Vérification groupes pour conversation:', conversationId);
           
-          if (groupsResponse.ok) {
-            const groups = await groupsResponse.json();
-            console.log('📋 Vérification groupes pour conversation:', conversationId);
-            
-            // Itérer sur chaque groupe pour trouver celui avec ce conversation_uuid
-            for (const group of groups) {
-              try {
-                const detailsResponse = await makeAuthenticatedRequest(
-                  `${API_BASE_URL}/groups/${group.uuid}/`
-                );
+          // Itérer sur chaque groupe pour trouver celui avec ce conversation_uuid
+          for (const group of groups) {
+            try {
+              const detailsResponse = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/groups/${group.uuid}/`
+              );
+              
+              if (detailsResponse.ok) {
+                const groupData = await detailsResponse.json();
                 
-                if (detailsResponse.ok) {
-                  const groupData = await detailsResponse.json();
-                  
-                  // Vérifier si c'est le bon groupe
-                  if (groupData.conversation_uuid === conversationId) {
-                    console.log('✅ Groupe trouvé pour header:', groupData.name);
-                    setGroupInfo({
-                      uuid: groupData.uuid,
-                      name: groupData.name,
-                      avatar: groupData.avatar
-                    });
-                    break; // Trouvé, on arrête
-                  }
+                // Vérifier si c'est le bon groupe
+                if (groupData.conversation_uuid === conversationId) {
+                  console.log('✅ Groupe trouvé pour header:', groupData.name);
+                  isGroupConversation = true;
+                  setGroupInfo({
+                    uuid: groupData.uuid,
+                    name: groupData.name,
+                    avatar: groupData.avatar
+                  });
+                  break; // Trouvé, on arrête
                 }
-              } catch (error) {
-                console.error('❌ Erreur chargement détails groupe:', group.uuid, error);
               }
+            } catch (error) {
+              console.error('❌ Erreur chargement détails groupe:', group.uuid, error);
             }
           }
+        }
+        
+        if (!isGroupConversation && conversationFromList?.other_participant) {
+          console.log('✅ Conversation privée détectée (pas un groupe)');
         }
       }
 
@@ -389,19 +389,19 @@ export default function ConversationDetail() {
 
   return (
     <Animated.View style={[styles.chatContainer, animatedStyle]}>
-      {/* Bouton de retour flottant */}
+      {/* Bouton retour */}
       <TouchableOpacity
         style={{
           position: 'absolute',
-          top: 63,
+          top: 65,
           left: 20,
           zIndex: 20,
-          backgroundColor: 'rgba(10, 145, 104, 0.7)',
-          borderRadius: 20,
+          backgroundColor: 'rgba(10, 145, 104, 0.9)',
           width: 40,
           height: 40,
-          alignItems: 'center',
+          borderRadius: 20,
           justifyContent: 'center',
+          alignItems: 'center',
           shadowColor: 'rgba(10, 145, 104, 0.4)',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.5,
@@ -413,22 +413,40 @@ export default function ConversationDetail() {
         <Ionicons name="chevron-back" size={24} color="#fff" />
       </TouchableOpacity>
 
-      {/* Header flottant avec avatar et nom */}
+      {/* Header avec avatar et nom */}
       <TouchableOpacity 
-        style={styles.chatHeader}
         onPress={() => router.push({
           pathname: '/(tabs)/conversation-management',
           params: { conversationId }
         })}
         activeOpacity={0.8}
+        style={{
+          position: 'absolute',
+          top: 65,
+          left: 75,
+          right: 20,
+          height: 40,
+          backgroundColor: 'rgba(10, 145, 104, 0.9)',
+          borderRadius: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 12,
+          gap: 10,
+          zIndex: 10,
+          shadowColor: 'rgba(10, 145, 104, 0.4)',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.5,
+          shadowRadius: 8,
+          elevation: 8,
+        }}
       >
         {(() => {
           // Si c'est un groupe, afficher le nom du groupe
           if (groupInfo) {
             return (
               <>
-                <DefaultAvatar name={groupInfo.name} size={30} style={styles.chatHeaderAvatar} />
-                <Text style={styles.chatHeaderName}>{groupInfo.name}</Text>
+                <DefaultAvatar name={groupInfo.name} size={26} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff', flex: 1 }}>{groupInfo.name}</Text>
               </>
             );
           }
@@ -442,8 +460,8 @@ export default function ConversationDetail() {
               const name = otherParticipant.surnom || otherParticipant.username;
               return (
                 <>
-                  <DefaultAvatar name={name} size={30} style={styles.chatHeaderAvatar} />
-                  <Text style={styles.chatHeaderName}>{name}</Text>
+                  <DefaultAvatar name={name} size={26} />
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff', flex: 1 }}>{name}</Text>
                 </>
               );
             }
@@ -452,14 +470,12 @@ export default function ConversationDetail() {
           // Par défaut
           return (
             <>
-              <DefaultAvatar name="Conversation" size={30} style={styles.chatHeaderAvatar} />
-              <Text style={styles.chatHeaderName}>Conversation</Text>
+              <DefaultAvatar name="Conversation" size={26} />
+              <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff', flex: 1 }}>Conversation</Text>
             </>
           );
         })()}
-        <View style={styles.chatHeaderStatus}>
-          <Text style={styles.statusDot}>•</Text>
-        </View>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#4ade80' }} />
       </TouchableOpacity>
       
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -474,9 +490,46 @@ export default function ConversationDetail() {
             const prevMsg = index > 0 ? messages[index - 1] : null;
             const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
             
-            // Vérifier si le message précédent/suivant est du même utilisateur
-            const isSameSenderAsPrev = prevMsg && prevMsg.sender_username === msg.sender_username;
-            const isSameSenderAsNext = nextMsg && nextMsg.sender_username === msg.sender_username;
+            // Détecter les messages système
+            const isSystemMessage = msg.content.startsWith('🎉') || 
+                                    msg.content.startsWith('👋') || 
+                                    msg.content.includes('a rejoint') ||
+                                    msg.content.includes('Bienvenue');
+            
+            // Vérifier si on doit afficher un séparateur de date
+            const currentDate = new Date(msg.created_at).toLocaleDateString('fr-FR');
+            const prevDate = prevMsg ? new Date(prevMsg.created_at).toLocaleDateString('fr-FR') : null;
+            const showDateSeparator = currentDate !== prevDate;
+            
+            // Trouver le message précédent non-système pour le groupement
+            let prevNonSystemMsg = prevMsg;
+            let prevNonSystemIndex = index - 1;
+            while (prevNonSystemMsg && (
+              prevNonSystemMsg.content.startsWith('🎉') || 
+              prevNonSystemMsg.content.startsWith('👋') || 
+              prevNonSystemMsg.content.includes('a rejoint') ||
+              prevNonSystemMsg.content.includes('Bienvenue')
+            )) {
+              prevNonSystemIndex--;
+              prevNonSystemMsg = prevNonSystemIndex >= 0 ? messages[prevNonSystemIndex] : null;
+            }
+            
+            // Trouver le message suivant non-système pour le groupement
+            let nextNonSystemMsg = nextMsg;
+            let nextNonSystemIndex = index + 1;
+            while (nextNonSystemMsg && (
+              nextNonSystemMsg.content.startsWith('🎉') || 
+              nextNonSystemMsg.content.startsWith('👋') || 
+              nextNonSystemMsg.content.includes('a rejoint') ||
+              nextNonSystemMsg.content.includes('Bienvenue')
+            )) {
+              nextNonSystemIndex++;
+              nextNonSystemMsg = nextNonSystemIndex < messages.length ? messages[nextNonSystemIndex] : null;
+            }
+            
+            // Vérifier si le message précédent/suivant (non-système) est du même utilisateur
+            const isSameSenderAsPrev = prevNonSystemMsg && prevNonSystemMsg.sender_username === msg.sender_username;
+            const isSameSenderAsNext = nextNonSystemMsg && nextNonSystemMsg.sender_username === msg.sender_username;
             
             // Déterminer si c'est le premier ou dernier message d'un groupe
             const isFirstInGroup = !isSameSenderAsPrev;
@@ -484,44 +537,66 @@ export default function ConversationDetail() {
             const isFirstMessageOverall = index === 0;
             
             return (
-              <View
-                key={msg.uuid}
-                style={[
-                  styles.messageBubble,
-                  isMe ? styles.myMessage : styles.theirMessage,
-                  // Réduire l'espacement pour le premier message
-                  isFirstMessageOverall && styles.firstMessageOverall,
-                  // Réduire l'espacement pour les messages groupés
-                  !isFirstInGroup && styles.messageGrouped,
-                  // Modifier les bordures pour les messages du milieu
-                  !isFirstInGroup && !isLastInGroup && (isMe ? styles.myMessageMiddle : styles.theirMessageMiddle),
-                  isFirstInGroup && isSameSenderAsNext && (isMe ? styles.myMessageFirst : styles.theirMessageFirst),
-                  isLastInGroup && isSameSenderAsPrev && (isMe ? styles.myMessageLast : styles.theirMessageLast),
-                ]}
-              >
-                <Text style={[
-                  styles.messageText,
-                  isMe ? styles.myMessageText : styles.theirMessageText
-                ]}>
-                  {msg.content}
-                </Text>
-                {/* Afficher l'heure seulement sur le dernier message du groupe */}
-                {isLastInGroup && (
-                  <View style={styles.messageMeta}>
-                    <Text style={styles.timestampText}>
-                      {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </Text>
-                    {isMe && (
-                      <Text style={styles.readStatus}>
-                        {msg.is_read ? "Lu" : "Envoyé"}
-                      </Text>
-                    )}
+              <React.Fragment key={msg.uuid}>
+                {/* Séparateur de date */}
+                {showDateSeparator && (
+                  <View style={styles.dateSeparator}>
+                    <View style={styles.dateLine} />
+                    <Text style={styles.dateText}>{currentDate}</Text>
+                    <View style={styles.dateLine} />
                   </View>
                 )}
-              </View>
+                
+                {/* Message système */}
+                {isSystemMessage ? (
+                  <View style={styles.systemMessageContainer}>
+                    <Text style={styles.systemMessageText}>{msg.content}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.messageWrapper}>
+                    {/* Afficher le nom sur le premier message du groupe (seulement pour les autres) */}
+                    {!isMe && isFirstInGroup && (
+                      <Text style={styles.senderName}>{msg.sender_username}</Text>
+                    )}
+                    
+                    <View
+                      style={[
+                        styles.messageBubble,
+                        isMe ? styles.myMessage : styles.theirMessage,
+                        // Réduire l'espacement pour les messages groupés
+                        !isFirstInGroup && styles.messageGrouped,
+                        // Modifier les bordures pour les messages du milieu
+                        !isFirstInGroup && !isLastInGroup && (isMe ? styles.myMessageMiddle : styles.theirMessageMiddle),
+                        isFirstInGroup && isSameSenderAsNext && (isMe ? styles.myMessageFirst : styles.theirMessageFirst),
+                        isLastInGroup && isSameSenderAsPrev && (isMe ? styles.myMessageLast : styles.theirMessageLast),
+                      ]}
+                    >
+                      <Text style={[
+                        styles.messageText,
+                        isMe ? styles.myMessageText : styles.theirMessageText
+                      ]}>
+                        {msg.content}
+                      </Text>
+                      {/* Afficher l'heure seulement sur le dernier message du groupe */}
+                      {isLastInGroup && (
+                        <View style={styles.messageMeta}>
+                          <Text style={styles.timestampText}>
+                            {new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </Text>
+                          {isMe && (
+                            <Text style={styles.readStatus}>
+                              {msg.is_read ? "Lu" : "Envoyé"}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </React.Fragment>
             );
           })}
         </ScrollView>

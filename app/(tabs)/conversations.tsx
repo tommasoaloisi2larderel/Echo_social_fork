@@ -395,6 +395,7 @@ export default function ConversationsScreen() {
         convList.forEach((c: any) => {
           if (c.other_participant) {
             privateConversationUuids.add(c.uuid);
+            console.log('🔒 Conv privée détectée:', c.uuid, '- participant:', c.other_participant.username);
           }
         });
         console.log('🔒 Conversations privées trouvées:', privateConversationUuids.size);
@@ -422,10 +423,25 @@ export default function ConversationsScreen() {
               const groupDetails = await detailsResponse.json();
               const convUuid = groupDetails.conversation_uuid;
               
-              // Ignorer si c'est une conversation privée
-              if (convUuid && privateConversationUuids.has(convUuid)) {
+              console.log('🔍 Détails complets pour', group.name, ':', JSON.stringify({
+                conversation_uuid: convUuid,
+                my_role: groupDetails.my_role,
+                my_membership: groupDetails.my_membership,
+                member_count: groupDetails.member_count
+              }, null, 2));
+              
+              // Vérifier si c'est vraiment un conflit (groupe avec my_role devrait être affiché)
+              const hasGroupRole = groupDetails.my_membership || groupDetails.my_role;
+              if (convUuid && privateConversationUuids.has(convUuid) && !hasGroupRole) {
                 console.warn('⚠️ Groupe', group.name, 'a un conversation_uuid qui est une conv privée, ignoré');
+                console.warn('   → conversation_uuid:', convUuid);
+                console.warn('   → group_uuid:', group.uuid);
+                console.warn('   → my_role:', groupDetails.my_role, 'my_membership:', groupDetails.my_membership);
                 continue;
+              }
+              
+              if (convUuid && privateConversationUuids.has(convUuid)) {
+                console.log('⚠️ CONFLIT détecté pour', group.name, '- mais le groupe a un rôle, donc affiché quand même');
               }
               
               console.log('✅ Détails récupérés pour', group.name, '- conversation_uuid:', convUuid);

@@ -24,7 +24,10 @@ export default function TabsLayout() {
   };
 
   // Determine if we're showing a detail route or other full-screen pages
-  const isInConversationDetail = pathname.includes('conversation-detail') || pathname.includes('conversation-management') || pathname.includes('/friends');
+  const isInConversationDetail = pathname.includes('conversation-detail') || 
+                                  pathname.includes('conversation-management') || 
+                                  pathname.includes('add-group-members') || 
+                                  pathname.includes('/friends');
 
   const handleSendMessage = () => {
     console.log("Envoi du message:", chatText);
@@ -46,12 +49,13 @@ export default function TabsLayout() {
           animation: 'none',
         }}
       >
-        <Stack.Screen name="conversation-detail" />
-        <Stack.Screen name="conversation-management" />
         <Stack.Screen name="index" />
         <Stack.Screen name="conversations" />
         <Stack.Screen name="about" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="conversation-detail" />
+        <Stack.Screen name="conversation-management" />
+        <Stack.Screen name="add-group-members" />
       </Stack>
 
       {/* SwipeableContainer - overlay quand on n'est pas dans detail */}

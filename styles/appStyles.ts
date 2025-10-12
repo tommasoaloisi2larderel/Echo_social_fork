@@ -131,20 +131,20 @@ export const styles = StyleSheet.create({
     shadowRadius: 15,
   },
   messagesContainer: {
-    paddingTop: 140,
-    paddingBottom: 150,
-    paddingHorizontal: 20,
+    paddingTop: 115,
+    paddingBottom: 100,
+    paddingHorizontal: 12,
   },
   messageBubble: {
-    marginVertical: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 25,
+    marginVertical: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
     maxWidth: "80%",
     shadowColor: WHITE,
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   myMessage: {
     alignSelf: "flex-end",
@@ -201,8 +201,8 @@ export const styles = StyleSheet.create({
   },
 
   messageGrouped: {
-    marginTop: 2,  // Réduire l'espace entre les messages groupés
-    marginBottom: 2,
+    marginTop: 1,  // Réduire l'espace entre les messages groupés
+    marginBottom: 1,
   },
 
   // Messages de l'utilisateur (à droite) - Premier du groupe
@@ -235,6 +235,60 @@ export const styles = StyleSheet.create({
   // Messages des autres (à gauche) - Dernier du groupe
   theirMessageLast: {
     borderTopLeftRadius: 8,      // Réduire le rayon en haut à gauche
+  },
+
+  // Séparateur de date
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    marginHorizontal: 16,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(200, 200, 200, 0.3)',
+  },
+  dateText: {
+    fontSize: 11,
+    color: '#999',
+    fontWeight: '600',
+    marginHorizontal: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(240, 240, 240, 0.8)',
+    borderRadius: 10,
+  },
+
+  // Messages système
+  systemMessageContainer: {
+    alignSelf: 'center',
+    marginVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(10, 145, 104, 0.08)',
+    borderRadius: 14,
+    maxWidth: '85%',
+  },
+  systemMessageText: {
+    fontSize: 12,
+    color: 'rgba(10, 145, 104, 0.85)',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // Wrapper de message
+  messageWrapper: {
+    marginBottom: 1,
+  },
+
+  // Nom de l'expéditeur
+  senderName: {
+    fontSize: 11,
+    color: '#777',
+    marginLeft: 10,
+    marginBottom: 2,
+    fontWeight: '600',
   },
 
   ///////////////////////////////////////// STYLES FOR HOME PAGE

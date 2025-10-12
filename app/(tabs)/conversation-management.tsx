@@ -1,19 +1,19 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
-import { FONTS } from '@/constants/fonts';
+import { FloatingHeader } from '@/components/FloatingHeader';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
@@ -116,13 +116,8 @@ export default function ConversationManagement() {
           console.log('📋 Conversation from list - other_participant:', conversationFromList?.other_participant);
         }
         
-        // Si la conversation a un other_participant dans la liste, c'est une conversation privée
-        if (conversationFromList?.other_participant) {
-          console.log('✅ C\'est une conversation privée (other_participant présent)');
-          return; // Ne pas charger les détails de groupe
-        }
-        
-        // Sinon, vérifier si c'est un groupe
+        // Toujours vérifier dans les groupes d'abord
+        console.log('👥 Recherche dans les groupes...');
         const groupsResponse = await makeAuthenticatedRequest(
           `${API_BASE_URL}/groups/my-groups/`
         );
@@ -282,7 +277,7 @@ export default function ConversationManagement() {
     
     console.log('➕ Ouverture page ajout membres pour:', groupDetails.name);
     router.push({
-      pathname: '/(screens)/add-group-members',
+      pathname: '/(tabs)/add-group-members',
       params: {
         groupUuid: groupDetails.uuid,
         groupName: groupDetails.name
@@ -421,26 +416,11 @@ export default function ConversationManagement() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Bouton retour flottant */}
-      <TouchableOpacity onPress={() => router.back()} style={styles.floatingBackButton}>
-        <LinearGradient
-          colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
-          style={styles.backButtonGradient}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Header flottant */}
-      <LinearGradient
-        colors={['rgba(10, 145, 104, 0.95)', 'rgba(10, 145, 104, 0.85)']}
-        style={styles.floatingHeader}
-      >
-        <Ionicons name="settings-outline" size={20} color="#fff" />
-        <Text style={styles.headerTitle}>
-          {isGroup ? 'Paramètres du groupe' : 'Infos du contact'}
-        </Text>
-      </LinearGradient>
+      {/* Header unifié */}
+      <FloatingHeader 
+        title={isGroup ? 'Paramètres du groupe' : 'Infos du contact'}
+        icon="settings-outline"
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Section Photo/Avatar */}
@@ -880,51 +860,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0f2f5',
   },
-  floatingBackButton: {
-    position: 'absolute',
-    top: 70,
-    left: 20,
-    zIndex: 20,
-    shadowColor: 'rgba(10, 145, 104, 0.5)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  backButtonGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floatingHeader: {
-    position: 'absolute',
-    top: 70,
-    left: 84,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    zIndex: 10,
-    shadowColor: 'rgba(10, 145, 104, 0.5)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: '#fff',
-  },
   content: {
     flex: 1,
-    paddingTop: 120,
+    paddingTop: 105,
   },
   
   // Section Profil
