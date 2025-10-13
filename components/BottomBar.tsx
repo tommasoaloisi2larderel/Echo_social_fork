@@ -1,19 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Audio } from 'expo-av';
 import { BlurView } from "expo-blur";
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  PanResponder,
-  Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActionSheetIOS,
+    Alert,
+    Animated,
+    Dimensions,
+    Keyboard,
+    KeyboardAvoidingView,
+    PanResponder,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { useChat } from "../contexts/ChatContext";
@@ -38,7 +44,7 @@ export default function BottomBar({
   conversationId
 }: BottomBarProps) {
   
-  const isChat = currentRoute.includes("conversation-detail");
+  const isChat = currentRoute.includes("conversation-direct") || currentRoute.includes("conversation-group") || currentRoute.includes("conversation-detail");
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
   const { sendMessage: sendChatMessage, websocket } = useChat();
@@ -289,6 +295,197 @@ export default function BottomBar({
     } catch (error) {
       console.error("❌ Erreur lors de l'envoi du message:", error);
     }
+  };
+
+  // --------- Pièces jointes & Upload ---------
+  // Utilise le proxy local pour éviter CORS en développement web
+  const API_BASE_URL = typeof window !== 'undefined' && (window as any).location?.hostname === 'localhost'
+    ? "http://localhost:3001"
+    : "https://reseausocial-production.up.railway.app";
+
+  const uploadAttachment = async (file: { uri: string; name: string; type: string }): Promise<string | null> => {
+    try {
+      const form = new FormData();
+      // @ts-ignore - React Native FormData accepte { uri, name, type }
+      form.append('file', {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      });
+      const resp = await fetch(`${API_BASE_URL}/messaging/attachments/upload/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+          // ne pas mettre Content-Type: RN le gère pour FormData
+        },
+        body: form,
+      });
+      if (!resp.ok) {
+        console.error('❌ Upload attachment failed', resp.status);
+        return null;
+      }
+      const data = await resp.json();
+      return data?.uuid || null;
+    } catch (e) {
+      console.error('❌ Upload attachment error', e);
+      return null;
+    }
+  };
+
+  const sendAttachmentMessage = async (attachmentUuids: string[], caption?: string) => {
+    if (!conversationId) return;
+    const payload: any = {
+      type: 'chat_message',
+      conversation_uuid: conversationId,
+      message: (caption || '').trim(),
+      attachment_uuids: attachmentUuids,
+    };
+    try {
+      if (websocket) {
+        websocket.send(JSON.stringify(payload));
+      } else {
+        // Fallback REST si websocket indisponible
+        const resp = await fetch(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: payload.message, attachment_uuids: attachmentUuids }),
+        });
+        if (!resp.ok) console.error('❌ Fallback REST envoi PJ échoué', resp.status);
+      }
+    } catch (e) {
+      console.error('❌ Envoi PJ error', e);
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') { Alert.alert('Permission requise', 'Autorisez l’accès à la galerie.'); return; }
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+      if (res.canceled || !res.assets?.length) return;
+      const a = res.assets[0];
+      const name = a.fileName || `photo_${Date.now()}.jpg`;
+      const type = a.mimeType || 'image/jpeg';
+      const uri = a.uri;
+      // Stage l'attachement dans la barre, l'envoi se fait au "send"
+      setStagedAttachments((prev) => [...prev, { uri, name, type, kind: 'image' as const }]);
+    } catch (e) { console.error('pick photo error', e); }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+      if (res.canceled || !res.assets?.length) return;
+      const a = res.assets[0];
+      const name = a.name || `fichier_${Date.now()}`;
+      const type = a.mimeType || 'application/octet-stream';
+      const uri = a.uri;
+      setStagedAttachments((prev) => [...prev, { uri, name, type, kind: 'file' as const }]);
+    } catch (e) { console.error('pick doc error', e); }
+  };
+
+  const handlePlus = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions({
+        options: ['Annuler', 'Photo', 'Fichier'],
+        cancelButtonIndex: 0,
+      }, (idx) => {
+        if (idx === 1) handlePickPhoto();
+        else if (idx === 2) handlePickDocument();
+      });
+    } else {
+      Alert.alert('Ajouter', 'Choisissez une option', [
+        { text: 'Photo', onPress: handlePickPhoto },
+        { text: 'Fichier', onPress: handlePickDocument },
+        { text: 'Annuler', style: 'cancel' },
+      ]);
+    }
+  };
+
+  // --------- Message vocal ---------
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef<any>(null);
+
+  const startRecording = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Micro', 'Autorisez le micro pour enregistrer.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+      setRecording(rec);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch (e) {
+      console.error('startRecording error', e);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      setIsRecording(false);
+      if (uri) setRecordedUri(uri);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    } catch (e) {
+      console.error('stopRecording error', e);
+    }
+  };
+
+  const cancelRecorded = () => {
+    setRecordedUri(null);
+    setRecordingSeconds(0);
+  };
+
+  const sendRecorded = async () => {
+    if (!recordedUri) return;
+    const uuid = await uploadAttachment({ uri: recordedUri, name: `voice_${Date.now()}.m4a`, type: 'audio/m4a' });
+    if (uuid) await sendAttachmentMessage([uuid]);
+    setRecordedUri(null);
+    setRecordingSeconds(0);
+  };
+
+  // --------- Staging visuel des PJ ---------
+  type StagedAttachment = { uri: string; name: string; type: string; kind: 'image' | 'file' };
+  const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
+  const removeStagedAt = (index: number) => {
+    setStagedAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSend = async () => {
+    if (recordedUri) { await sendRecorded(); return; }
+    if (stagedAttachments.length > 0) {
+      try {
+        const uuids: string[] = [];
+        for (const att of stagedAttachments) {
+          const u = await uploadAttachment({ uri: att.uri, name: att.name, type: att.type });
+          if (u) uuids.push(u);
+        }
+        if (uuids.length > 0) {
+          await sendAttachmentMessage(uuids, chatText.trim());
+          setChatText("");
+          setStagedAttachments([]);
+        }
+      } catch (e) { console.error('send attachments error', e); }
+      return;
+    }
+    await handleSendMessage();
   };
 
   // Calcul de l'opacité et autres interpolations
@@ -609,85 +806,142 @@ export default function BottomBar({
           elevation: 3,
         }} />
         
-        {/* Champ de saisie avec bouton d'envoi */}
+        {/* Barre de chat: enregistrement vocal ou saisie classique */}
         <View style={styles.chatSection}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <TextInput
-              style={[styles.chatInput, { flex: 1, marginRight: 8 }]}
-              placeholder={
-                isChat 
-                  ? (websocket ? `Message...` : "Connexion...") 
-                  : "Ask Jarvis anything"
-              }
-              placeholderTextColor="rgba(105, 105, 105, 0.8)"
-              value={chatText}
-              onChangeText={setChatText}
-              onSubmitEditing={handleSendMessage}
-              editable={isChat ? !!websocket : true}
-            />
-            <TouchableOpacity
-              style={{
-                backgroundColor: chatText.trim() ? "rgba(10, 145, 104, 0.)" : 'rgba(200, 200, 200, 0.)',
-                borderRadius: 25,
-                paddingHorizontal: 8,
-                paddingVertical: 8,
-                opacity: chatText.trim() ? 1 : 0.6,
-              }}
-              onPress={handleSendMessage}
-              disabled={!chatText.trim()}
-            >
-              {Platform.OS === 'ios' ? (
-                <SymbolView
-                  name="arrow.up.circle.fill"
-                  size={20}
-                  tintColor="white"
-                  type="hierarchical"
-                />
-              ) : (
-                <Ionicons name="send" size={18} color="white" />
+          {isRecording ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 12 }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="mic" size={18} color="#ef4444" />
+                <Text style={{ marginLeft: 8, color: '#ef4444', fontWeight: '700' }}>Enregistrement...</Text>
+                <Text style={{ marginLeft: 8, color: '#ef4444' }}>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}</Text>
+              </View>
+              <TouchableOpacity onPress={stopRecording}>
+                {Platform.OS === 'ios' ? (
+                  <SymbolView name="stop.circle.fill" size={24} tintColor="#ef4444" type="hierarchical" />
+                ) : (
+                  <Ionicons name="stop-circle" size={22} color="#ef4444" />
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              {stagedAttachments.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 56, marginRight: 8 }}>
+                  {stagedAttachments.map((att, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(10,145,104,0.08)', borderRadius: 12, paddingVertical: 6, paddingHorizontal: 8, marginRight: 6 }}>
+                      {att.kind === 'image' ? (
+                        <Ionicons name="image" size={16} color="rgba(10,145,104,1)" />
+                      ) : (
+                        <Ionicons name="document" size={16} color="rgba(10,145,104,1)" />
+                      )}
+                      <Text numberOfLines={1} style={{ maxWidth: 120, marginLeft: 6, color: '#1a1a1a' }}>{att.name}</Text>
+                      <TouchableOpacity onPress={() => removeStagedAt(idx)} style={{ marginLeft: 6 }}>
+                        {Platform.OS === 'ios' ? (
+                          <SymbolView name="xmark.circle.fill" size={18} tintColor="#ff6b6b" type="hierarchical" />
+                        ) : (
+                          <Ionicons name="close-circle" size={18} color="#ff6b6b" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
               )}
-            </TouchableOpacity>
-          </View>
+              {recordedUri ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 8 }}>
+                  <Ionicons name="mic" size={18} color="#4ade80" />
+                  <Text style={{ marginLeft: 8, color: '#4ade80', fontWeight: '700' }}>Vocal prêt</Text>
+                  <TouchableOpacity style={{ marginLeft: 10 }} onPress={cancelRecorded}>
+                    {Platform.OS === 'ios' ? (
+                      <SymbolView name="xmark.circle.fill" size={20} tintColor="#ff6b6b" type="hierarchical" />
+                    ) : (
+                      <Ionicons name="close-circle" size={18} color="#ff6b6b" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TextInput
+                  style={[styles.chatInput, { flex: 1, marginRight: 8 }]} 
+                  placeholder={
+                    isChat 
+                      ? (websocket ? `Message...` : "Connexion...") 
+                      : "Ask Jarvis anything"
+                  }
+                  placeholderTextColor="rgba(105, 105, 105, 0.8)"
+                  value={chatText}
+                  onChangeText={setChatText}
+                  onSubmitEditing={handleSendMessage}
+                  editable={isChat ? !!websocket : true}
+                />
+              )}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: (chatText.trim() || recordedUri || stagedAttachments.length>0) ? "rgba(10, 145, 104, 0.)" : 'rgba(200, 200, 200, 0.)',
+                  borderRadius: 25,
+                  paddingHorizontal: 8,
+                  paddingVertical: 8,
+                  opacity: (chatText.trim() || recordedUri || stagedAttachments.length>0) ? 1 : 0.6,
+                }}
+                onPress={handleSend}
+                disabled={!chatText.trim() && !recordedUri && stagedAttachments.length===0}
+              >
+                {Platform.OS === 'ios' ? (
+                  <SymbolView
+                    name="arrow.up.circle.fill"
+                    size={20}
+                    tintColor="white"
+                    type="hierarchical"
+                  />
+                ) : (
+                  <Ionicons name="send" size={18} color="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         
         {/* Boutons conditionnels */}
         {isChat ? (
           <View style={styles.navBar}>
+            {/* Bouton + (photo/fichier) */}
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => console.log('Ajouter un fichier')}
+              onPress={handlePlus}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView
-                  name="doc.fill"
+                  name="plus.circle.fill"
+                  size={24}
+                  tintColor="rgba(240, 240, 240, 0.9)"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="add-circle" size={24} color="rgba(240, 240, 240, 0.9)" />
+              )}
+            </TouchableOpacity>
+
+            {/* Retrait des boutons fichiers/photos (gérés par "+") */}
+
+            {/* Bouton génération de message (placeholder) */}
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => Alert.alert('Génération', 'La génération de message sera implémentée plus tard.')}
+            >
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="sparkles"
                   size={24}
                   tintColor="rgba(240, 240, 240, 0.8)"
                   type="hierarchical"
                 />
               ) : (
-                <Ionicons name="document" size={22} color="rgba(240, 240, 240, 0.8)" />
+                <Ionicons name="sparkles" size={22} color="rgba(240, 240, 240, 0.8)" />
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => console.log('Prendre une photo')}
-            >
-              {Platform.OS === 'ios' ? (
-                <SymbolView
-                  name="camera.fill"
-                  size={24}
-                  tintColor="rgba(240, 240, 240, 0.8)"
-                  type="hierarchical"
-                />
-              ) : (
-                <Ionicons name="camera" size={22} color="rgba(240, 240, 240, 0.8)" />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={() => console.log('Message vocal')}
+              onLongPress={startRecording}
+              onPressOut={stopRecording}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView
@@ -700,6 +954,7 @@ export default function BottomBar({
                 <Ionicons name="mic" size={22} color="rgba(240, 240, 240, 0.8)" />
               )}
             </TouchableOpacity>
+            {/* Envoi/annulation du vocal via la barre principale (send/croix) */}
           </View>
         ) : (
           <View style={styles.navBar}>

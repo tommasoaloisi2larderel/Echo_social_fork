@@ -1,24 +1,25 @@
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import React, { ComponentRef, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CreateGroupModal } from '../../components/CreateGroupModal';
 import DefaultAvatar from '../../components/DefaultAvatar';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
 
 // Import type pour forcer TypeScript à reconnaître la route
@@ -246,6 +247,7 @@ const GroupSquare = React.memo(({
 });
 
 export default function ConversationsScreen() {
+  const pathname = usePathname();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -254,6 +256,19 @@ export default function ConversationsScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<'direct' | 'group'>('direct');
+  const {
+    prefetchConversation,
+    prefetchAvatars,
+    getCachedConversations,
+    setCachedConversations,
+    getCachedConnections,
+    setCachedConnections,
+    getCachedGroups,
+    setCachedGroups,
+    getCachedGroupInvitations,
+    setCachedGroupInvitations,
+    prefetchConversationsOverview,
+  } = useChat();
   const squareRefs = useRef<Map<string, React.RefObject<ComponentRef<typeof TouchableOpacity>>>>(new Map());
   
   // États pour la recherche d'utilisateurs
@@ -271,6 +286,17 @@ export default function ConversationsScreen() {
     ? "http://localhost:3001"
     : "https://reseausocial-production.up.railway.app";
 
+  // Forcer la route base sur /conversations pour éviter le “rebascule” vers Home
+  useEffect(() => {
+    try {
+      if (!pathname.includes('/conversations')) {
+        router.replace('/(tabs)/conversations');
+      }
+    } catch {}
+    // volontairement [] pour ne déclencher qu'au montage de l'écran
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fonction pour récupérer les conversations
   const fetchConversations = async (isRefresh = false) => {
     try {
@@ -286,7 +312,18 @@ export default function ConversationsScreen() {
 
       const data = await response.json();
       console.log('Conversations récupérées:', data);
-      setConversations(data.results || data);
+      const list = data.results || data;
+      setConversations(list);
+      setCachedConversations(list);
+      // Précharger avatars de la liste de conversations
+      try {
+        const avatarUrls: string[] = [];
+        (Array.isArray(data.results ? data.results : data) ? (data.results || data) : []).forEach((c: any) => {
+          const url = c.other_participant?.photo_profil_url || c.group?.avatar;
+          if (url) avatarUrls.push(url);
+        });
+        await prefetchAvatars(avatarUrls);
+      } catch {}
       
     } catch (error) {
       console.error('Erreur lors du chargement des conversations:', error);
@@ -370,6 +407,7 @@ export default function ConversationsScreen() {
         const data = await response.json();
         const connections: Connection[] = data.connexions || [];
         setMyConnections(connections);
+        setCachedConnections(connections);
         console.log('📱 Connexions chargées:', connections.length, connections.map(c => c.surnom || c.username));
         console.log('📋 Structure première connexion:', JSON.stringify(connections[0], null, 2));
       }
@@ -464,6 +502,7 @@ export default function ConversationsScreen() {
         }
         
         setGroups(groupsWithDetails);
+        setCachedGroups(groupsWithDetails);
         console.log('👥 Groupes chargés:', groupsWithDetails.length, groupsWithDetails.map((g: any) => g.name));
         console.log('📋 Groupes avec conversation_uuid:', JSON.stringify(groupsWithDetails.map((g: any) => ({
           name: g.name,
@@ -485,6 +524,7 @@ export default function ConversationsScreen() {
       if (response.ok) {
         const data = await response.json();
         setGroupInvitations(data);
+        setCachedGroupInvitations(data);
         console.log('📨 Invitations de groupe:', data.length);
       }
     } catch (error) {
@@ -532,7 +572,7 @@ export default function ConversationsScreen() {
       if (newGroup.conversation_uuid) {
         console.log('🎯 Ouverture conversation groupe:', newGroup.conversation_uuid);
         router.push({
-          pathname: '/(tabs)/conversation-detail',
+          pathname: '/(tabs)/conversation-group',
           params: { conversationId: newGroup.conversation_uuid }
         });
       } else {
@@ -544,10 +584,37 @@ export default function ConversationsScreen() {
     }
   };
 
-  // Charger les conversations et connexions au montage du composant
+  // Charger depuis le cache au montage pour affichage instantané, puis rafraîchir en arrière-plan léger
   useEffect(() => {
-    fetchConversations();
+    const cachedConvs = getCachedConversations();
+    const cachedConns = getCachedConnections();
+    const cachedGroups = getCachedGroups();
+    const cachedInvites = getCachedGroupInvitations();
+
+    if (cachedConvs) {
+      setConversations(cachedConvs as any);
+      // Précharger avatars pour un rendu encore plus fluide
+      try {
+        const avatarUrls: string[] = [];
+        (cachedConvs as any[]).forEach((c: any) => {
+          const url = c.other_participant?.photo_profil_url || c.group?.avatar;
+          if (url) avatarUrls.push(url);
+        });
+        prefetchAvatars(avatarUrls);
+      } catch {}
+    }
+  if (cachedConns) setMyConnections(cachedConns as any);
+  // Hydrater immédiatement les groupes/invitations pour que l'onglet Groupe s'affiche instantanément
+  if (cachedGroups) setGroups(cachedGroups as any);
+  if (cachedInvites) setGroupInvitations(cachedInvites as any);
+
+    // Si on a déjà des conversations en cache, pas de spinner
+    setLoading(!(cachedConvs && (cachedConvs as any[]).length > 0));
+
+    // Rafraîchissement léger en arrière-plan (sans changer loading)
+    fetchConversations(true);
     fetchConnections();
+    // Les groupes sont chargés uniquement lors du passage en mode 'group'
   }, []); // Supprimer accessToken des dépendances
 
   // Charger les groupes quand on passe en mode Groupe
@@ -579,6 +646,17 @@ export default function ConversationsScreen() {
     fetchConnections();
   };
 
+  // Déclencher le préchargement pour les éléments visibles
+  const handleItemVisibility = async (items: typeof displayItems) => {
+    try {
+      const candidateIds = items
+        .map((it) => it.conversationId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        .slice(0, 9); // limiter pour éviter surcharge
+      await Promise.allSettled(candidateIds.map((id) => prefetchConversation(id, makeAuthenticatedRequest)));
+    } catch {}
+  };
+
   // Fonction pour créer ou ouvrir une conversation avec un utilisateur
   const handleUserPress = async (userUuid: string, userName: string) => {
     try {
@@ -590,7 +668,7 @@ export default function ConversationsScreen() {
       if (existingConversation) {
         // C'est un ami, ouvrir la conversation existante
         router.push({
-          pathname: '/(tabs)/conversation-detail',
+          pathname: '/(tabs)/conversation-direct',
           params: { conversationId: existingConversation.uuid }
         });
       } else {
@@ -820,6 +898,8 @@ export default function ConversationsScreen() {
               onRefresh={onRefresh}
             />
           }
+          onLayout={() => handleItemVisibility(filteredFriends)}
+          onScrollEndDrag={() => handleItemVisibility(filteredFriends)}
         >
           {/* Grille des amis (toujours affichée) */}
       <FlatList
@@ -842,10 +922,10 @@ export default function ConversationsScreen() {
                     
                     if (group.conversation_uuid) {
                       console.log('👥 Ouverture groupe:', group.name, 'conversation:', group.conversation_uuid);
-                      router.push({
-                        pathname: '/(tabs)/conversation-detail',
-                        params: { conversationId: group.conversation_uuid }
-                      });
+        router.push({
+          pathname: '/(tabs)/conversation-group',
+          params: { conversationId: group.conversation_uuid }
+        });
                     } else {
                       // Le groupe devrait avoir un conversation_uuid dès la création
                       // Si ce n'est pas le cas, recharger les données du groupe
@@ -878,7 +958,7 @@ export default function ConversationsScreen() {
                           // Ouvrir la conversation maintenant
                           console.log('✅ Ouverture conversation:', updatedGroup.conversation_uuid);
                           router.push({
-                            pathname: '/(tabs)/conversation-detail',
+                            pathname: '/(tabs)/conversation-group',
                             params: { conversationId: updatedGroup.conversation_uuid }
                           });
                         } else {
@@ -918,7 +998,7 @@ export default function ConversationsScreen() {
                       squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                         setTransitionPosition({ x: pageX, y: pageY, width, height });
                         router.push({
-                          pathname: '/(tabs)/conversation-detail',
+                          pathname: '/(tabs)/conversation-direct',
                           params: { conversationId: item.conversationId }
                         });
                       });
@@ -934,10 +1014,10 @@ export default function ConversationsScreen() {
                           console.log('✅ Conversation trouvée:', existingConv.uuid);
                           squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                             setTransitionPosition({ x: pageX, y: pageY, width, height });
-                            router.push({
-                              pathname: '/(tabs)/conversation-detail',
-                              params: { conversationId: existingConv.uuid }
-                            });
+                        router.push({
+                          pathname: '/(tabs)/conversation-direct',
+                          params: { conversationId: existingConv.uuid }
+                        });
                           });
                           return;
                         }
@@ -953,7 +1033,7 @@ export default function ConversationsScreen() {
                               'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
-                              recipient_uuid: item.uuid,
+                              other_user_uuid: item.uuid,
                             }),
                           }
                         );
@@ -974,8 +1054,8 @@ export default function ConversationsScreen() {
                         squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                   setTransitionPosition({ x: pageX, y: pageY, width, height });
                   router.push({
-                    pathname: '/(tabs)/conversation-detail',
-                            params: { conversationId: newConversation.uuid }
+                    pathname: '/(tabs)/conversation-direct',
+                    params: { conversationId: newConversation.uuid }
                   });
                 });
                       } catch (error) {

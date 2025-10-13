@@ -1,6 +1,5 @@
 import { StyleSheet } from "react-native";
 import { BACKGROUND_GRAY, DARK_GRAY, ECHO_COLOR, LIGHT_GRAY, WHITE } from "../constants/colors";
-import { FONTS } from "../constants/fonts";
 
 export const styles = StyleSheet.create({
   container: {
@@ -29,7 +28,6 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 8,
     color: DARK_GRAY,
-    fontFamily: FONTS.regular,
   },
   conversationGrid: {
     paddingTop: 105,
@@ -80,7 +78,7 @@ export const styles = StyleSheet.create({
   },
   conversationNameText: {
     fontSize: 12,
-    fontFamily: FONTS.semiBold,
+    fontWeight: "600",
     color: "#333",
     textAlign: "center",
   },
@@ -114,7 +112,7 @@ export const styles = StyleSheet.create({
   },
   chatHeaderName: {
     fontSize: 20,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
     color: "#666",
     flex: 1,
   },
@@ -125,7 +123,7 @@ export const styles = StyleSheet.create({
   statusDot: {
     fontSize: 20,
     color: ECHO_COLOR,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
     shadowColor: ECHO_COLOR,
     shadowOpacity: 0.8,
     shadowRadius: 15,
@@ -163,16 +161,14 @@ export const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
-    fontFamily: FONTS.regular,
+    lineHeight: 20,
   },
   myMessageText: {
     color: WHITE,
-    fontFamily: FONTS.medium,
+    fontWeight: "500",
   },
   theirMessageText: {
     color: "rgba(60,60,60,0.9)",
-    fontFamily: FONTS.regular,
   },
 
   messageMeta: {
@@ -186,13 +182,12 @@ export const styles = StyleSheet.create({
   timestampText: {
     fontSize: 10,
     color: "#aaa",
-    fontFamily: FONTS.regular,
   },
 
   readStatus: {
     fontSize: 10,
     color: "#aaa",
-    fontFamily: FONTS.medium,
+    fontWeight: "500",
   },
 
   // Styles pour les messages groupés
@@ -306,7 +301,7 @@ export const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 32,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
     color: "rgba(10, 145, 104, 1)",
     marginBottom: 10,
     marginTop: 20,
@@ -315,7 +310,6 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     marginBottom: 20,
-    fontFamily: FONTS.regular,
   },
   logoutButton: {
     backgroundColor: "#ff6b6b",
@@ -328,11 +322,11 @@ export const styles = StyleSheet.create({
   logoutButtonText: {
     color: WHITE,
     fontSize: 14,
-    fontFamily: FONTS.semiBold,
+    fontWeight: "600",
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
     color: '#333',
     marginBottom: 15,
   },
@@ -343,7 +337,7 @@ export const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#666',
-    fontFamily: FONTS.regularItalic,
+    fontStyle: 'italic',
   },
   notificationButton: {
     flexDirection: "row",
@@ -371,7 +365,7 @@ export const styles = StyleSheet.create({
   },
   conversationName: {
     fontSize: 16,
-    fontFamily: FONTS.semiBold,
+    fontWeight: '600',
     color: '#333',
     marginBottom: 4,
   },
@@ -379,7 +373,6 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     flex: 1,
-    fontFamily: FONTS.regular,
   },
   unreadBadge: {
     position: 'absolute',
@@ -396,7 +389,7 @@ export const styles = StyleSheet.create({
   unreadText: {
     color: WHITE,
     fontSize: 12,
-    fontFamily: FONTS.bold,
+    fontWeight: 'bold',
   },
 
   //////////////////////////////////////// STYLES FOR PROFILE PAGE
@@ -410,7 +403,7 @@ export const styles = StyleSheet.create({
   pseudo: {
     textAlign: "center",
     fontSize: 30,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
     color: "rgba(70,70,130,0.5)",
   },
 
@@ -448,7 +441,6 @@ export const styles = StyleSheet.create({
   chatInput: {
     fontSize: 16,
     color: "#444",
-    fontFamily: FONTS.regular,
   },
   navBar: {
     flexDirection: "row",
@@ -467,6 +459,6 @@ export const styles = StyleSheet.create({
   navText: {
     color: "rgba(240, 240, 240, 0.8)",
     fontSize: 16,
-    fontFamily: FONTS.bold,
+    fontWeight: "bold",
   },
 });

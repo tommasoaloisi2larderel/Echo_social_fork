@@ -1399,3 +1399,829 @@ json
     "created_at": "2025-08-28T10:30:00.000Z"
   }
 ]
+
+
+
+
+
+
+📘 Documentation API - Module ai_agent
+Table des matières
+1. Vue d'ensemble
+2. Authentification
+3. Gestion des Agents
+4. Règles d'interaction
+5. Historique des réponses
+6. Agents dans les conversations
+7. Endpoints utilitaires
+8. Modèles de données
+9. Codes d'erreur
+________________
+
+
+Vue d'ensemble
+Le module ai_agent permet de créer et gérer des agents IA qui peuvent participer automatiquement aux conversations. Les agents peuvent avoir différents types de comportement et règles d'interaction.
+Base URL: Toutes les URLs sont préfixées par /api/agents/ ou /api/conversations/ selon le contexte.
+________________
+
+
+Authentification
+Toutes les API nécessitent une authentification JWT. Les headers doivent contenir :
+Authorization: Bearer <votre_access_token>
+
+
+________________
+
+
+Gestion des Agents
+1. Liste des agents de l'utilisateur
+Endpoint: GET /api/agents/
+Description: Récupère tous les agents créés par l'utilisateur authentifié.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres: Aucun
+Réponse réussie (200 OK):
+[
+  {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Assistant Marketing",
+    "description": "Agent spécialisé dans le marketing digital",
+    "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
+    "agent_type": "simple",
+    "is_active": true,
+    "created_at": "2025-10-10T14:30:00Z",
+    "created_by_username": "john_doe",
+    "conversation_count": 3
+  },
+  {
+    "uuid": "234e5678-e89b-12d3-a456-426614174001",
+    "name": "Bot Support",
+    "description": "Agent de support technique",
+    "avatar": null,
+    "agent_type": "conditional",
+    "is_active": true,
+    "created_at": "2025-10-11T09:15:00Z",
+    "created_by_username": "john_doe",
+    "conversation_count": 1
+  }
+]
+
+
+Champs de réponse:
+* uuid: Identifiant unique de l'agent
+* name: Nom de l'agent
+* description: Description de l'agent
+* avatar: URL de l'image de l'agent (peut être null)
+* agent_type: Type d'agent (simple, conditional, action)
+* is_active: Si l'agent est actif ou non
+* created_at: Date de création
+* created_by_username: Nom d'utilisateur du créateur
+* conversation_count: Nombre de conversations où l'agent est présent
+________________
+
+
+2. Créer un nouvel agent
+Endpoint: POST /api/agents/
+Description: Crée un nouvel agent IA pour l'utilisateur authentifié.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Body (JSON):
+{
+  "name": "Mon Agent",
+  "description": "Description de mon agent",
+  "agent_type": "simple",
+  "instructions": {
+    "system_prompt": "Tu es un assistant serviable qui répond en français.",
+    "language": "fr",
+    "formality_level": "casual",
+    "max_response_length": 500
+  }
+}
+
+
+Champs obligatoires:
+* name (string, max 100 caractères): Nom de l'agent
+Champs optionnels:
+* description (string, max 500 caractères): Description
+* agent_type (string): Type d'agent - valeurs possibles:
+   * "simple": Agent qui répond à tous les messages (défaut)
+   * "conditional": Agent qui répond selon des règles
+   * "action": Agent qui peut effectuer des actions
+* instructions (objet): Instructions pour l'agent
+   * system_prompt (string): Prompt système pour l'IA
+   * language (string): Langue ("fr", "en", "es", "de", "it") - défaut: "fr"
+   * formality_level (string): Niveau de formalité ("formal", "casual", "friendly", "professional") - défaut: "casual"
+   * max_response_length (integer): Longueur max des réponses en caractères - défaut: 500
+Réponse réussie (201 Created):
+{
+  "uuid": "345e6789-e89b-12d3-a456-426614174002",
+  "name": "Mon Agent",
+  "description": "Description de mon agent",
+  "avatar": null,
+  "agent_type": "simple",
+  "is_active": true,
+  "created_at": "2025-10-13T10:30:00Z",
+  "created_by_username": "john_doe",
+  "conversation_count": 0
+}
+
+
+Erreurs possibles:
+* 400 Bad Request: Données invalides
+* 401 Unauthorized: Token manquant ou invalide
+________________
+
+
+3. Détails d'un agent
+Endpoint: GET /api/agents/{uuid}/
+Description: Récupère les détails complets d'un agent spécifique.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Réponse réussie (200 OK):
+{
+  "uuid": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Assistant Marketing",
+  "description": "Agent spécialisé dans le marketing digital",
+  "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
+  "agent_type": "simple",
+  "is_active": true,
+  "created_at": "2025-10-10T14:30:00Z",
+  "updated_at": "2025-10-12T16:45:00Z",
+  "created_by_username": "john_doe",
+  "instructions": {
+    "system_prompt": "Tu es un expert en marketing digital.",
+    "language": "fr",
+    "formality_level": "professional",
+    "max_response_length": 500,
+    "created_at": "2025-10-10T14:30:00Z",
+    "updated_at": "2025-10-12T16:45:00Z"
+  },
+  "interaction_rules": [
+    {
+      "id": 1,
+      "interaction_type": "respond_to",
+      "target_user": 5,
+      "target_agent": null,
+      "target_user_username": "alice",
+      "target_agent_name": null,
+      "created_at": "2025-10-11T10:00:00Z"
+    }
+  ],
+  "recent_responses": [
+    {
+      "id": 42,
+      "response_content": "Voici quelques idées de campagne...",
+      "processing_time": 1.23,
+      "created_at": "2025-10-13T09:15:00Z",
+      "was_sent": true,
+      "error_message": "",
+      "triggered_by_message": 156
+    }
+  ],
+  "conversation_count": 3
+}
+
+
+Erreurs possibles:
+* 404 Not Found: Agent introuvable ou vous n'en êtes pas le créateur
+* 401 Unauthorized: Token manquant ou invalide
+________________
+
+
+4. Modifier un agent
+Endpoint: PUT /api/agents/{uuid}/ ou PATCH /api/agents/{uuid}/
+Description: Met à jour un agent existant. PUT nécessite tous les champs, PATCH permet une mise à jour partielle.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Body (JSON) - Exemple PATCH:
+{
+  "name": "Assistant Marketing v2",
+  "is_active": true,
+  "instructions": {
+    "system_prompt": "Tu es un expert senior en marketing digital.",
+    "formality_level": "professional"
+  }
+}
+
+
+Champs modifiables:
+* name (string)
+* description (string)
+* avatar (image file - utiliser multipart/form-data)
+* agent_type (string)
+* is_active (boolean)
+* instructions (objet - mise à jour partielle possible)
+Réponse réussie (200 OK): Même structure que GET d'un agent détaillé
+Erreurs possibles:
+* 400 Bad Request: Données invalides
+* 404 Not Found: Agent introuvable
+* 401 Unauthorized: Token manquant ou invalide
+________________
+
+
+5. Désactiver un agent
+Endpoint: DELETE /api/agents/{uuid}/
+Description: Désactive un agent (ne le supprime pas vraiment, met is_active à false).
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Réponse réussie (204 No Content): Pas de contenu
+Erreurs possibles:
+* 404 Not Found: Agent introuvable
+* 401 Unauthorized: Token manquant ou invalide
+________________
+
+
+6. Liste des agents publics
+Endpoint: GET /api/agents/public/
+Description: Récupère la liste de tous les agents actifs (pour usage futur - actuellement retourne tous les agents actifs de tous les utilisateurs).
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Réponse réussie (200 OK): Même structure que la liste des agents
+Note: Cette API est prévue pour un système de partage d'agents publics dans le futur.
+________________
+
+
+Règles d'interaction
+Les règles d'interaction définissent comment un agent doit se comporter vis-à-vis d'utilisateurs ou d'autres agents spécifiques.
+7. Liste des règles d'interaction d'un agent
+Endpoint: GET /api/agents/{uuid}/interactions/
+Description: Récupère toutes les règles d'interaction configurées pour un agent.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Réponse réussie (200 OK):
+[
+  {
+    "id": 1,
+    "interaction_type": "respond_to",
+    "target_user": 5,
+    "target_agent": null,
+    "target_user_username": "alice",
+    "target_agent_name": null,
+    "created_at": "2025-10-11T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "interaction_type": "ignore",
+    "target_user": 8,
+    "target_agent": null,
+    "target_user_username": "bob",
+    "target_agent_name": null,
+    "created_at": "2025-10-11T11:30:00Z"
+  },
+  {
+    "id": 3,
+    "interaction_type": "mention_only",
+    "target_user": null,
+    "target_agent": 10,
+    "target_user_username": null,
+    "target_agent_name": "Autre Agent",
+    "created_at": "2025-10-12T09:00:00Z"
+  }
+]
+
+
+Types d'interaction possibles:
+* "respond_to": L'agent répond aux messages de cette cible
+* "ignore": L'agent ignore complètement cette cible
+* "mention_only": L'agent répond uniquement si mentionné par cette cible (avec @nom_agent)
+* "always_respond": L'agent répond toujours à cette cible
+________________
+
+
+8. Créer une règle d'interaction
+Endpoint: POST /api/agents/{uuid}/interactions/
+Description: Crée une nouvelle règle d'interaction pour un agent.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Body (JSON):
+{
+  "interaction_type": "respond_to",
+  "target_user": 5,
+  "target_agent": null
+}
+
+
+Champs obligatoires:
+* interaction_type (string): Type d'interaction (voir types ci-dessus)
+* Soit target_user (integer, ID utilisateur), soit target_agent (integer, ID agent) - pas les deux
+Réponse réussie (201 Created):
+{
+  "id": 4,
+  "interaction_type": "respond_to",
+  "target_user": 5,
+  "target_agent": null,
+  "target_user_username": "alice",
+  "target_agent_name": null,
+  "created_at": "2025-10-13T10:45:00Z"
+}
+
+
+Erreurs possibles:
+* 400 Bad Request:
+   * Les deux champs target_user et target_agent sont renseignés
+   * Aucun des deux n'est renseigné
+   * Règle en doublon (déjà existante pour cette cible)
+* 404 Not Found: Agent introuvable
+________________
+
+
+9. Détails d'une règle d'interaction
+Endpoint: GET /api/agents/{uuid}/interactions/{id}/
+Description: Récupère les détails d'une règle d'interaction spécifique.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+* id: ID de la règle d'interaction
+Réponse réussie (200 OK): Même structure que la création d'une règle
+________________
+
+
+10. Modifier une règle d'interaction
+Endpoint: PUT /api/agents/{uuid}/interactions/{id}/ ou PATCH /api/agents/{uuid}/interactions/{id}/
+Description: Met à jour une règle d'interaction existante.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Body (JSON):
+{
+  "interaction_type": "always_respond"
+}
+
+
+Réponse réussie (200 OK): Règle mise à jour
+________________
+
+
+11. Supprimer une règle d'interaction
+Endpoint: DELETE /api/agents/{uuid}/interactions/{id}/
+Description: Supprime une règle d'interaction.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Réponse réussie (204 No Content): Pas de contenu
+________________
+
+
+Historique des réponses
+12. Historique des réponses d'un agent
+Endpoint: GET /api/agents/{uuid}/responses/
+Description: Récupère l'historique de toutes les réponses générées par un agent.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Réponse réussie (200 OK):
+[
+  {
+    "id": 42,
+    "response_content": "Voici quelques idées de campagne marketing...",
+    "processing_time": 1.23,
+    "created_at": "2025-10-13T09:15:00Z",
+    "was_sent": true,
+    "error_message": "",
+    "triggered_by_message": 156
+  },
+  {
+    "id": 41,
+    "response_content": "Je peux t'aider avec ça...",
+    "processing_time": 0.87,
+    "created_at": "2025-10-13T08:30:00Z",
+    "was_sent": true,
+    "error_message": "",
+    "triggered_by_message": 155
+  },
+  {
+    "id": 40,
+    "response_content": "Erreur lors de la génération",
+    "processing_time": 2.5,
+    "created_at": "2025-10-12T16:00:00Z",
+    "was_sent": false,
+    "error_message": "Timeout API",
+    "triggered_by_message": 150
+  }
+]
+
+
+Champs de réponse:
+* id: ID de la réponse
+* response_content: Contenu de la réponse générée
+* processing_time: Temps de traitement en secondes
+* created_at: Date de création
+* was_sent: true si la réponse a été envoyée, false sinon
+* error_message: Message d'erreur (vide si pas d'erreur)
+* triggered_by_message: ID du message qui a déclenché cette réponse
+________________
+
+
+Agents dans les conversations
+13. Liste des agents dans une conversation
+Endpoint: GET /api/conversations/{conversation_uuid}/agents/
+Description: Récupère la liste de tous les agents actifs dans une conversation.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* conversation_uuid: UUID de la conversation
+Réponse réussie (200 OK):
+{
+  "id": 15,
+  "agents": [
+    {
+      "uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "name": "Assistant Marketing",
+      "description": "Agent spécialisé dans le marketing",
+      "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
+      "agent_type": "simple",
+      "is_active": true
+    },
+    {
+      "uuid": "234e5678-e89b-12d3-a456-426614174001",
+      "name": "Bot Support",
+      "description": "Agent de support",
+      "avatar": null,
+      "agent_type": "conditional",
+      "is_active": true
+    }
+  ],
+  "active_agents_count": 2
+}
+
+
+Erreurs possibles:
+* 404 Not Found: Conversation introuvable ou vous n'êtes pas participant
+* 401 Unauthorized: Token invalide
+________________
+
+
+14. Ajouter un agent à une conversation
+Endpoint: POST /api/conversations/{conversation_uuid}/agents/add/
+Description: Ajoute un agent à une conversation. Limite de 5 agents maximum par conversation.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Paramètres URL:
+* conversation_uuid: UUID de la conversation
+Body (JSON):
+{
+  "agent_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
+
+
+Champs obligatoires:
+* agent_uuid (string): UUID de l'agent à ajouter
+Réponse réussie (200 OK):
+{
+  "message": "Agent 'Assistant Marketing' ajouté à la conversation.",
+  "agent": {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Assistant Marketing",
+    "description": "Agent spécialisé dans le marketing",
+    "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
+    "agent_type": "simple",
+    "is_active": true
+  }
+}
+
+
+Erreurs possibles:
+* 400 Bad Request:
+   * Agent UUID manquant ou invalide
+   * Limite d'agents atteinte (5 max)
+   * Agent non actif
+* 403 Forbidden: Vous ne pouvez pas utiliser cet agent (pas le créateur)
+* 404 Not Found: Conversation ou agent introuvable
+________________
+
+
+15. Retirer un agent d'une conversation
+Endpoint: POST /api/conversations/{conversation_uuid}/agents/remove/
+Description: Retire un agent d'une conversation.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Paramètres URL:
+* conversation_uuid: UUID de la conversation
+Body (JSON):
+{
+  "agent_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
+
+
+Réponse réussie (200 OK):
+{
+  "message": "Agent 'Assistant Marketing' retiré de la conversation."
+}
+
+
+Erreurs possibles:
+* 404 Not Found:
+   * Conversation introuvable
+   * Agent introuvable
+   * Agent pas dans cette conversation
+* 400 Bad Request: Agent UUID invalide
+________________
+
+
+Endpoints utilitaires
+16. Mes agents disponibles pour conversation
+Endpoint: GET /api/agents/my-available/
+Description: Liste de tous les agents actifs de l'utilisateur disponibles pour être ajoutés à une conversation.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Réponse réussie (200 OK):
+[
+  {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Assistant Marketing",
+    "description": "Agent spécialisé dans le marketing",
+    "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
+    "agent_type": "simple",
+    "is_active": true,
+    "created_at": "2025-10-10T14:30:00Z",
+    "created_by_username": "john_doe",
+    "conversation_count": 3
+  }
+]
+
+
+________________
+
+
+17. Types d'agents disponibles
+Endpoint: GET /api/agents/types/
+Description: Récupère la liste des types d'agents disponibles dans le système.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Réponse réussie (200 OK):
+[
+  {
+    "value": "simple",
+    "label": "Agent Simple"
+  },
+  {
+    "value": "conditional",
+    "label": "Agent Conditionnel"
+  },
+  {
+    "value": "action",
+    "label": "Agent d'Action"
+  }
+]
+
+
+________________
+
+
+18. Statistiques d'un agent
+Endpoint: GET /api/agents/{uuid}/stats/
+Description: Récupère les statistiques d'utilisation d'un agent.
+Headers requis:
+Authorization: Bearer <access_token>
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Réponse réussie (200 OK):
+{
+  "total_responses": 127,
+  "successful_responses": 122,
+  "failed_responses": 5,
+  "active_conversations": 3,
+  "avg_processing_time": 1.45,
+  "created_at": "2025-10-10T14:30:00Z",
+  "last_response": "2025-10-13T09:15:00Z"
+}
+
+
+Champs de réponse:
+* total_responses: Nombre total de réponses générées
+* successful_responses: Nombre de réponses envoyées avec succès
+* failed_responses: Nombre de réponses qui ont échoué
+* active_conversations: Nombre de conversations où l'agent est actif
+* avg_processing_time: Temps moyen de traitement en secondes
+* created_at: Date de création de l'agent
+* last_response: Date de la dernière réponse (null si aucune)
+________________
+
+
+19. Tester un agent
+Endpoint: POST /api/agents/{uuid}/test/
+Description: Teste un agent avec un message fictif sans l'ajouter à une vraie conversation.
+Headers requis:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+
+Paramètres URL:
+* uuid: UUID de l'agent
+Body (JSON):
+{
+  "message": "Bonjour, peux-tu m'aider ?"
+}
+
+
+Champs obligatoires:
+* message (string): Message de test
+Réponse réussie (200 OK):
+{
+  "agent_name": "Assistant Marketing",
+  "test_message": "Bonjour, peux-tu m'aider ?",
+  "response": "Bien sûr ! Je suis là pour vous aider. Que puis-je faire pour vous ?",
+  "success": true,
+  "processing_time": 1.23,
+  "error": null
+}
+
+
+Réponse en cas d'erreur (200 OK avec success: false):
+{
+  "agent_name": "Assistant Marketing",
+  "test_message": "Bonjour, peux-tu m'aider ?",
+  "response": "Erreur de génération",
+  "success": false,
+  "processing_time": 2.5,
+  "error": "Timeout API Mistral"
+}
+
+
+Erreurs possibles:
+* 400 Bad Request: Message manquant
+* 404 Not Found: Agent introuvable
+* 403 Forbidden: Pas le créateur de l'agent
+________________
+
+
+Modèles de données
+Agent
+{
+  "uuid": "uuid",
+  "name": "string (max 100 caractères)",
+  "description": "string (max 500 caractères)",
+  "avatar": "url ou null",
+  "agent_type": "simple | conditional | action",
+  "is_active": "boolean",
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "created_by": "id utilisateur"
+}
+
+
+AgentInstructions
+{
+  "system_prompt": "string",
+  "language": "fr | en | es | de | it",
+  "formality_level": "formal | casual | friendly | professional",
+  "max_response_length": "integer",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+
+AgentInteraction
+{
+  "id": "integer",
+  "agent": "id agent",
+  "interaction_type": "respond_to | ignore | mention_only | always_respond",
+  "target_user": "id utilisateur ou null",
+  "target_agent": "id agent ou null",
+  "created_at": "datetime"
+}
+
+
+AgentResponse
+{
+  "id": "integer",
+  "agent": "id agent",
+  "conversation": "id conversation",
+  "triggered_by_message": "id message ou null",
+  "response_content": "string",
+  "processing_time": "float (secondes)",
+  "created_at": "datetime",
+  "was_sent": "boolean",
+  "error_message": "string"
+}
+
+
+________________
+
+
+Codes d'erreur
+Code
+	Description
+	200
+	Succès
+	201
+	Ressource créée
+	204
+	Succès sans contenu
+	400
+	Requête invalide (données incorrectes)
+	401
+	Non authentifié (token manquant/invalide)
+	403
+	Accès refusé (permissions insuffisantes)
+	404
+	Ressource introuvable
+	500
+	Erreur serveur
+	________________
+
+
+Notes importantes
+1. Limite d'agents par conversation: Maximum 5 agents actifs par conversation
+2. Règles d'interaction: Une règle ne peut cibler qu'un utilisateur OU un agent, pas les deux
+3. Suppression d'agents: La suppression désactive l'agent (is_active = false) plutôt que de le supprimer définitivement
+4. Unicité des règles: Un agent ne peut avoir qu'une seule règle par cible (utilisateur ou agent)
+5. Permissions: Seul le créateur d'un agent peut le modifier, le supprimer ou accéder à ses détails
+6. IA utilisée: Les agents utilisent l'API Mistral pour générer leurs réponses
+7. Contexte conversationnel: Les agents ont accès aux 5 derniers messages de la conversation pour générer leurs réponses
+________________
+
+
+Exemples d'utilisation
+Créer un agent simple
+curl -X POST https://votre-domaine.com/api/agents/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Assistant Personnel",
+    "description": "Mon assistant qui répond à mes questions",
+    "agent_type": "simple",
+    "instructions": {
+      "system_prompt": "Tu es un assistant personnel serviable.",
+      "language": "fr",
+      "formality_level": "friendly"
+    }
+  }'
+
+
+Ajouter un agent à une conversation
+curl -X POST https://votre-domaine.com/api/conversations/123e4567-e89b-12d3-a456-426614174000/agents/add/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_uuid": "345e6789-e89b-12d3-a456-426614174002"
+  }'
+
+
+Créer une règle d'interaction
+curl -X POST https://votre-domaine.com/api/agents/345e6789-e89b-12d3-a456-426614174002/interactions/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "interaction_type": "mention_only",
+    "target_user": 5,
+    "target_agent": null
+  }'
+
+
+________________
+
+
+Documentation générée le 13 octobre 2025

@@ -1,8 +1,10 @@
 import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import BottomBar from '../../components/BottomBar';
 import SwipeableContainer, { SwipeableContainerHandle } from '../../components/SwipeableContainer';
+import { useAuth } from '../../contexts/AuthContext';
+import { useChat } from '../../contexts/ChatContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 
 // Import the actual screen components
@@ -16,6 +18,8 @@ export default function TabsLayout() {
   const { conversationId } = useLocalSearchParams();
   const { registerScrollRef } = useNavigation();
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
+  const { isLoggedIn, makeAuthenticatedRequest } = useAuth();
+  const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
 
   const deriveIndexFromPath = (p: string) => {
     if (p.includes('/conversations')) return 0;
@@ -24,7 +28,9 @@ export default function TabsLayout() {
   };
 
   // Determine if we're showing a detail route or other full-screen pages
-  const isInConversationDetail = pathname.includes('conversation-detail') || 
+  const isInConversationDetail = pathname.includes('conversation-direct') || 
+                                  pathname.includes('conversation-group') || 
+                                  pathname.includes('conversation-detail') || 
                                   pathname.includes('conversation-management') || 
                                   pathname.includes('add-group-members') || 
                                   pathname.includes('/friends');
@@ -37,6 +43,14 @@ export default function TabsLayout() {
   React.useEffect(() => {
     registerScrollRef(swipeControlRef);
   }, []);
+
+  // Bootstrap: au premier rendu des tabs (si connecté), précharger overview + tous messages
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    prefetchConversationsOverview(makeAuthenticatedRequest).then(() => {
+      prefetchAllMessages(makeAuthenticatedRequest);
+    });
+  }, [isLoggedIn]);
 
   console.log('Layout rendered with path:', pathname, 'isInConversationDetail:', isInConversationDetail);
   
@@ -53,6 +67,9 @@ export default function TabsLayout() {
         <Stack.Screen name="conversations" />
         <Stack.Screen name="about" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="conversation-direct" />
+        <Stack.Screen name="conversation-group" />
+        {/* backward-compat pour anciennes navigations éventuelles */}
         <Stack.Screen name="conversation-detail" />
         <Stack.Screen name="conversation-management" />
         <Stack.Screen name="add-group-members" />

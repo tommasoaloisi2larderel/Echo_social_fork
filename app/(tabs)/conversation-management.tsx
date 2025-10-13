@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChat } from '../../contexts/ChatContext';
 
 // Utilise le proxy local pour éviter CORS en développement web
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -78,6 +79,7 @@ interface ConversationDetails {
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
   const { makeAuthenticatedRequest, user } = useAuth();
+  const { prefetchAvatars } = useChat();
   const insets = useSafeAreaInsets();
   
   const [loading, setLoading] = useState(true);
@@ -104,6 +106,12 @@ export default function ConversationManagement() {
         console.log('📋 Conversation chargée ID:', conversationId);
         console.log('📋 Participants count:', data.participants_detail?.length);
         
+        // Précharger l'avatar principal si présent
+        try {
+          const avatarUrl = data?.other_participant?.photo_profil_url || data?.avatar;
+          if (avatarUrl) await prefetchAvatars([avatarUrl]);
+        } catch {}
+
         // D'abord vérifier dans la liste des conversations si c'est un groupe
         const conversationsResponse = await makeAuthenticatedRequest(
           `${API_BASE_URL}/messaging/conversations/`
@@ -903,7 +911,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 28,
-    fontFamily: FONTS.bold,
+    fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 4,
   },
@@ -911,7 +919,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     marginTop: 4,
-    fontFamily: FONTS.regular,
   },
   aiBadgeLarge: {
     flexDirection: 'row',
@@ -931,7 +938,7 @@ const styles = StyleSheet.create({
   aiBadgeTextLarge: {
     color: '#fff',
     fontSize: 14,
-    fontFamily: FONTS.bold,
+    fontWeight: '700',
   },
   groupDesc: {
     fontSize: 15,
