@@ -58,6 +58,19 @@ const THEME = {
   card: '#ffffff',
 };
 
+// --- Debug helpers ---
+const DEBUG_CAL = true;
+const log = (...args: any[]) => DEBUG_CAL && console.log('[CAL]', ...args);
+const logErr = (...args: any[]) => DEBUG_CAL && console.error('[CAL][ERR]', ...args);
+
+// Format a local date as YYYY-MM-DD (no timezone conversion)
+const fmtLocalDate = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const EVENT_TYPES_COLORS: Record<string, string> = {
   professionnel: '#3a7d44', // deep moss
   personnel: '#5aa469',     // fresh leaf
@@ -82,35 +95,110 @@ export default function CalendarScreen() {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
   const [submitting, setSubmitting] = useState(false);
+  const [createdEventIds, setCreatedEventIds] = useState<Set<number>>(new Set());
 
   // Récupérer les événements du mois
   const fetchMonthEvents = async (date: Date) => {
     try {
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
+      const url = `${API_BASE_URL}/calendrier/month/?year=${year}&month=${month}`;
+      log('fetchMonthEvents ->', { year, month, url });
 
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/calendrier/month/?year=${year}&month=${month}`
-      );
+      const response = await makeAuthenticatedRequest(url);
+      log('fetchMonthEvents response status', response?.status);
 
       if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`);
+        const txt = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status} ${txt}`);
       }
 
-      const data = await response.json();
-      // S'assurer que events est toujours un tableau
+      const raw = await response.json();
+      log('fetchMonthEvents raw', raw);
+
+      // Normalize server payload (supports several possible shapes)
+      let eventsRaw: any[] = [];
+      let normYear = date.getFullYear();
+      let normMonth = date.getMonth() + 1;
+
+      if (Array.isArray(raw)) {
+        eventsRaw = raw;
+      } else if (raw && Array.isArray(raw.events)) {
+        eventsRaw = raw.events;
+        if (typeof raw.year === 'number') normYear = raw.year;
+        if (typeof raw.month === 'number') normMonth = raw.month;
+      } else if (raw && Array.isArray(raw.evenements)) {
+        eventsRaw = raw.evenements;
+        if (typeof raw.annee === 'number') normYear = raw.annee;
+        if (typeof raw.mois === 'number') normMonth = raw.mois;
+      } else if (raw && raw.evenements_par_jour && typeof raw.evenements_par_jour === 'object') {
+        // Shape: { evenements_par_jour: { '13': [ {...}, ... ], ... }, month, year }
+        const byDay = raw.evenements_par_jour as Record<string, any[]>;
+        if (typeof raw.year === 'number') normYear = raw.year;
+        if (typeof raw.month === 'number') normMonth = raw.month;
+        const acc: any[] = [];
+        Object.entries(byDay).forEach(([dayKey, arr]) => {
+          if (!Array.isArray(arr)) return;
+          const dayNum = parseInt(dayKey, 10);
+          const yyyy = normYear;
+          const mm = String(normMonth).padStart(2, '0');
+          const dd = String(dayNum).padStart(2, '0');
+          arr.forEach((ev) => {
+            // If backend omitted full datetime, try to build from day + heure fields
+            let dateDebut = ev.date_debut ?? ev.start ?? ev.start_at ?? ev.startDate;
+            let dateFin = ev.date_fin ?? ev.end ?? ev.end_at ?? ev.endDate;
+            if (!dateDebut && (ev.heure_debut || ev.heureDebut)) {
+              const hhmm = (ev.heure_debut || ev.heureDebut).toString().padStart(5, '0');
+              dateDebut = `${yyyy}-${mm}-${dd}T${hhmm}:00`;
+            }
+            if (!dateFin && (ev.heure_fin || ev.heureFin)) {
+              const hhmm = (ev.heure_fin || ev.heureFin).toString().padStart(5, '0');
+              dateFin = `${yyyy}-${mm}-${dd}T${hhmm}:00`;
+            }
+            acc.push({
+              ...ev,
+              date_debut: dateDebut,
+              date_fin: dateFin,
+              type: ev.type ?? ev.type_evenement ?? 'autre',
+            });
+          });
+        });
+        eventsRaw = acc;
+      } else if (raw && Array.isArray(raw.results)) {
+        eventsRaw = raw.results;
+      } else if (raw && raw.data && Array.isArray(raw.data)) {
+        eventsRaw = raw.data;
+      }
+
+      const events = eventsRaw.map((ev: any) => ({
+        id: ev.id,
+        titre: ev.titre ?? ev.title ?? '',
+        description: ev.description ?? '',
+        date_debut: ev.date_debut ?? ev.start ?? ev.start_at ?? ev.startDate,
+        date_fin: ev.date_fin ?? ev.end ?? ev.end_at ?? ev.endDate,
+        type: ev.type ?? ev.type_evenement ?? 'autre',
+        lieu: ev.lieu ?? ev.location,
+        is_all_day: Boolean(ev.is_all_day ?? ev.all_day ?? false),
+        rappel_minutes: typeof ev.rappel_minutes === 'number' ? ev.rappel_minutes : undefined,
+        created_at: ev.created_at ?? ev.date_creation,
+        updated_at: ev.updated_at ?? ev.date_modification,
+      }));
+
+      log('fetchMonthEvents normalized', { count: events.length, first: events[0] });
+
       setMonthData({
-        ...data,
-        events: data.events || []
+        year: normYear,
+        month: normMonth,
+        events,
+        total: events.length,
       });
     } catch (error) {
-      console.error('Erreur chargement événements du mois:', error);
-      // Définir une structure vide en cas d'erreur
+      logErr('Erreur chargement événements du mois:', error);
       setMonthData({
         year: date.getFullYear(),
         month: date.getMonth() + 1,
         events: [],
-        total: 0
+        total: 0,
       });
     }
   };
@@ -120,6 +208,7 @@ export default function CalendarScreen() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      log('Initial load for month', { currentMonth: currentMonth.toString() });
       await fetchMonthEvents(currentMonth);
       setLoading(false);
     };
@@ -129,6 +218,7 @@ export default function CalendarScreen() {
   // Rafraîchir les données
   const onRefresh = async () => {
     setRefreshing(true);
+    log('Pull-to-refresh for', { month: currentMonth.getMonth() + 1, year: currentMonth.getFullYear() });
     await fetchMonthEvents(currentMonth);
     setRefreshing(false);
   };
@@ -136,6 +226,7 @@ export default function CalendarScreen() {
   // Animate month transitions
   const changeMonth = async (direction: 'prev' | 'next') => {
     if (isAnimatingMonth) return;
+    log('changeMonth', direction);
     setIsAnimatingMonth(true);
     const toValue = direction === 'next' ? -1 : 1; // slide left on next
     animMonth.setValue(0);
@@ -148,6 +239,7 @@ export default function CalendarScreen() {
       const newMonth = new Date(currentMonth);
       newMonth.setMonth(newMonth.getMonth() + (direction === 'next' ? 1 : -1));
       setCurrentMonth(newMonth);
+      log('changeMonth -> new month', newMonth.toString());
       await fetchMonthEvents(newMonth);
       animMonth.setValue(-toValue);
       Animated.timing(animMonth, {
@@ -186,12 +278,19 @@ export default function CalendarScreen() {
   // Count events for a day
   const countEventsForDay = (day: number): number => {
     if (!monthData || !monthData.events?.length) return 0;
-    const dateStr = new Date(
+    const cellDate = new Date(
       currentMonth.getFullYear(),
       currentMonth.getMonth(),
-      day
-    ).toISOString().split('T')[0];
-    return monthData.events.filter(ev => ev.date_debut.split('T')[0] === dateStr).length;
+      day,
+      0, 0, 0, 0
+    );
+    const cellKey = fmtLocalDate(cellDate);
+    const count = monthData.events.filter(ev => {
+      const evKey = fmtLocalDate(new Date(ev.date_debut));
+      return evKey === cellKey;
+    }).length;
+    log('countEventsForDay', { day, cellKey, count });
+    return count;
   };
 
   // Vérifier si c'est le jour sélectionné
@@ -226,7 +325,7 @@ export default function CalendarScreen() {
       const start = mergeDateTime(selectedDate, startTime);
       const end = mergeDateTime(selectedDate, endTime);
       if (end <= start) {
-        Alert.alert('Heure invalide', 'L\'heure de fin doit être après le début.');
+        Alert.alert('Heure invalide', "L'heure de fin doit être après le début.");
         setSubmitting(false);
         return;
       }
@@ -238,22 +337,34 @@ export default function CalendarScreen() {
         type: newType,
         is_all_day: false,
       };
+      log('handleCreate -> POST /calendrier/events/', payload);
       const resp = await makeAuthenticatedRequest(`${API_BASE_URL}/calendrier/events/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+      log('handleCreate response status', resp?.status);
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status} ${txt}`);
+      }
+      const created = await resp.json();
+      log('Event created OK', created);
+      setCreatedEventIds(prev => {
+        const next = new Set(prev);
+        if (typeof created?.id === 'number') next.add(created.id);
+        return next;
+      });
+
       setShowCreate(false);
       setNewTitle('');
       setStartTime('09:00');
       setEndTime('10:00');
-      // refresh month data
       await fetchMonthEvents(currentMonth);
       Alert.alert('Événement créé', 'Votre événement a été ajouté.');
     } catch (e: any) {
-      console.error('Create event error:', e);
-      Alert.alert("Échec de la création", e?.message || 'Réessayez plus tard.');
+      logErr('Create event error:', e);
+      Alert.alert('Échec de la création', e?.message || 'Réessayez plus tard.');
     } finally {
       setSubmitting(false);
     }
@@ -292,10 +403,12 @@ export default function CalendarScreen() {
   // Events in the selected week (use month data for speed)
   const eventsThisWeek = useMemo(() => {
     if (!monthData?.events) return [] as CalendarEvent[];
-    return monthData.events.filter(ev => {
+    const list = monthData.events.filter(ev => {
       const start = new Date(ev.date_debut);
       return start >= selWeekStart && start <= selWeekEnd;
     });
+    log('eventsThisWeek', { selWeekStart: selWeekStart.toString(), selWeekEnd: selWeekEnd.toString(), count: list.length });
+    return list;
   }, [monthData?.events, selWeekStartTime, selWeekEndTime]);
 
   if (loading) {
@@ -400,6 +513,7 @@ export default function CalendarScreen() {
                     key={`agenda-${wIdx}`}
                     startDate={selWeekStart}
                     events={eventsThisWeek}
+                    newIds={createdEventIds}
                   />
                 )}
               </View>
@@ -452,7 +566,7 @@ export default function CalendarScreen() {
   );
 }
 
-function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEvent[] }) {
+function WeekAgenda({ startDate, events, newIds }: { startDate: Date; events: CalendarEvent[]; newIds?: Set<number> }) {
   const HOURS = Array.from({ length: 24 }, (_, i) => i);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(startDate);
@@ -464,8 +578,10 @@ function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEv
 
   // Build events per day
   const eventsByDay = days.map((d) => {
-    const key = d.toISOString().slice(0,10);
-    return events.filter((ev) => ev.date_debut.slice(0,10) === key);
+    const key = fmtLocalDate(d);
+    const items = events.filter((ev) => fmtLocalDate(new Date(ev.date_debut)) === key);
+    log('WeekAgenda day', { key, items: items.length });
+    return items;
   });
 
   // Scrolling to current time if this week is the current one
@@ -483,6 +599,8 @@ function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEv
 
   // Helper for day label (Lun 09)
   const dayLabel = (d: Date) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }).replace('.', '');
+
+  log('WeekAgenda header days', days.map(dd => fmtLocalDate(dd)));
 
   // Current time indicator within each column (only for today)
   const now = new Date();
@@ -534,13 +652,24 @@ function WeekAgenda({ startDate, events }: { startDate: Date; events: CalendarEv
                     const endHour = end.getHours() + end.getMinutes()/60;
                     const top = startHour * slotH;
                     const height = Math.max(slotH * (endHour - startHour), 22);
+                    const isNew = !!newIds && typeof ev.id === 'number' && newIds.has(ev.id);
+                    log('Render event', { id: ev.id, titre: ev.titre, start: start.toISOString(), end: end.toISOString(), isNew });
                     return (
-                      <View key={i} style={[styles.agendaEvent, { top, height, backgroundColor: EVENT_TYPES_COLORS[ev.type] || '#6a6a6a' }]}> 
+                      <View key={i} style={[
+                        styles.agendaEvent,
+                        { top, height, backgroundColor: EVENT_TYPES_COLORS[ev.type] || '#6a6a6a' },
+                        isNew ? { borderWidth: 2, borderColor: '#FFD54F' } : null,
+                      ]}>
                         <Text style={styles.agendaEventTitle} numberOfLines={1}>{ev.titre}</Text>
                         {!ev.is_all_day && (
                           <Text style={styles.agendaEventTime} numberOfLines={1}>
                             {start.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
                           </Text>
+                        )}
+                        {isNew && (
+                          <View style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#FFD54F', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#5d4100' }}>NOUVEAU</Text>
+                          </View>
                         )}
                       </View>
                     );

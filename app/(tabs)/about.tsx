@@ -7,7 +7,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// Utilise le proxy local pour éviter CORS en développement web
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
   : "https://reseausocial-production.up.railway.app";
@@ -34,34 +33,23 @@ const isDerniereReponse = (val: any): val is DerniereReponse => {
 export default function ProfileScreen() {
   const { user, accessToken, logout, makeAuthenticatedRequest } = useAuth();
   const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [friendsCount, setFriendsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
-      // If no token, do not attempt the call (avoids noisy error "Pas de token d'accès")
       if (!accessToken) {
         setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      const [statsResponse, connectionsResponse] = await Promise.all([
-        makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`),
-        makeAuthenticatedRequest(`${API_BASE_URL}/relations/connections/my-connections/`)
-      ]);
-
-      if (statsResponse.ok) {
-        const data = await statsResponse.json();
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`);
+      if (response.ok) {
+        const data = await response.json();
         setStats(data);
       } else {
-        console.warn('Stats request failed with status', statsResponse.status);
-      }
-
-      if (connectionsResponse.ok) {
-        const connectionsData = await connectionsResponse.json();
-        setFriendsCount(connectionsData.total || connectionsData.connexions?.length || 0);
+        console.warn('Stats request failed with status', response.status);
       }
     } catch (error) {
       console.warn('Error fetching stats:', error);
@@ -112,6 +100,9 @@ export default function ProfileScreen() {
     );
   }
 
+  // Fixed profile picture logic - using photo_profil_url directly
+  const profilePictureUrl = (user as any)?.photo_profil_url;
+
   return (
     <ScrollView 
       style={styles.container}
@@ -119,22 +110,22 @@ export default function ProfileScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero Header */}
       <LinearGradient colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)']} style={styles.hero} start={{x:0, y:0}} end={{x:1, y:1}}>
         <View style={styles.heroTopRow}>
           <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
             <Ionicons name="log-out-outline" size={22} color="rgba(10, 145, 104, 1)" />
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/edit-profile' as any)} style={styles.iconButton}>
+            <Ionicons name="create-outline" size={22} color="rgba(10, 145, 104, 1)" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.avatarWrap}>
-          {(() => {
-            const avatarUri = (user as any)?.avatar || (user as any)?.avatar_url || (user as any)?.photo_url || (user as any)?.profile_picture || (user as any)?.image;
-            if (avatarUri) {
-              return <Image source={{ uri: String(avatarUri) }} style={styles.avatarImage} />;
-            }
-            return <DefaultAvatar name={user?.username || 'User'} size={110} />;
-          })()}
+          {profilePictureUrl ? (
+            <Image source={{ uri: profilePictureUrl }} style={styles.avatarImage} />
+          ) : (
+            <DefaultAvatar name={user?.username || 'User'} size={110} />
+          )}
         </View>
 
         <Text style={styles.nameText}>{user?.username}</Text>
@@ -145,12 +136,11 @@ export default function ProfileScreen() {
           <Text style={styles.bioText}>{user.bio}</Text>
         ) : null}
 
-        {/* Quick stats */}
         {(
           <View style={styles.quickStatsRow}>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
               <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{friendsCount}</Text>
+              <Text style={styles.quickStatNum}>{(user as any)?.nb_amis ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
@@ -167,7 +157,6 @@ export default function ProfileScreen() {
         )}
       </LinearGradient>
 
-      {/* Information & Activity */}
       <View style={styles.cardsGrid}>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -183,35 +172,14 @@ export default function ProfileScreen() {
             <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
           </View>
         </View>
-
       </View>
 
-      {/* Primary action */}
       <View style={styles.footerSpace} />
     </ScrollView>
   );
 }
 
-const InfoRow = ({ icon, label, value }: { icon: any; label: string; value?: string }) => {
-  if (!value) return null;
-  return (
-    <View style={styles.infoRow}>
-      <Ionicons name={icon} size={20} color={ECHO_COLOR} />
-      <View style={styles.infoContent}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-};
-
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: BACKGROUND_GRAY,
-  },
   container: {
     flex: 1,
     backgroundColor: BACKGROUND_GRAY,
@@ -219,48 +187,55 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 40,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: BACKGROUND_GRAY,
+  },
   hero: {
-    paddingTop: 36,
-    paddingBottom: 24,
+    paddingTop: 60,
+    paddingBottom: 30,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    alignItems: 'center',
   },
   heroTopRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginBottom: 20,
   },
   iconButton: {
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   avatarWrap: {
-    alignSelf: 'center',
-    marginTop: 6,
-    marginBottom: 10,
+    marginBottom: 16,
   },
   avatarImage: {
     width: 110,
     height: 110,
     borderRadius: 55,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: 'white',
   },
   nameText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1b5e20',
-    textAlign: 'center',
   },
   tagline: {
-    textAlign: 'center',
-    color: ECHO_COLOR,
+    fontSize: 15,
+    color: '#5a7a5f',
     marginTop: 4,
     fontStyle: 'italic',
   },
@@ -326,56 +301,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginLeft: 8,
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  infoContent: {
-    marginLeft: 15,
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 15,
-    color: '#333',
-  },
-  answerBox: {
-    padding: 14,
-    backgroundColor: '#f6fbf6',
-    borderRadius: 12,
-  },
-  questionText: {
-    fontSize: 14,
-    color: '#5f6d61',
-    marginBottom: 8,
-    fontStyle: 'italic',
-  },
-  answerText: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '600',
-  },
-  answerFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  dateText: {
-    fontSize: 11,
-    color: '#999',
-    marginLeft: 6,
-  },
-  footerSpace: {
-    height: 60,
-  },
-
   newPostBtn: {
     marginLeft: 'auto',
     flexDirection: 'row',
@@ -385,13 +310,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  newPostText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
-  emptyState: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  emptyText: { marginLeft: 8, color: '#6e7f71' },
-
-  statsPreviewRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  previewItem: { flex: 1, alignItems: 'center' },
-  previewNumber: { fontSize: 20, fontWeight: '800', color: '#1b5e20' },
-  previewLabel: { fontSize: 11, color: '#6c8a6e', marginTop: 2 },
-  statsHint: { textAlign: 'center', marginTop: 10, fontSize: 12, color: '#6c8a6e' },
+  newPostText: { 
+    color: '#fff', 
+    fontWeight: '700', 
+    marginLeft: 6 
+  },
+  emptyState: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 8 
+  },
+  emptyText: { 
+    marginLeft: 8, 
+    color: '#6e7f71' 
+  },
+  footerSpace: {
+    height: 60,
+  },
 });
