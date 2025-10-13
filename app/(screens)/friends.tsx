@@ -6,15 +6,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -289,7 +289,7 @@ export default function FriendsScreen() {
               <Ionicons name="people-outline" size={64} color="#ccc" />
               <Text style={styles.emptyTitle}>Aucun ami</Text>
               <Text style={styles.emptyText}>
-                Recherchez des personnes dans l'onglet Conversations pour envoyer des demandes de connexion
+                Recherchez des personnes dans l&apos;onglet Conversations pour envoyer des demandes de connexion
               </Text>
             </View>
           ) : (
@@ -332,7 +332,7 @@ export default function FriendsScreen() {
               <Ionicons name="mail-outline" size={64} color="#ccc" />
               <Text style={styles.emptyTitle}>Aucune invitation</Text>
               <Text style={styles.emptyText}>
-                Vous n'avez pas de demandes de connexion en attente
+                Vous n&apos;avez pas de demandes de connexion en attente
               </Text>
             </View>
           ) : (

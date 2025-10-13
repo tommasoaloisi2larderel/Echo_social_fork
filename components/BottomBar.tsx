@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from "../contexts/AuthContext";
 import { useChat } from "../contexts/ChatContext";
+import { useJarvis } from "../contexts/JarvisContext";
 import { useNavigation } from "../contexts/NavigationContext";
 import { styles } from "../styles/appStyles";
 
@@ -49,7 +50,8 @@ export default function BottomBar({
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
   const { sendMessage: sendChatMessage, websocket } = useChat();
-  
+  const { messages: jarvisMessages, sendMessage: sendJarvisMessage, clearHistory, loadHistory } = useJarvis();
+
   // Dimensions de l'écran
   const screenHeight = Dimensions.get('window').height;
   // hauteur de l'espace panneau (90% de l'écran)
@@ -65,8 +67,6 @@ export default function BottomBar({
   const [jarvisKeyboardHeight, setJarvisKeyboardHeight] = useState(0);
   // Jarvis mode ephemeral chat state
   const [jarvisActive, setJarvisActive] = useState(false);
-  const [jarvisMessages, setJarvisMessages] = useState<Array<{ id: number; role: 'user' | 'assistant'; content: string }>>([]);
-  const [jarvisAgentUuid, setJarvisAgentUuid] = useState<string | null>(null);
   const [isJarvisInputFocused, setIsJarvisInputFocused] = useState(false);
   const jarvisScrollRef = useRef<any>(null);
   const chatInputRef = useRef<TextInput>(null);
@@ -112,6 +112,20 @@ export default function BottomBar({
       keyboardWillHide.remove();
     };
   }, []);
+
+  // Add after the keyboard handling useEffect
+  useEffect(() => {
+    if (jarvisMessages.length > 0) {
+      setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [jarvisMessages]);
+
+  // Load history when Jarvis is activated
+  useEffect(() => {
+    if (jarvisActive && jarvisMessages.length === 0) {
+      loadHistory();
+    }
+  }, [jarvisActive]);
 
   // Debug
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
@@ -164,14 +178,20 @@ export default function BottomBar({
 
   // Effacement de l'historique Jarvis
   const deleteJarvisHistory = async () => {
-    try {
-      const uuid = await resolveJarvisAgentUuid();
-      if (uuid) {
-        // Si l'API ne prévoit pas de delete, on tente un POST spécial puis on purge localement
-        await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/${uuid}/responses/clear/`, { method: 'POST' }).catch(() => null as any);
-      }
-    } catch {}
-    setJarvisMessages([]);
+    Alert.alert(
+      "Clear History",
+      "Are you sure you want to clear your conversation with Jarvis?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear", 
+          style: "destructive",
+          onPress: async () => {
+            await clearHistory();
+          }
+        }
+      ]
+    );
   };
 
   // S'assurer qu'à l'ouverture d'une conversation, on démarre en mode message,
@@ -198,50 +218,12 @@ export default function BottomBar({
         sendChatMessage(chatText);
         setChatText("");
       } else if (sendTarget === 'jarvis') {
-        if (!jarvisActive) setJarvisActive(true); // activer overlay UNIQUEMENT à l'envoi
-        const userText = chatText.trim();
-        setJarvisMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: userText }]);
-        setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 100);
-          setChatText("");
-
-        try {
-          let agentUuid: string | null = null;
-          try {
-            const respAvail = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/my-available/`);
-            if (respAvail.ok) {
-              const list = await respAvail.json();
-              const found = (Array.isArray(list) ? list : []).find((a: any) => (a.name || '').toLowerCase().includes('jarvis')) || (Array.isArray(list) ? list[0] : null);
-              if (found?.uuid) agentUuid = found.uuid;
-            }
-          } catch {}
-          if (!agentUuid) {
-            const respAgents = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/`);
-            if (respAgents.ok) {
-              const list2 = await respAgents.json();
-              const found2 = (Array.isArray(list2) ? list2 : []).find((a: any) => (a.name || '').toLowerCase().includes('jarvis')) || (Array.isArray(list2) ? list2[0] : null);
-              if (found2?.uuid) agentUuid = found2.uuid;
-            }
-          }
-          if (!agentUuid) {
-            setJarvisMessages((prev) => [...prev, { id: Date.now()+1, role: 'assistant', content: 'Aucun agent disponible.' }]);
-            return;
-          }
-          const respTest = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/${agentUuid}/test/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: userText }),
-          });
-          if (respTest.ok) {
-            const data = await respTest.json().catch(() => ({} as any));
-            const reply = data.response || data.answer || data.text || '...';
-            setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: String(reply) }]);
-            setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 100);
-        } else {
-            setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: `Erreur (${respTest.status})`}]);
-          }
-        } catch (e) {
-          setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: 'Erreur réseau' }]);
-        }
+      if (!jarvisActive) setJarvisActive(true);
+      const userText = chatText.trim();
+      setChatText("");
+      
+      // Use Jarvis context to send message
+      await sendJarvisMessage(userText);
       } else {
         console.warn("⚠️ Pas de fonction d'envoi disponible");
       }

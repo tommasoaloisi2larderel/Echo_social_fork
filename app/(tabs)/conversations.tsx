@@ -3,17 +3,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import React, { ComponentRef, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CreateGroupModal } from '../../components/CreateGroupModal';
@@ -245,6 +245,8 @@ const GroupSquare = React.memo(({
     </TouchableOpacity>
   );
 });
+
+GroupSquare.displayName = 'GroupSquare';
 
 export default function ConversationsScreen() {
   const pathname = usePathname();
@@ -775,7 +777,7 @@ export default function ConversationsScreen() {
   );
 
   // Créer une liste selon le mode sélectionné
-  let displayItems: Array<{
+  let displayItems: {
     uuid: string;
     name: string;
     photoUrl?: string;
@@ -785,7 +787,7 @@ export default function ConversationsScreen() {
     isGroup?: boolean;
     memberCount?: number;
     unreadMessages?: number;
-  }> = [];
+  }[] = [];
 
   if (viewMode === 'direct') {
     // Mode Privé : afficher tous les amis (avec ou sans conversation)
@@ -1111,7 +1113,7 @@ export default function ConversationsScreen() {
               <Ionicons name="search-outline" size={64} color="#ccc" />
               <Text style={localStyles.noResultsTitle}>Aucun résultat</Text>
               <Text style={localStyles.noResultsText}>
-                Aucun utilisateur ne correspond à "{query}"
+                Aucun utilisateur ne correspond à &quot;{query}&quot;
               </Text>
             </View>
           )}

@@ -348,7 +348,7 @@ export default function AddGroupMembers() {
           <Ionicons name="search-outline" size={64} color="#ccc" />
           <Text style={localStyles.emptyTitle}>Aucun résultat</Text>
           <Text style={localStyles.emptyText}>
-            Aucun utilisateur ne correspond à "{query}"
+            Aucun utilisateur ne correspond à &quot;{query}&quot;
           </Text>
         </View>
       ) : (

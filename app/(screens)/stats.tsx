@@ -148,7 +148,7 @@ export default function StatsScreen() {
         }
       >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
+          <Text style={styles.sectionTitle}>Vue d&apos;ensemble</Text>
           <View style={styles.statsGrid}>
             <StatCard
               icon="people"
@@ -257,7 +257,7 @@ export default function StatsScreen() {
                 <Ionicons name="calendar-outline" size={24} color={ECHO_COLOR} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Date d'inscription</Text>
+                <Text style={styles.infoLabel}>Date d&apos;inscription</Text>
                 <Text style={styles.infoValue}>
                   {stats?.date_inscription ? formatDate(stats.date_inscription) : 'N/A'}
                 </Text>

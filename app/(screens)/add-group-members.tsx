@@ -5,14 +5,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
@@ -337,7 +337,7 @@ export default function AddGroupMembers() {
           <Ionicons name="search-outline" size={64} color="#ccc" />
           <Text style={localStyles.emptyTitle}>Aucun résultat</Text>
           <Text style={localStyles.emptyText}>
-            Aucun utilisateur ne correspond à "{query}"
+            Aucun utilisateur ne correspond à &quot;{query}&quot;
           </Text>
         </View>
       ) : (

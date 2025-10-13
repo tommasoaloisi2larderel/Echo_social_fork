@@ -852,7 +852,7 @@ export default function ConversationManagement() {
           </Text>
           {isGroup && groupDetails?.invite_code && (
             <Text style={[styles.infoText, { marginTop: 8, fontWeight: '600' }]}>
-              Code d'invitation : {groupDetails.invite_code}
+              Code d&apos;invitation : {groupDetails.invite_code}
             </Text>
           )}
         </View>
