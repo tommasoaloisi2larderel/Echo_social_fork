@@ -461,11 +461,44 @@ Réception :
 ________________
 
 
-💬 MESSAGING
-Pour les llm : à savoir les endpoints qui servent à envoyer des messages / marquer comme vu / statut en train d’écrire    sont maintenant gérés par les websockets
+💬 API MESSAGING - Documentation Complète
+Base URL: /api/messaging/
+Note pour les LLM: Les endpoints qui servent à envoyer des messages, marquer comme vu, et gérer le statut "en train d'écrire" sont maintenant gérés par les WebSockets.
+________________
+
+
+📋 Table des matières
 1. Liste des conversations
-GET /messaging/conversations/
-Réception :
+2. Conversations privées uniquement
+3. Conversations de groupe uniquement
+4. Créer une conversation
+5. Rechercher des conversations
+6. Détail d'une conversation
+7. Messages d'une conversation
+8. Envoyer un message
+9. Marquer comme vu
+10. Statut "en train d'écrire"
+11. Messages non lus globaux
+12. Résumer une conversation
+13. Upload d'un attachment
+14. Détail d'un attachment
+15. Envoyer un message avec attachments
+16. Statut de lecture d'une conversation
+17. Messages non lus d'un utilisateur
+18. Participants d'une conversation
+19. Archiver/Désarchiver une conversation
+20. Conversations archivées
+________________
+
+
+1. Liste des conversations
+Récupère toutes les conversations de l'utilisateur (privées + groupes).
+Endpoint: GET /messaging/conversations/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
 [
   {
     "id": 1,
@@ -473,66 +506,206 @@ Réception :
     "last_message": {
       "content": "Dernier message...",
       "sender_username": "Alice",
-      "created_at": "2025-08-28T10:30:00.000Z"
+      "created_at": "2025-10-13T10:30:00.000Z",
+      "is_read": true
     },
     "other_participant": {
       "id": 456,
       "uuid": "uuid-string",
       "username": "Alice",
-      "surnom": "string",
-      "photo_profil_url": "url-ou-null"
+      "surnom": "string"
     },
     "unread_count": 3,
-    "created_at": "2025-08-28T10:30:00.000Z",
-    "updated_at": "2025-08-28T10:30:00.000Z"
+    "created_at": "2025-10-13T10:30:00.000Z",
+    "updated_at": "2025-10-13T10:30:00.000Z"
   }
 ]
 
 
-2. Créer une conversation
-POST /messaging/conversations/
-Envoi :
+________________
+
+
+2. Conversations privées uniquement
+Récupère uniquement les conversations privées (1v1) de l'utilisateur.
+Endpoint: GET /messaging/conversations/private/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+[
+  {
+    "id": 1,
+    "uuid": "conversation-uuid",
+    "conversation_type": "direct",
+    "last_message": {
+      "content": "Dernier message...",
+      "sender_username": "Alice",
+      "created_at": "2025-10-13T10:30:00.000Z",
+      "is_read": true
+    },
+    "other_participant": {
+      "id": 456,
+      "uuid": "uuid-string",
+      "username": "Alice",
+      "surnom": "string"
+    },
+    "unread_count": 3,
+    "created_at": "2025-10-13T10:30:00.000Z",
+    "updated_at": "2025-10-13T10:30:00.000Z"
+  }
+]
+
+
+________________
+
+
+3. Conversations de groupe uniquement
+Récupère uniquement les conversations de groupe de l'utilisateur.
+Endpoint: GET /messaging/conversations/groups/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+[
+  {
+    "id": 2,
+    "uuid": "group-conversation-uuid",
+    "conversation_type": "group_chat",
+    "last_message": {
+      "content": "Message dans le groupe...",
+      "sender_username": "Bob",
+      "created_at": "2025-10-13T11:00:00.000Z",
+      "is_read": false
+    },
+    "group_info": {
+      "id": 10,
+      "uuid": "group-uuid",
+      "name": "Équipe Marketing",
+      "description": "Groupe de l'équipe marketing",
+      "avatar": "/media/groups/avatar.jpg",
+      "member_count": 15,
+      "my_role": "member"
+    },
+    "unread_count": 7,
+    "created_at": "2025-10-13T09:00:00.000Z",
+    "updated_at": "2025-10-13T11:00:00.000Z"
+  }
+]
+
+
+Note: Le champ my_role peut être: "owner", "moderator", ou "member".
+________________
+
+
+4. Créer une conversation
+Crée une nouvelle conversation privée ou récupère une existante.
+Endpoint: POST /messaging/conversations/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
 {
-  "other_user_uuid": "uuid-de-l-autre-utilisateur"
+  "recipient_uuid": "uuid-de-l-autre-utilisateur",
+  "first_message": "Salut ! Comment ça va ?"
 }
 
 
-Réception :
+Champs:
+* recipient_uuid (obligatoire): UUID de l'utilisateur destinataire
+* first_message (optionnel): Premier message à envoyer
+Réponse:
 {
   "id": 1,
   "uuid": "conversation-uuid",
-  "participants": [
-    {
-      "user": 123,
-      "username": "string",
-      "user_uuid": "uuid-string",
-      "surnom": "string",
-      "last_seen": null,
-      "is_typing": false,
-      "joined_at": "2025-08-28T10:30:00.000Z"
-    }
-  ],
-  "messages": [],
-  "created_at": "2025-08-28T10:30:00.000Z",
-  "updated_at": "2025-08-28T10:30:00.000Z"
-}
-
-
-3. Détail d'une conversation
-GET /messaging/conversations/{uuid}/
-Réception :
-{
-  "id": 1,
-  "uuid": "conversation-uuid",
-  "participants": [
+  "participants_detail": [
     {
       "user": 123,
       "username": "Alice",
       "user_uuid": "uuid-string",
       "surnom": "string",
-      "last_seen": "2025-08-28T10:30:00.000Z",
+      "last_seen": null,
       "is_typing": false,
-      "joined_at": "2025-08-28T10:30:00.000Z"
+      "joined_at": "2025-10-13T10:30:00.000Z",
+      "is_archived": false,
+      "archived_at": null
+    },
+    {
+      "user": 456,
+      "username": "Bob",
+      "user_uuid": "uuid-string-2",
+      "surnom": "Bobby",
+      "last_seen": null,
+      "is_typing": false,
+      "joined_at": "2025-10-13T10:30:00.000Z",
+      "is_archived": false,
+      "archived_at": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 1,
+      "uuid": "message-uuid",
+      "sender": 123,
+      "sender_username": "Alice",
+      "sender_uuid": "uuid-string",
+      "content": "Salut ! Comment ça va ?",
+      "is_ai_generated": false,
+      "is_read": false,
+      "read_at": null,
+      "created_at": "2025-10-13T10:30:00.000Z",
+      "updated_at": "2025-10-13T10:30:00.000Z",
+      "attachments": []
+    }
+  ],
+  "my_last_seen": null,
+  "created_at": "2025-10-13T10:30:00.000Z",
+  "updated_at": "2025-10-13T10:30:00.000Z"
+}
+
+
+________________
+
+
+5. Rechercher des conversations
+Recherche dans les conversations de l'utilisateur.
+Endpoint: GET /messaging/conversations/search/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Query Parameters:
+* q: Terme de recherche
+Exemple: GET /messaging/conversations/search/?q=Alice
+Réponse: Même structure que la liste des conversations.
+________________
+
+
+6. Détail d'une conversation
+Récupère tous les détails et messages d'une conversation.
+Endpoint: GET /messaging/conversations/{uuid}/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+{
+  "id": 1,
+  "uuid": "conversation-uuid",
+  "participants_detail": [
+    {
+      "user": 123,
+      "username": "Alice",
+      "user_uuid": "uuid-string",
+      "surnom": "string",
+      "last_seen": "2025-10-13T10:30:00.000Z",
+      "is_typing": false,
+      "joined_at": "2025-10-13T10:00:00.000Z",
+      "is_archived": false,
+      "archived_at": null
     }
   ],
   "messages": [
@@ -545,20 +718,32 @@ Réception :
       "content": "Salut !",
       "is_ai_generated": false,
       "is_read": true,
-      "read_at": "2025-08-28T10:35:00.000Z",
-      "created_at": "2025-08-28T10:30:00.000Z",
-      "updated_at": "2025-08-28T10:30:00.000Z",
+      "read_at": "2025-10-13T10:35:00.000Z",
+      "created_at": "2025-10-13T10:30:00.000Z",
+      "updated_at": "2025-10-13T10:30:00.000Z",
       "attachments": []
     }
   ],
-  "created_at": "2025-08-28T10:30:00.000Z",
-  "updated_at": "2025-08-28T10:30:00.000Z"
+  "my_last_seen": "2025-10-13T10:35:00.000Z",
+  "created_at": "2025-10-13T10:00:00.000Z",
+  "updated_at": "2025-10-13T10:30:00.000Z"
 }
 
 
-4. Messages d'une conversation
-GET /messaging/conversations/{uuid}/messages/
-Réception :
+________________
+
+
+7. Messages d'une conversation
+Liste tous les messages d'une conversation.
+Endpoint: GET /messaging/conversations/{conversation_uuid}/messages/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Query Parameters (optionnels):
+* limit: Nombre de messages à retourner (par défaut: 50)
+* offset: Point de départ pour la pagination
+Réponse:
 [
   {
     "id": 1,
@@ -569,9 +754,9 @@ Réception :
     "content": "Salut !",
     "is_ai_generated": false,
     "is_read": true,
-    "read_at": "2025-08-28T10:35:00.000Z",
-    "created_at": "2025-08-28T10:30:00.000Z",
-    "updated_at": "2025-08-28T10:30:00.000Z",
+    "read_at": "2025-10-13T10:35:00.000Z",
+    "created_at": "2025-10-13T10:30:00.000Z",
+    "updated_at": "2025-10-13T10:30:00.000Z",
     "attachments": [
       {
         "id": 1,
@@ -581,23 +766,35 @@ Réception :
         "file_size": 1048576,
         "file_url": "/media/attachments/photo.jpg",
         "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
-        "created_at": "2025-08-28T10:30:00.000Z"
+        "created_at": "2025-10-13T10:30:00.000Z"
       }
     ]
   }
 ]
 
 
-5. Envoyer un message
-POST /messaging/conversations/{uuid}/messages/create/
-Envoi :
+________________
+
+
+8. Envoyer un message
+Envoie un nouveau message dans une conversation.
+Endpoint: POST /messaging/conversations/{conversation_uuid}/messages/create/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
 {
   "content": "Contenu du message",
   "is_ai_generated": false
 }
 
 
-Réception :
+Champs:
+* content (obligatoire): Contenu du message (ne peut pas être vide)
+* is_ai_generated (optionnel, défaut: false): Indique si généré par IA
+Réponse:
 {
   "id": 1,
   "uuid": "message-uuid",
@@ -608,18 +805,117 @@ Réception :
   "is_ai_generated": false,
   "is_read": false,
   "read_at": null,
-  "created_at": "2025-08-28T10:30:00.000Z",
-  "updated_at": "2025-08-28T10:30:00.000Z"
+  "created_at": "2025-10-13T10:30:00.000Z",
+  "updated_at": "2025-10-13T10:30:00.000Z",
+  "attachments": []
 }
 
 
-6. Upload d'un attachment
-POST /messaging/attachments/upload/
-Envoi (multipart/form-data) :
-file: [fichier binaire]
+________________
 
 
-Réception :
+9. Marquer comme vu
+Marque tous les messages d'une conversation comme lus.
+Endpoint: POST /messaging/conversations/{conversation_uuid}/mark-as-seen/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
+{}
+
+
+Réponse:
+{
+  "message": "Conversation marquée comme vue",
+  "marked_count": 5
+}
+
+
+Note: marked_count indique le nombre de messages marqués comme lus.
+________________
+
+
+10. Statut "en train d'écrire"
+Met à jour le statut "en train d'écrire" de l'utilisateur dans une conversation.
+Endpoint: POST /messaging/conversations/{conversation_uuid}/typing/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
+{
+  "is_typing": true
+}
+
+
+Champs:
+* is_typing (obligatoire): true si l'utilisateur tape, false sinon
+Réponse:
+{
+  "message": "Statut mis à jour",
+  "is_typing": true
+}
+
+
+________________
+
+
+11. Messages non lus globaux
+Récupère le nombre total de messages non lus de l'utilisateur.
+Endpoint: GET /messaging/messages/unread/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+{
+  "total_unread": 15,
+  "conversations": [
+    {
+      "conversation_uuid": "uuid-1",
+      "unread_count": 5
+    },
+    {
+      "conversation_uuid": "uuid-2",
+      "unread_count": 10
+    }
+  ]
+}
+
+
+________________
+
+
+12. Résumer une conversation
+Génère un résumé de la conversation (probablement avec IA).
+Endpoint: POST /messaging/conversations/{conversation_uuid}/summarize/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
+{}
+
+
+Réponse: (À définir selon l'implémentation)
+________________
+
+
+13. Upload d'un attachment
+Upload un fichier pour l'attacher à un message.
+Endpoint: POST /messaging/attachments/upload/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: multipart/form-data
+
+
+Form Data:
+* file: Le fichier binaire à uploader
+Réponse:
 {
   "id": 1,
   "uuid": "attachment-uuid",
@@ -628,13 +924,50 @@ Réception :
   "file_size": 1048576,
   "file_url": "/media/attachments/photo.jpg",
   "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
-  "created_at": "2025-08-28T10:30:00.000Z"
+  "created_at": "2025-10-13T10:30:00.000Z"
 }
 
 
-7. Envoyer un message avec attachments
-POST /messaging/conversations/{uuid}/messages/create-with-attachments/
-Envoi :
+Types de fichiers supportés:
+* image: Images (JPEG, PNG, GIF, etc.)
+* video: Vidéos
+* audio: Audio
+* document: Documents (PDF, DOCX, etc.)
+________________
+
+
+14. Détail d'un attachment
+Récupère les informations d'un attachment.
+Endpoint: GET /messaging/attachments/{uuid}/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+{
+  "id": 1,
+  "uuid": "attachment-uuid",
+  "file_type": "image",
+  "original_filename": "photo.jpg",
+  "file_size": 1048576,
+  "file_url": "/media/attachments/photo.jpg",
+  "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
+  "created_at": "2025-10-13T10:30:00.000Z"
+}
+
+
+________________
+
+
+15. Envoyer un message avec attachments
+Envoie un message avec des fichiers joints.
+Endpoint: POST /messaging/conversations/{conversation_uuid}/messages/create-with-attachments/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body:
 {
   "content": "Message avec fichier joint",
   "attachment_uuids": ["attachment-uuid-1", "attachment-uuid-2"],
@@ -642,7 +975,15 @@ Envoi :
 }
 
 
-Réception :
+Champs:
+* content (obligatoire): Contenu du message
+* attachment_uuids (obligatoire): Liste des UUIDs des attachments (uploadés préalablement)
+* is_ai_generated (optionnel): Indique si généré par IA
+Workflow:
+1. Upload les fichiers via /messaging/attachments/upload/
+2. Récupérer les UUIDs des attachments
+3. Créer le message avec les UUIDs
+Réponse:
 {
   "id": 1,
   "uuid": "message-uuid",
@@ -653,8 +994,8 @@ Réception :
   "is_ai_generated": false,
   "is_read": false,
   "read_at": null,
-  "created_at": "2025-08-28T10:30:00.000Z",
-  "updated_at": "2025-08-28T10:30:00.000Z",
+  "created_at": "2025-10-13T10:30:00.000Z",
+  "updated_at": "2025-10-13T10:30:00.000Z",
   "attachments": [
     {
       "id": 1,
@@ -664,28 +1005,80 @@ Réception :
       "file_size": 1048576,
       "file_url": "/media/attachments/photo.jpg",
       "thumbnail_url": "/media/thumbnails/photo_thumb.jpg",
-      "created_at": "2025-08-28T10:30:00.000Z"
+      "created_at": "2025-10-13T10:30:00.000Z"
     }
   ]
 }
 
 
-8. Marquer comme vu
-POST /messaging/conversations/{uuid}/mark-as-seen/
-Envoi :
-{}
+________________
 
 
-Réception :
+16. Statut de lecture d'une conversation
+Récupère le statut de lecture pour tous les participants.
+Endpoint: GET /messaging/conversations/{conversation_uuid}/read-status/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
 {
-  "message": "Conversation marquée comme vue",
-  "marked_count": 5
+  "conversation_uuid": "conversation-uuid",
+  "participants": [
+    {
+      "user_id": 123,
+      "username": "Alice",
+      "last_seen": "2025-10-13T10:35:00.000Z",
+      "unread_count": 0
+    },
+    {
+      "user_id": 456,
+      "username": "Bob",
+      "last_seen": "2025-10-13T10:20:00.000Z",
+      "unread_count": 3
+    }
+  ]
 }
 
 
-9. Participants d'une conversation
-GET /messaging/conversations/{uuid}/participants/
-Réception :
+________________
+
+
+17. Messages non lus d'un utilisateur
+Récupère les messages non lus d'un utilisateur spécifique dans une conversation.
+Endpoint: GET /messaging/conversations/{conversation_uuid}/unread-messages/{user_uuid}/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
+{
+  "conversation_uuid": "conversation-uuid",
+  "user_uuid": "user-uuid",
+  "unread_count": 3,
+  "unread_messages": [
+    {
+      "id": 1,
+      "uuid": "message-uuid",
+      "content": "Message non lu 1",
+      "sender_username": "Alice",
+      "created_at": "2025-10-13T10:30:00.000Z"
+    }
+  ]
+}
+
+
+________________
+
+
+18. Participants d'une conversation
+Liste tous les participants d'une conversation avec leurs statuts.
+Endpoint: GET /messaging/conversations/{conversation_uuid}/participants/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
 {
   "conversation_uuid": "conversation-uuid",
   "participants": [
@@ -694,52 +1087,112 @@ Réception :
       "user_uuid": "uuid-string",
       "username": "Alice",
       "surnom": "string",
-      "last_seen": "2025-08-28T10:30:00.000Z",
+      "last_seen": "2025-10-13T10:30:00.000Z",
       "is_typing": false,
-      "joined_at": "2025-08-28T10:00:00.000Z",
+      "joined_at": "2025-10-13T10:00:00.000Z",
       "unread_count": 0
     }
   ]
 }
 
 
-10. Archiver une conversation
-POST /messaging/conversations/{uuid}/archive/
-Envoi :
+________________
+
+
+19. Archiver/Désarchiver une conversation
+Archive ou désarchive une conversation pour l'utilisateur.
+Endpoint: POST /messaging/conversations/{uuid}/archive/
+Headers:
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+
+Body pour archiver:
 {
   "action": "archive"
 }
 
 
-Réception :
-{
-  "message": "Conversation archivée avec succès"
-}
-
-
-11. Désarchiver une conversation
-POST /messaging/conversations/{uuid}/archive/
-Envoi :
+Body pour désarchiver:
 {
   "action": "unarchive"
 }
 
 
-Réception :
+Réponse (archiver):
+{
+  "message": "Conversation archivée avec succès"
+}
+
+
+Réponse (désarchiver):
 {
   "message": "Conversation désarchivée avec succès"
 }
 
 
-12. Conversations archivées
-GET /messaging/conversations/archived/
-Réception :
+________________
+
+
+20. Conversations archivées
+Liste toutes les conversations archivées de l'utilisateur.
+Endpoint: GET /messaging/conversations/archived/
+Headers:
+Authorization: Bearer {access_token}
+
+
+Réponse:
 [
   {
-    // Même structure que la liste des conversations
-    "archived_at": "2025-08-28T10:30:00.000Z"
+    "id": 1,
+    "uuid": "conversation-uuid",
+    "last_message": {
+      "content": "Dernier message...",
+      "sender_username": "Alice",
+      "created_at": "2025-10-13T10:30:00.000Z",
+      "is_read": true
+    },
+    "other_participant": {
+      "id": 456,
+      "uuid": "uuid-string",
+      "username": "Alice",
+      "surnom": "string"
+    },
+    "unread_count": 0,
+    "created_at": "2025-10-13T10:00:00.000Z",
+    "updated_at": "2025-10-13T10:30:00.000Z",
+    "archived_at": "2025-10-13T12:00:00.000Z"
   }
 ]
+
+
+________________
+
+
+📝 Notes importantes
+Types de conversations
+* direct: Conversation privée entre 2 utilisateurs
+* group_chat: Conversation de groupe (3+ utilisateurs)
+Authentification
+Tous les endpoints nécessitent un token JWT valide dans le header:
+Authorization: Bearer {access_token}
+
+
+Pagination
+Certains endpoints supportent la pagination via les paramètres:
+* limit: Nombre d'éléments par page
+* offset: Point de départ
+WebSockets
+Les fonctionnalités temps réel (messages instantanés, statut typing, etc.) sont gérées via WebSockets pour une meilleure performance.
+Gestion des erreurs
+Codes de statut HTTP courants:
+* 200: Succès
+* 201: Créé avec succès
+* 400: Requête invalide
+* 401: Non authentifié
+* 403: Non autorisé
+* 404: Ressource non trouvée
+* 500: Erreur serveur
 
 
 ________________

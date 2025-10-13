@@ -1,26 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from 'expo-av';
-import { BlurView } from "expo-blur";
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
-    ActionSheetIOS,
-    Alert,
-    Animated,
-    Dimensions,
-    Keyboard,
-    KeyboardAvoidingView,
-    PanResponder,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActionSheetIOS,
+  Alert,
+  Animated,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from "../contexts/AuthContext";
 import { useChat } from "../contexts/ChatContext";
 import { useNavigation } from "../contexts/NavigationContext";
@@ -44,6 +44,7 @@ export default function BottomBar({
   conversationId
 }: BottomBarProps) {
   
+  const insets = useSafeAreaInsets();
   const isChat = currentRoute.includes("conversation-direct") || currentRoute.includes("conversation-group") || currentRoute.includes("conversation-detail");
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
@@ -61,6 +62,16 @@ export default function BottomBar({
 
   const [barHeight, setBarHeight] = useState(96); // default, will be measured
   const keyboardOffset = useRef(new Animated.Value(0)).current;
+  const [jarvisKeyboardHeight, setJarvisKeyboardHeight] = useState(0);
+  // Jarvis mode ephemeral chat state
+  const [jarvisActive, setJarvisActive] = useState(false);
+  const [jarvisMessages, setJarvisMessages] = useState<Array<{ id: number; role: 'user' | 'assistant'; content: string }>>([]);
+  const [jarvisAgentUuid, setJarvisAgentUuid] = useState<string | null>(null);
+  const [isJarvisInputFocused, setIsJarvisInputFocused] = useState(false);
+  const jarvisScrollRef = useRef<any>(null);
+  const chatInputRef = useRef<TextInput>(null);
+  // Cible d’envoi
+  const [sendTarget, setSendTarget] = useState<'chat' | 'jarvis'>(isChat ? 'chat' : 'jarvis');
   
   // Animations pour l'effet WOW
   const particleAnim1 = useRef(new Animated.Value(0)).current;
@@ -79,6 +90,8 @@ export default function BottomBar({
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: true,
         }).start();
+        setJarvisKeyboardHeight(e.endCoordinates.height || 0);
+        setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 50);
       }
     );
 
@@ -90,6 +103,7 @@ export default function BottomBar({
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: true,
         }).start();
+        setJarvisKeyboardHeight(0);
       }
     );
 
@@ -99,103 +113,22 @@ export default function BottomBar({
     };
   }, []);
 
-  // Animation des particules en boucle
-  useEffect(() => {
-    const particle1Loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(particleAnim1, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(particleAnim1, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    const particle2Loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(particleAnim2, {
-          toValue: 1,
-          duration: 4000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(particleAnim2, {
-          toValue: 0,
-          duration: 4000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    const particle3Loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(particleAnim3, {
-          toValue: 1,
-          duration: 5000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(particleAnim3, {
-          toValue: 0,
-          duration: 5000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowPulse, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    particle1Loop.start();
-    particle2Loop.start();
-    particle3Loop.start();
-    glowLoop.start();
-
-    return () => {
-      particle1Loop.stop();
-      particle2Loop.stop();
-      particle3Loop.stop();
-      glowLoop.stop();
-    };
-  }, []);
-  
-  // Debug: vérifier que isChat fonctionne
+  // Debug
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
   
-  // PanResponder pour gérer le swipe - capture les gestes sur toute la barre
+  // PanResponder pour gérer le swipe
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: (_, g) => {
-        // Capturer uniquement les mouvements verticaux significatifs
-        return Math.abs(g.dy) > 3;
-      },
+      onStartShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 3,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
-      onMoveShouldSetPanResponderCapture: (_, g) => {
-        // Capturer les swipes verticaux avant les enfants (TextInput, boutons)
-        return Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx);
-      },
+      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderGrant: () => {
         // @ts-ignore
         dragStartY.current = (sheetY as any)._value ?? MAX_TRANSLATE;
       },
       onPanResponderMove: (_, g) => {
-        const next = dragStartY.current + g.dy; // dy>0 vers le bas
+        const next = dragStartY.current + g.dy;
         const clamped = Math.max(0, Math.min(MAX_TRANSLATE, next));
         sheetY.setValue(clamped);
       },
@@ -208,51 +141,51 @@ export default function BottomBar({
     })
   ).current;
 
-  // Fonctions pour ouvrir/fermer le panneau avec effet WOW
   const openPanel = () => {
     isPanelOpen.current = true;
     Animated.parallel([
-      Animated.spring(sheetY, { 
-        toValue: 0, 
-        useNativeDriver: true, 
-        tension: 50, 
-        friction: 8 
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1.02,
-        useNativeDriver: true,
-        tension: 40,
-        friction: 7,
-      }),
+      Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }),
+      Animated.spring(scaleAnim, { toValue: 1.02, useNativeDriver: true, tension: 40, friction: 7 }),
     ]).start(() => {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 8,
-      }).start();
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }).start();
     });
   };
-  
   const closePanel = () => {
     isPanelOpen.current = false;
     Animated.parallel([
-      Animated.spring(sheetY, { 
-        toValue: MAX_TRANSLATE, 
-        useNativeDriver: true, 
-        tension: 60, 
-        friction: 10 
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 8,
-      }),
+      Animated.spring(sheetY, { toValue: MAX_TRANSLATE, useNativeDriver: true, tension: 60, friction: 10 }),
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
     ]).start();
   };
 
-  // Fonction pour envoyer un message
+  const API_BASE_URL = typeof window !== 'undefined' && (window as any).location?.hostname === 'localhost'
+    ? "http://localhost:3001"
+    : "https://reseausocial-production.up.railway.app";
+
+  // Effacement de l'historique Jarvis
+  const deleteJarvisHistory = async () => {
+    try {
+      const uuid = await resolveJarvisAgentUuid();
+      if (uuid) {
+        // Si l'API ne prévoit pas de delete, on tente un POST spécial puis on purge localement
+        await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/${uuid}/responses/clear/`, { method: 'POST' }).catch(() => null as any);
+      }
+    } catch {}
+    setJarvisMessages([]);
+  };
+
+  // S'assurer qu'à l'ouverture d'une conversation, on démarre en mode message,
+  // et hors conversation on repasse en mode Jarvis
+  useEffect(() => {
+    if (isChat) {
+      setSendTarget('chat');
+      setJarvisActive(false);
+    } else {
+      setSendTarget('jarvis');
+      setJarvisActive(false);
+    }
+  }, [isChat]);
+
   const handleSendMessage = async () => {
     if (!chatText.trim()) {
       console.log("⚠️ Message vide, pas d'envoi");
@@ -260,34 +193,54 @@ export default function BottomBar({
     }
 
     try {
-      if (isChat && sendChatMessage) {
-        // Envoi de message dans une conversation existante via WebSocket
+      if (sendTarget === 'chat' && isChat && sendChatMessage) {
         console.log("📤 Envoi message via WebSocket:", chatText);
         sendChatMessage(chatText);
-        
-        // Vider le champ après envoi
         setChatText("");
-      } else if (!isChat) {
-        // Envoi de message à l'IA Jarvis
-        console.log("🤖 Envoi message à Jarvis:", chatText);
-        const response = await makeAuthenticatedRequest(
-          'https://reseausocial-production.up.railway.app/ai/chat/',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: chatText.trim(),
-            }),
-          }
-        );
-        
-        if (response.ok) {
-          console.log("✅ Message envoyé à Jarvis avec succès");
+      } else if (sendTarget === 'jarvis') {
+        if (!jarvisActive) setJarvisActive(true); // activer overlay UNIQUEMENT à l'envoi
+        const userText = chatText.trim();
+        setJarvisMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: userText }]);
+        setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 100);
           setChatText("");
+
+        try {
+          let agentUuid: string | null = null;
+          try {
+            const respAvail = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/my-available/`);
+            if (respAvail.ok) {
+              const list = await respAvail.json();
+              const found = (Array.isArray(list) ? list : []).find((a: any) => (a.name || '').toLowerCase().includes('jarvis')) || (Array.isArray(list) ? list[0] : null);
+              if (found?.uuid) agentUuid = found.uuid;
+            }
+          } catch {}
+          if (!agentUuid) {
+            const respAgents = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/`);
+            if (respAgents.ok) {
+              const list2 = await respAgents.json();
+              const found2 = (Array.isArray(list2) ? list2 : []).find((a: any) => (a.name || '').toLowerCase().includes('jarvis')) || (Array.isArray(list2) ? list2[0] : null);
+              if (found2?.uuid) agentUuid = found2.uuid;
+            }
+          }
+          if (!agentUuid) {
+            setJarvisMessages((prev) => [...prev, { id: Date.now()+1, role: 'assistant', content: 'Aucun agent disponible.' }]);
+            return;
+          }
+          const respTest = await makeAuthenticatedRequest(`${API_BASE_URL}/api/agents/${agentUuid}/test/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userText }),
+          });
+          if (respTest.ok) {
+            const data = await respTest.json().catch(() => ({} as any));
+            const reply = data.response || data.answer || data.text || '...';
+            setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: String(reply) }]);
+            setTimeout(() => jarvisScrollRef.current?.scrollToEnd({ animated: true }), 100);
         } else {
-          console.error("❌ Erreur envoi message à Jarvis:", response.status);
+            setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: `Erreur (${respTest.status})`}]);
+          }
+        } catch (e) {
+          setJarvisMessages((prev) => [...prev, { id: Date.now()+2, role: 'assistant', content: 'Erreur réseau' }]);
         }
       } else {
         console.warn("⚠️ Pas de fonction d'envoi disponible");
@@ -298,104 +251,40 @@ export default function BottomBar({
   };
 
   // --------- Pièces jointes & Upload ---------
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && (window as any).location?.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
-
   const uploadAttachment = async (file: { uri: string; name: string; type: string }): Promise<string | null> => {
     try {
       const form = new FormData();
-      // @ts-ignore - React Native FormData accepte { uri, name, type }
-      form.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: file.type,
-      });
+      // @ts-ignore
+      form.append('file', { uri: file.uri, name: file.name, type: file.type });
       const resp = await fetch(`${API_BASE_URL}/messaging/attachments/upload/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json',
-          // ne pas mettre Content-Type: RN le gère pour FormData
-        },
-        body: form,
+        method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }, body: form,
       });
-      if (!resp.ok) {
-        console.error('❌ Upload attachment failed', resp.status);
-        return null;
-      }
+      if (!resp.ok) return null;
       const data = await resp.json();
       return data?.uuid || null;
-    } catch (e) {
-      console.error('❌ Upload attachment error', e);
+    } catch {
       return null;
     }
   };
 
   const sendAttachmentMessage = async (attachmentUuids: string[], caption?: string) => {
     if (!conversationId) return;
-    const payload: any = {
-      type: 'chat_message',
-      conversation_uuid: conversationId,
-      message: (caption || '').trim(),
-      attachment_uuids: attachmentUuids,
-    };
+    const payload: any = { type: 'chat_message', conversation_uuid: conversationId, message: (caption || '').trim(), attachment_uuids: attachmentUuids };
     try {
       if (websocket) {
         websocket.send(JSON.stringify(payload));
       } else {
-        // Fallback REST si websocket indisponible
-        const resp = await fetch(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ content: payload.message, attachment_uuids: attachmentUuids }),
+        await fetch(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ content: payload.message, attachment_uuids: attachmentUuids }),
         });
-        if (!resp.ok) console.error('❌ Fallback REST envoi PJ échoué', resp.status);
       }
-    } catch (e) {
-      console.error('❌ Envoi PJ error', e);
-    }
-  };
-
-  const handlePickPhoto = async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== 'granted') { Alert.alert('Permission requise', 'Autorisez l’accès à la galerie.'); return; }
-      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-      if (res.canceled || !res.assets?.length) return;
-      const a = res.assets[0];
-      const name = a.fileName || `photo_${Date.now()}.jpg`;
-      const type = a.mimeType || 'image/jpeg';
-      const uri = a.uri;
-      // Stage l'attachement dans la barre, l'envoi se fait au "send"
-      setStagedAttachments((prev) => [...prev, { uri, name, type, kind: 'image' as const }]);
-    } catch (e) { console.error('pick photo error', e); }
-  };
-
-  const handlePickDocument = async () => {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
-      if (res.canceled || !res.assets?.length) return;
-      const a = res.assets[0];
-      const name = a.name || `fichier_${Date.now()}`;
-      const type = a.mimeType || 'application/octet-stream';
-      const uri = a.uri;
-      setStagedAttachments((prev) => [...prev, { uri, name, type, kind: 'file' as const }]);
-    } catch (e) { console.error('pick doc error', e); }
+    } catch {}
   };
 
   const handlePlus = () => {
     if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({
-        options: ['Annuler', 'Photo', 'Fichier'],
-        cancelButtonIndex: 0,
-      }, (idx) => {
-        if (idx === 1) handlePickPhoto();
-        else if (idx === 2) handlePickDocument();
+      ActionSheetIOS.showActionSheetWithOptions({ options: ['Annuler', 'Photo', 'Fichier'], cancelButtonIndex: 0 }, (idx) => {
+        if (idx === 1) handlePickPhoto(); else if (idx === 2) handlePickDocument();
       });
     } else {
       Alert.alert('Ajouter', 'Choisissez une option', [
@@ -404,6 +293,34 @@ export default function BottomBar({
         { text: 'Annuler', style: 'cancel' },
       ]);
     }
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Photos', 'Autorisez l’accès aux photos.'); return; }
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset?.uri) return;
+      const name = asset.fileName || `photo_${Date.now()}.jpg`;
+      setStagedAttachments((prev) => [...prev, { uri: asset.uri, name, type: 'image/jpeg', kind: 'image' }]);
+    } catch (e) { console.error('pick photo error', e); }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ multiple: false, type: '*/*', copyToCacheDirectory: true });
+      // @ts-ignore
+      if (res.canceled || res.type === 'cancel') return;
+      // SDK variations
+      // @ts-ignore
+      const file = res.assets?.[0] || res;
+      const uri = file.uri;
+      const name = file.name || `file_${Date.now()}`;
+      const mime = file.mimeType || 'application/octet-stream';
+      setStagedAttachments((prev) => [...prev, { uri, name, type: mime, kind: 'file' }]);
+    } catch (e) { console.error('pick doc error', e); }
   };
 
   // --------- Message vocal ---------
@@ -550,31 +467,57 @@ export default function BottomBar({
 
   return (
     <>
-      {/* Overlay sombre avec blur - couvre tout l'écran */}
-      <Animated.View
-        pointerEvents={isPanelOpen.current ? 'auto' : 'none'}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          opacity: overlayOpacity,
-          zIndex: 9998,
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closePanel}
-          style={{ flex: 1 }}
-        >
-          <BlurView
-            intensity={Platform.OS === 'web' ? 0 : 15}
-            tint="dark"
-            style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
-          />
-        </TouchableOpacity>
-      </Animated.View>
+      {/* Overlay Jarvis (absolute, sous la BottomBar) */}
+      {jarvisActive && (
+        <>
+          {/* Fond assombri derrière les messages et sous la BottomBar */}
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9000 }} pointerEvents="auto">
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => { setIsJarvisInputFocused(false); setJarvisActive(false); Keyboard.dismiss(); }}
+              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            />
+          </View>
+
+          {/* Contenu Jarvis évitant le clavier, toujours sous la BottomBar */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={insets.top}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barHeight, zIndex: 9500 }}
+            pointerEvents="box-none"
+          >
+            {/* Bandeau top */}
+            <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, height: 56, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontWeight: '700', color: 'white', fontSize: 16 }}>Jarvis</Text>
+              <TouchableOpacity onPress={async () => { await deleteJarvisHistory(); }}>
+                {Platform.OS === 'ios' ? (
+                  <SymbolView name="trash.fill" size={20} tintColor="#ff6b6b" type="hierarchical" />
+                ) : (
+                  <Ionicons name="trash" size={20} color="#ff6b6b" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Messages scrollables */}
+            <View style={{ position: 'absolute', top: insets.top + 70, left: 0, right: 0, bottom: 0, paddingHorizontal: 14 }} pointerEvents="box-none">
+              <ScrollView ref={jarvisScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: barHeight + jarvisKeyboardHeight + 12 }}>
+                {jarvisMessages.map((m) => (
+                  <View key={m.id} style={{ marginVertical: 6, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <View style={[
+                      styles.messageBubble,
+                      m.role === 'user' ? styles.myMessage : styles.theirMessage,
+                    ]}>
+                      <Text style={[styles.messageText, m.role === 'user' ? styles.myMessageText : styles.theirMessageText]}>
+                        {m.content}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </>
+      )}
 
       <Animated.View
         style={{ 
@@ -739,6 +682,26 @@ export default function BottomBar({
             ],
           }}
         >
+          {/* Jarvis messages overlay (éphémère) */}
+          {jarvisActive && (
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: barHeight + 6, paddingHorizontal: 14, paddingTop: 80, pointerEvents: 'box-none' }}>
+              <ScrollView ref={jarvisScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+                {jarvisMessages.map((m) => (
+                  <View key={m.id} style={{ marginVertical: 6, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <View style={[
+                      styles.messageBubble,
+                      m.role === 'user' ? styles.myMessage : styles.theirMessage,
+                    ]}>
+                      <Text style={[styles.messageText, m.role === 'user' ? styles.myMessageText : styles.theirMessageText]}>
+                        {m.content}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Bordure lumineuse en haut du panneau - effet dimension parallèle */}
           <Animated.View
             pointerEvents="none"
@@ -824,7 +787,7 @@ export default function BottomBar({
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               {stagedAttachments.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 56, marginRight: 8 }}>
                   {stagedAttachments.map((att, idx) => (
@@ -860,42 +823,45 @@ export default function BottomBar({
                 </View>
               ) : (
                 <TextInput
-                  style={[styles.chatInput, { flex: 1, marginRight: 8 }]} 
-                  placeholder={
-                    isChat 
-                      ? (websocket ? `Message...` : "Connexion...") 
-                      : "Ask Jarvis anything"
-                  }
-                  placeholderTextColor="rgba(105, 105, 105, 0.8)"
-                  value={chatText}
-                  onChangeText={setChatText}
-                  onSubmitEditing={handleSendMessage}
-                  editable={isChat ? !!websocket : true}
+                  ref={chatInputRef}
+              style={[styles.chatInput, { flex: 1, marginRight: 8 }]}
+              placeholder={
+                    sendTarget === 'jarvis' 
+                      ? 'Ask Jarvis anything'
+                      : (websocket ? 'Message...' : 'Connexion...')
+              }
+              placeholderTextColor="rgba(105, 105, 105, 0.8)"
+              value={chatText}
+              onChangeText={setChatText}
+                  onSubmitEditing={handleSend}
+                  editable={sendTarget === 'chat' ? !!websocket : true}
+                  onFocus={() => { if (sendTarget === 'jarvis') { setIsJarvisInputFocused(true); } }}
+                  onBlur={() => { if (sendTarget === 'jarvis') { setIsJarvisInputFocused(false); } }}
                 />
               )}
-              <TouchableOpacity
-                style={{
+            <TouchableOpacity
+              style={{
                   backgroundColor: (chatText.trim() || recordedUri || stagedAttachments.length>0) ? "rgba(10, 145, 104, 0.)" : 'rgba(200, 200, 200, 0.)',
-                  borderRadius: 25,
-                  paddingHorizontal: 8,
-                  paddingVertical: 8,
+                borderRadius: 25,
+                paddingHorizontal: 8,
+                paddingVertical: 8,
                   opacity: (chatText.trim() || recordedUri || stagedAttachments.length>0) ? 1 : 0.6,
-                }}
+              }}
                 onPress={handleSend}
                 disabled={!chatText.trim() && !recordedUri && stagedAttachments.length===0}
-              >
-                {Platform.OS === 'ios' ? (
-                  <SymbolView
-                    name="arrow.up.circle.fill"
-                    size={20}
-                    tintColor="white"
-                    type="hierarchical"
-                  />
-                ) : (
-                  <Ionicons name="send" size={18} color="white" />
-                )}
-              </TouchableOpacity>
-            </View>
+            >
+              {Platform.OS === 'ios' ? (
+                <SymbolView
+                  name="arrow.up.circle.fill"
+                  size={20}
+                  tintColor="white"
+                  type="hierarchical"
+                />
+              ) : (
+                <Ionicons name="send" size={18} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
           )}
         </View>
         
@@ -921,20 +887,30 @@ export default function BottomBar({
 
             {/* Retrait des boutons fichiers/photos (gérés par "+") */}
 
-            {/* Bouton génération de message (placeholder) */}
+            {/* Bouton permutation Jarvis <-> Chat */}
             <TouchableOpacity
               style={styles.navButton}
-              onPress={() => Alert.alert('Génération', 'La génération de message sera implémentée plus tard.')}
+              onPress={() => {
+                setSendTarget((prev) => {
+                  const next = prev === 'jarvis' ? 'chat' : 'jarvis';
+                  if (next === 'chat') { 
+                    setJarvisActive(false); 
+                  } else {
+                    setJarvisActive(true);
+                  }
+                  return next;
+                });
+              }}
             >
               {Platform.OS === 'ios' ? (
                 <SymbolView
-                  name="sparkles"
+                  name={sendTarget === 'jarvis' ? 'bubble.left.and.bubble.right.fill' : 'sparkles'}
                   size={24}
-                  tintColor="rgba(240, 240, 240, 0.8)"
+                  tintColor={sendTarget === 'jarvis' ? 'rgba(240, 240, 240, 0.9)' : 'rgba(255, 255, 255, 0.95)'}
                   type="hierarchical"
                 />
               ) : (
-                <Ionicons name="sparkles" size={22} color="rgba(240, 240, 240, 0.8)" />
+                <Ionicons name={sendTarget === 'jarvis' ? 'chatbubbles' : 'sparkles'} size={22} color={sendTarget === 'jarvis' ? 'rgba(240, 240, 240, 0.9)' : 'rgba(255, 255, 255, 0.95)'} />
               )}
             </TouchableOpacity>
 
