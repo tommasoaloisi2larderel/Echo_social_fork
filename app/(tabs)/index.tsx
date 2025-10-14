@@ -12,25 +12,17 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
   ? "http://localhost:3001"
   : "https://reseausocial-production.up.railway.app";
 
-interface ConversationSummary {
-  conversation_uuid: string;
-  unread_count: number;
-  sender_name: string;
-  summary: string;
-}
-
-interface UnreadMessagesResponse {
-  total_unread: number;
-  conversations: {
-    conversation_uuid: string;
-    unread_count: number;
-  }[];
+interface MessageSummary {
+  id: string;
+  sender: string;
+  message: string;
+  conversationUuid?: string;
 }
 
 export default function HomePage() {
   const { user, makeAuthenticatedRequest, accessToken } = useAuth();
   
-  const [summaries, setSummaries] = useState<ConversationSummary[]>([]);
+  const [summaries, setSummaries] = useState<MessageSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -45,8 +37,8 @@ export default function HomePage() {
     });
   }, []);
 
-  // Fetch unread messages and their summaries
-  const fetchUnreadSummaries = useCallback(async () => {
+  // Fetch AI summaries from Jarvis
+  const fetchAISummaries = useCallback(async () => {
     // Don't fetch if not authenticated
     if (!accessToken) {
       console.log('No access token, skipping fetch');
@@ -56,116 +48,41 @@ export default function HomePage() {
     }
 
     try {
-      // Get all conversations to find those with unread messages
-      const conversationsResponse = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/`
+      console.log('🤖 Requesting AI summaries from Jarvis...');
+      
+      // Call Jarvis notifications endpoint
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/jarvis/chat/?type=notifications`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        }
       );
       
-      if (!conversationsResponse.ok) {
-        console.error('Failed to fetch conversations');
+      console.log(`📥 Jarvis response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Jarvis request failed:', errorText);
         setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      const conversationsData = await conversationsResponse.json();
-      console.log('Conversations data for summaries:', conversationsData);
+      const data = await response.json();
+      console.log('✅ Jarvis response received:', JSON.stringify(data, null, 2));
       
-      // Filter conversations with unread messages and take top 3
-      const unreadConversations = Array.isArray(conversationsData) 
-        ? conversationsData
-            .filter((conv: any) => conv.unread_count > 0)
-            .slice(0, 3)
-        : [];
+      // Parse the structured response from Jarvis
+      const parsedSummaries = parseJarvisNotifications(data);
+      console.log('📋 Parsed summaries:', parsedSummaries);
       
-      console.log('Filtered unread conversations:', unreadConversations);
+      setSummaries(parsedSummaries);
       
-      if (unreadConversations.length === 0) {
-        setSummaries([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      
-      // Get AI summaries for each conversation
-      const summariesPromises = unreadConversations.map(async (conv: any) => {
-          try {
-            const conversationUuid = conv.uuid;
-            
-            console.log(`🔄 Processing conversation ${conversationUuid} for ${conv.other_participant?.username || 'Unknown'}`);
-            
-            // Get sender name from conversation data
-            const senderName = conv.other_participant?.username || 
-                              conv.other_participant?.surnom || 
-                              conv.name ||
-                              'Unknown';
-            
-            // Try to get AI summary
-            let summary = `${conv.unread_count} message${conv.unread_count > 1 ? 's' : ''} non lu${conv.unread_count > 1 ? 's' : ''}`;
-            
-            try {
-              console.log(`📡 Requesting AI summary for conversation ${conversationUuid}...`);
-              const summaryResponse = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/messaging/conversations/${conversationUuid}/summarize/`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({}),
-                }
-              );
-              
-              console.log(`📥 Summary response status: ${summaryResponse.status}`);
-              
-              if (summaryResponse.ok) {
-                const summaryData = await summaryResponse.json();
-                console.log('✅ AI Summary received for', conversationUuid, ':', summaryData);
-                // The API might return the summary in different fields
-                summary = summaryData.summary || 
-                         summaryData.message || 
-                         summaryData.ai_summary ||
-                         summaryData.result ||
-                         summary;
-                console.log('📝 Final summary text:', summary);
-              } else {
-                const errorText = await summaryResponse.text();
-                console.warn('❌ AI summary request failed with status:', summaryResponse.status, 'Error:', errorText);
-              }
-            } catch (summaryError) {
-              console.warn('⚠️ Could not fetch AI summary:', summaryError);
-            }
-
-            const result = {
-              conversation_uuid: conversationUuid,
-              unread_count: conv.unread_count,
-              sender_name: senderName,
-              summary,
-            };
-            
-            console.log('✨ Final conversation summary object:', result);
-            
-            return result;
-          } catch (error) {
-            console.error('❌ Error processing conversation:', error);
-            return null;
-          }
-        });
-      
-      console.log('⏳ Waiting for all summaries to resolve...');
-      const resolvedSummaries = (await Promise.all(summariesPromises))
-        .filter((s): s is ConversationSummary => 
-          s !== null && 
-          s.sender_name !== undefined && 
-          s.summary !== undefined
-        );
-      
-      console.log('🎉 Final resolved summaries count:', resolvedSummaries.length);
-      console.log('🎉 Final resolved summaries:', resolvedSummaries);
-      
-      setSummaries(resolvedSummaries);
     } catch (error) {
-      console.error('Error fetching unread summaries:', error);
+      console.error('Error fetching AI summaries:', error);
       setSummaries([]);
     } finally {
       setLoading(false);
@@ -173,19 +90,89 @@ export default function HomePage() {
     }
   }, [makeAuthenticatedRequest, accessToken]);
 
+  // Parse Jarvis notifications from structured JSON response
+  const parseJarvisNotifications = (data: any): MessageSummary[] => {
+    const summaries: MessageSummary[] = [];
+    
+    console.log('🔍 Parsing Jarvis data:', data);
+    console.log('🔍 Data type:', typeof data);
+    
+    // First, check if data.response is a JSON string that needs parsing
+    let parsedData = data;
+    if (data.response && typeof data.response === 'string') {
+      try {
+        console.log('🔄 Parsing data.response as JSON...');
+        parsedData = JSON.parse(data.response);
+        console.log('✅ Parsed response:', parsedData);
+      } catch (error) {
+        console.log('❌ Failed to parse response as JSON:', error);
+        parsedData = data;
+      }
+    }
+    
+    console.log('🔍 Has notifications?', parsedData?.notifications);
+    console.log('🔍 Is array?', Array.isArray(parsedData?.notifications));
+    console.log('🔍 Total unread:', parsedData?.total_unread);
+    
+    // Check if we have the notifications array
+    if (parsedData.notifications && Array.isArray(parsedData.notifications)) {
+      console.log(`📦 Found ${parsedData.notifications.length} notifications`);
+      
+      if (parsedData.notifications.length === 0) {
+        console.log('⚠️ Notifications array is empty');
+        
+        // Check if there are unread messages but no notifications
+        if (parsedData.total_unread && parsedData.total_unread > 0) {
+          console.log(`📊 Found ${parsedData.total_unread} total unread but no notification details`);
+          summaries.push({
+            id: '0',
+            sender: 'Messages',
+            message: `Vous avez ${parsedData.total_unread} message${parsedData.total_unread > 1 ? 's' : ''} non lu${parsedData.total_unread > 1 ? 's' : ''}`,
+          });
+        }
+      } else {
+        parsedData.notifications.forEach((notif: any, index: number) => {
+          console.log(`📝 Processing notification ${index}:`, notif);
+          
+          // Each notification has: conversation_uuid, username, unread_count, summary
+          if (notif.summary) {
+            const summary = {
+              id: notif.conversation_uuid || `${index}`,
+              sender: notif.username || 'Unknown',
+              message: notif.summary,
+              conversationUuid: notif.conversation_uuid,
+            };
+            
+            console.log(`✅ Added summary:`, summary);
+            summaries.push(summary);
+          } else {
+            console.warn(`⚠️ Notification ${index} has no summary:`, notif);
+          }
+        });
+      }
+      
+      console.log(`✅ Parsed ${summaries.length} notifications from structured data`);
+      return summaries;
+    }
+    
+    console.log('⚠️ No notifications array found in parsed data');
+    console.log(`🎯 Final summaries count: ${summaries.length}`);
+    return summaries;
+  };
+
   useEffect(() => {
     // Only fetch if user is authenticated
     if (accessToken) {
-      fetchUnreadSummaries();
+      fetchAISummaries();
     } else {
       setLoading(false);
     }
-  }, [fetchUnreadSummaries, accessToken]);
+  }, [fetchAISummaries, accessToken]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchUnreadSummaries();
-  }, [fetchUnreadSummaries]);
+    fetchAISummaries();
+  }, [fetchAISummaries]);
 
   useEffect(() => {
     enterAnims.forEach((anim, i) => {
@@ -235,7 +222,7 @@ export default function HomePage() {
           <Ionicons name="checkmark-circle-outline" size={48} color="rgba(10, 145, 104, 0.5)" />
           <Text style={styles.emptyTitle}>Tout est à jour !</Text>
           <Text style={styles.emptyText}>
-            Vous n&apos;avez aucun message non lu pour le moment.
+            Vous n&apos;avez aucune notification pour le moment.
           </Text>
         </View>
       )}
@@ -245,24 +232,24 @@ export default function HomePage() {
         const translateY = enterAnims[idx]?.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) || 0;
         
         return (
-          <Animated.View key={item.conversation_uuid} style={[styles.card, { opacity, transform: [{ translateY }] }]}> 
+          <Animated.View key={item.id} style={[styles.card, { opacity, transform: [{ translateY }] }]}> 
             <TouchableOpacity 
               activeOpacity={0.85} 
-              onPress={() => goToConversation(item.conversation_uuid)} 
+              onPress={() => item.conversationUuid && goToConversation(item.conversationUuid)}
               style={styles.cardTouchable}
+              disabled={!item.conversationUuid}
             >
               <View style={styles.row}>
                 <View style={styles.senderAvatar}>
-                  <Text style={styles.senderInitial}>{item.sender_name[0]}</Text>
+                  <Text style={styles.senderInitial}>{item.sender[0]}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.senderName}>{item.sender_name}</Text>
-                  <Text style={styles.messageText}>{item.summary}</Text>
-                  <Text style={styles.unreadBadge}>
-                    {item.unread_count} message{item.unread_count > 1 ? 's' : ''} non lu{item.unread_count > 1 ? 's' : ''}
-                  </Text>
+                  <Text style={styles.senderName}>{item.sender}</Text>
+                  <Text style={styles.messageText}>{item.message}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(10, 145, 104, 1)" />
+                {item.conversationUuid && (
+                  <Ionicons name="chevron-forward" size={18} color="rgba(10, 145, 104, 1)" />
+                )}
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -363,10 +350,4 @@ const styles = StyleSheet.create({
   senderInitial: { color: 'rgba(10, 145, 104, 1)', fontWeight: '800' },
   senderName: { color: '#365a3a', fontWeight: '700', marginBottom: 2 },
   messageText: { color: '#55685a', lineHeight: 22, marginBottom: 4 },
-  unreadBadge: {
-    color: 'rgba(10, 145, 104, 1)',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
 });
