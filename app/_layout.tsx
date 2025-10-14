@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import React from 'react';
+import { AgentsProvider } from '../contexts/AgentsContext';
 import { AuthProvider } from "../contexts/AuthContext";
 import { ChatProvider } from "../contexts/ChatContext";
 import { JarvisProvider } from "../contexts/JarvisContext";
@@ -13,6 +14,7 @@ export default function RootLayout() {
     <AuthProvider>
       <ChatProvider>
         <JarvisProvider>
+          <AgentsProvider>
           <NavigationProvider>
             <TransitionProvider>
               <Stack screenOptions={{ headerShown: false }}>
@@ -23,6 +25,7 @@ export default function RootLayout() {
               </Stack>
             </TransitionProvider>
           </NavigationProvider>
+          </AgentsProvider>
         </JarvisProvider>
       </ChatProvider>
     </AuthProvider>

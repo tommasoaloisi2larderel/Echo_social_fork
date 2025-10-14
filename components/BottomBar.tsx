@@ -7,6 +7,7 @@ import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
   ActionSheetIOS,
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -21,11 +22,13 @@ import {
   View
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAgents } from '../contexts/AgentsContext';
 import { useAuth } from "../contexts/AuthContext";
 import { useChat } from "../contexts/ChatContext";
 import { useJarvis } from "../contexts/JarvisContext";
 import { useNavigation } from "../contexts/NavigationContext";
 import { styles } from "../styles/appStyles";
+import AgentModal from './AgentModal';
 
 interface BottomBarProps {
   currentRoute: string;
@@ -72,6 +75,20 @@ export default function BottomBar({
   const chatInputRef = useRef<TextInput>(null);
   // Cible d’envoi
   const [sendTarget, setSendTarget] = useState<'chat' | 'jarvis'>(isChat ? 'chat' : 'jarvis');
+
+  // Add after existing useState declarations (around line 70)
+const { 
+  conversationAgents, 
+  loadingConversationAgents, 
+  fetchConversationAgents,
+  removeAgentFromConversation,
+  myAgents,
+  fetchMyAgents,
+} = useAgents();
+
+const [showAgentModal, setShowAgentModal] = useState(false);
+const [selectedAgent, setSelectedAgent] = useState<any>(null);
+const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
   
   // Animations pour l'effet WOW
   const particleAnim1 = useRef(new Animated.Value(0)).current;
@@ -126,6 +143,18 @@ export default function BottomBar({
       loadHistory();
     }
   }, [jarvisActive]);
+
+  // Fetch conversation agents when conversationId changes
+  useEffect(() => {
+    if (conversationId && isChat) {
+      fetchConversationAgents(conversationId as string, makeAuthenticatedRequest);
+    }
+  }, [conversationId, isChat]);
+
+  // Fetch user's agents
+  useEffect(() => {
+    fetchMyAgents(makeAuthenticatedRequest);
+  }, []);
 
   // Debug
   console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
@@ -446,6 +475,27 @@ export default function BottomBar({
     inputRange: [0, 1],
     outputRange: [0.3, 0.7],
   });
+
+  const handleCreateAgent = () => {
+    setSelectedAgent(null);
+    setShowAgentModal(true);
+  };
+
+  const handleEditAgent = (agent: any) => {
+    setSelectedAgent(agent);
+    setShowAgentModal(true);
+  };
+
+  const handleRemoveAgent = async (agentUuid: string) => {
+    if (!conversationId) return;
+    
+    try {
+      await removeAgentFromConversation(conversationId as string, agentUuid, makeAuthenticatedRequest);
+      Alert.alert('Succès', 'Agent retiré de la conversation');
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de retirer l\'agent');
+    }
+  };
 
   return (
     <>
@@ -971,45 +1021,28 @@ export default function BottomBar({
           {/* Contenu du panneau - Monde parallèle des agents IA */}
           <View style={{ flex: 1, padding: 20 }}>
             
-            <View style={{ alignItems: 'center', marginBottom: 25, marginTop: 10 }}>
-              <Animated.View
-                style={{
-                  opacity: glowOpacity,
-                  transform: [{ scale: glowScale }],
-                }}
-              >
+            <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
+              <Animated.View style={{ opacity: glowOpacity, transform: [{ scale: glowScale }] }}>
                 <Ionicons name="flash" size={40} color="rgba(10, 145, 104, 0.8)" />
               </Animated.View>
-              <Text style={{ 
-                fontSize: 22, 
-                fontWeight: 'bold', 
-                color: 'rgba(10, 145, 104, 1)', 
-                marginTop: 10,
-                textAlign: 'center',
-              }}>
+              <Text style={{ fontSize: 22, fontWeight: 'bold', color: 'rgba(10, 145, 104, 1)', marginTop: 10, textAlign: 'center' }}>
                 Agents IA
               </Text>
               <Text style={{ fontSize: 14, color: '#666', marginTop: 5, textAlign: 'center' }}>
                 Vos assistants intelligents
               </Text>
             </View>
-            
-            {/* Carte Agent Jarvis avec effet de profondeur */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={{ marginBottom: 15 }}
-            >
+
+            {/* AI Agent configurator button */}
+            <TouchableOpacity activeOpacity={0.9} style={{ marginBottom: 15 }} onPress={handleCreateAgent}>
               <LinearGradient
-                colors={[
-                  'rgba(10, 145, 104, 0.08)',
-                  'rgba(10, 145, 104, 0.03)',
-                ]}
+                colors={[ 'rgba(10, 145, 104, 0.10)', 'rgba(10, 145, 104, 0.04)' ]}
                 style={{
                   padding: 18,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: 'rgba(10, 145, 104, 0.2)',
-                  shadowColor: 'rgba(10, 145, 104, 0.3)',
+                  borderColor: 'rgba(10, 145, 104, 0.25)',
+                  shadowColor: 'rgba(10, 145, 104, 0.25)',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
                   shadowRadius: 8,
@@ -1018,30 +1051,303 @@ export default function BottomBar({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View style={{
                     width: 44,
                     height: 44,
                     borderRadius: 22,
-                    backgroundColor: 'rgba(10, 145, 104, 0.15)',
+                    backgroundColor: 'rgba(10, 145, 104, 0.18)',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 12,
                   }}>
-                    <Ionicons name="flash" size={24} color="rgba(10, 145, 104, 1)" />
+                    <Ionicons name="settings" size={24} color="rgba(10, 145, 104, 1)" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>
-                      Agent Jarvis
+                      Configurer un agent IA
                     </Text>
                     <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                      Assistant personnel intelligent
+                      Créez ou modifiez vos assistants
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="rgba(10, 145, 104, 0.6)" />
                 </View>
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* Agents in conversation section - only show when in a conversation */}
+            {isChat && conversationId && (
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>
+                    Agents dans cette conversation
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleCreateAgent}
+                    style={{
+                      backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name="add-circle" size={18} color="rgba(10, 145, 104, 1)" />
+                    <Text style={{ color: 'rgba(10, 145, 104, 1)', fontWeight: '600', fontSize: 13 }}>
+                      Nouveau
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {loadingConversationAgents ? (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <ActivityIndicator color="rgba(10, 145, 104, 1)" />
+                  </View>
+                ) : conversationAgents.length === 0 ? (
+                  <View style={{ 
+                    padding: 20, 
+                    backgroundColor: '#f5f5f5', 
+                    borderRadius: 12, 
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: 'rgba(10, 145, 104, 0.1)',
+                    borderStyle: 'dashed',
+                  }}>
+                    <Ionicons name="cube-outline" size={32} color="#ccc" />
+                    <Text style={{ fontSize: 14, color: '#999', marginTop: 8, textAlign: 'center' }}>
+                      Aucun agent dans cette conversation
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#bbb', marginTop: 4, textAlign: 'center' }}>
+                      Créez-en un avec le bouton + ci-dessus
+                    </Text>
+                  </View>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {conversationAgents.map((agent) => (
+                        <TouchableOpacity
+                          key={agent.uuid}
+                          onPress={() => handleEditAgent(agent)}
+                          onLongPress={() => {
+                            Alert.alert(
+                              'Retirer l\'agent',
+                              `Voulez-vous retirer "${agent.name}" de cette conversation ?`,
+                              [
+                                { text: 'Annuler', style: 'cancel' },
+                                { 
+                                  text: 'Retirer', 
+                                  style: 'destructive',
+                                  onPress: () => handleRemoveAgent(agent.uuid)
+                                },
+                              ]
+                            );
+                          }}
+                          activeOpacity={0.8}
+                          style={{
+                            width: 140,
+                            backgroundColor: 'white',
+                            borderRadius: 14,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 145, 104, 0.2)',
+                            shadowColor: 'rgba(10, 145, 104, 0.2)',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          }}
+                        >
+                          <View style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: 8,
+                            alignSelf: 'center',
+                          }}>
+                            <Ionicons 
+                              name={agent.agent_type === 'simple' ? 'flash' : agent.agent_type === 'conditional' ? 'git-branch' : 'settings'} 
+                              size={24} 
+                              color="rgba(10, 145, 104, 1)" 
+                            />
+                          </View>
+                          <Text style={{ 
+                            fontSize: 14, 
+                            fontWeight: '600', 
+                            color: '#333',
+                            textAlign: 'center',
+                            marginBottom: 4,
+                          }} numberOfLines={1}>
+                            {agent.name}
+                          </Text>
+                          <Text style={{ 
+                            fontSize: 11, 
+                            color: '#999',
+                            textAlign: 'center',
+                          }} numberOfLines={2}>
+                            {agent.description || 'Aucune description'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            )}
+
+            {/* My Agents History Section */}
+            <View style={{ marginTop: 20 }}>
+              <TouchableOpacity
+                onPress={() => setShowAgentsDropdown(!showAgentsDropdown)}
+                style={{ 
+                  flexDirection: 'row', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: 12,
+                  padding: 12,
+                  backgroundColor: 'rgba(10, 145, 104, 0.05)',
+                  borderRadius: 12,
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>
+                  Mes agents ({myAgents.length})
+                </Text>
+                <Ionicons 
+                  name={showAgentsDropdown ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="rgba(10, 145, 104, 0.8)" 
+                />
+              </TouchableOpacity>
+
+              {showAgentsDropdown && (
+                <View style={{ gap: 10 }}>
+                  {myAgents.length === 0 ? (
+                    <View style={{ 
+                      padding: 20, 
+                      backgroundColor: '#f5f5f5', 
+                      borderRadius: 12, 
+                      alignItems: 'center',
+                    }}>
+                      <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
+                        Vous n'avez pas encore créé d'agents
+                      </Text>
+                    </View>
+                  ) : (
+                    myAgents.map((agent) => (
+                      <TouchableOpacity
+                        key={agent.uuid}
+                        onPress={() => handleEditAgent(agent)}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: 'white',
+                          borderRadius: 14,
+                          padding: 14,
+                          borderWidth: 1,
+                          borderColor: 'rgba(10, 145, 104, 0.15)',
+                          shadowColor: 'rgba(0, 0, 0, 0.1)',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 3,
+                          elevation: 2,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: agent.is_active ? 'rgba(10, 145, 104, 0.1)' : 'rgba(150, 150, 150, 0.1)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 12,
+                          }}>
+                            <Ionicons 
+                              name={agent.agent_type === 'simple' ? 'flash' : agent.agent_type === 'conditional' ? 'git-branch' : 'settings'} 
+                              size={24} 
+                              color={agent.is_active ? 'rgba(10, 145, 104, 1)' : '#999'} 
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 2 }}>
+                              {agent.name}
+                            </Text>
+                            <Text style={{ fontSize: 13, color: '#666', marginBottom: 4 }} numberOfLines={2}>
+                              {agent.description || 'Aucune description'}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <View style={{
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
+                                backgroundColor: agent.is_active ? 'rgba(10, 145, 104, 0.1)' : 'rgba(150, 150, 150, 0.1)',
+                                borderRadius: 8,
+                              }}>
+                                <Text style={{ 
+                                  fontSize: 11, 
+                                  color: agent.is_active ? 'rgba(10, 145, 104, 1)' : '#999',
+                                  fontWeight: '500',
+                                }}>
+                                  {agent.is_active ? 'Actif' : 'Inactif'}
+                                </Text>
+                              </View>
+                              {agent.conversation_count !== undefined && agent.conversation_count > 0 && (
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  backgroundColor: 'rgba(100, 100, 100, 0.1)',
+                                  borderRadius: 8,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}>
+                                  <Ionicons name="chatbubbles" size={10} color="#666" />
+                                  <Text style={{ fontSize: 11, color: '#666', fontWeight: '500' }}>
+                                    {agent.conversation_count}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <Ionicons name="chevron-forward" size={20} color="rgba(10, 145, 104, 0.4)" />
+                        </View>
+
+                        {/* Show prompt preview when expanded */}
+                        {agent.instructions?.system_prompt && (
+                          <View style={{ 
+                            marginTop: 12, 
+                            paddingTop: 12, 
+                            borderTopWidth: 1, 
+                            borderTopColor: 'rgba(10, 145, 104, 0.1)',
+                          }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 4 }}>
+                              Prompt système:
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }} numberOfLines={3}>
+                              {agent.instructions.system_prompt}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* Add the modal at the end of the panel content, before closing the View */}
+            <AgentModal
+              visible={showAgentModal}
+              onClose={() => {
+                setShowAgentModal(false);
+                setSelectedAgent(null);
+              }}
+              agent={selectedAgent}
+              conversationId={conversationId as string | undefined}
+            />
 
             {/* Message mystérieux */}
             <Animated.View

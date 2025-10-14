@@ -1035,7 +1035,7 @@ export default function ConversationsScreen() {
                               'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
-                              other_user_uuid: item.uuid,
+                              recipient_uuid: item.uuid,
                             }),
                           }
                         );
