@@ -1,6 +1,7 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -25,7 +26,7 @@ interface Message {
   content: string;
   created_at: string;
   is_read?: boolean;
-  attachments?: Array<{ uuid: string; file_type: string; file_url: string; thumbnail_url?: string; original_filename?: string }>;
+  attachments?: { uuid: string; file_type: string; file_url: string; thumbnail_url?: string; original_filename?: string }[];
 }
 
 interface ConversationInfo {
@@ -35,13 +36,13 @@ interface ConversationInfo {
     photo_profil_url?: string;
     user_uuid?: string;
   };
-  participants_detail?: Array<{
+  participants_detail?: {
     username: string;
     surnom?: string;
     user_uuid: string;
     user?: number;
     photo_profil_url?: string;
-  }>;
+  }[];
   is_group?: boolean;
 }
 
@@ -342,7 +343,7 @@ export default function ConversationDirect() {
                                 // Image preview
                                 <View>
                                   {/* On peut remplacer par expo-image si besoin */}
-                                  <img src={att.thumbnail_url || att.file_url} style={{ width: 220, height: 160, objectFit: 'cover' }} />
+                                  <Image source={{ uri: att.thumbnail_url || att.file_url }} style={{ width: 220, height: 160 }} contentFit="cover" />
                                 </View>
                               ) : (
                                 // Fichier générique
