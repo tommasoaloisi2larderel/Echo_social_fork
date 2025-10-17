@@ -166,22 +166,36 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     try {
-      // Conversations + connexions + groupes (+ détails) + invitations
-      const [convResp, connResp, groupsResp, invResp] = await Promise.all([
-        request(`${API_BASE_URL}/messaging/conversations/`),
+      // Conversations privées + conversations de groupe + connexions + groupes (+ détails) + invitations
+      const [privateConvResp, groupConvResp, connResp, groupsResp, invResp] = await Promise.all([
+        request(`${API_BASE_URL}/messaging/conversations/private/`),
+        request(`${API_BASE_URL}/messaging/conversations/groups/`),
         request(`${API_BASE_URL}/relations/connections/my-connections/`),
         request(`${API_BASE_URL}/groups/my-groups/`),
         request(`${API_BASE_URL}/groups/invitations/received/`),
       ]);
 
-      if (convResp.ok) {
-        const convData = await convResp.json();
-        const list = Array.isArray(convData) ? convData : (convData.results || []);
-        setCachedConversations(list);
+      // Combiner conversations privées et de groupe
+      const allConversations: any[] = [];
+      
+      if (privateConvResp.ok) {
+        const privateData = await privateConvResp.json();
+        const privateList = Array.isArray(privateData) ? privateData : (privateData.results || []);
+        allConversations.push(...privateList);
+      }
+      
+      if (groupConvResp.ok) {
+        const groupData = await groupConvResp.json();
+        const groupList = Array.isArray(groupData) ? groupData : (groupData.results || []);
+        allConversations.push(...groupList);
+      }
+      
+      if (allConversations.length > 0) {
+        setCachedConversations(allConversations);
         // Préfetch avatars visibles
         const avatarUrls: string[] = [];
-        list.forEach((c: any) => {
-          const url = c.other_participant?.photo_profil_url || c.group?.avatar;
+        allConversations.forEach((c: any) => {
+          const url = c.other_participant?.photo_profil_url || c.group_info?.avatar;
           if (url) avatarUrls.push(url);
         });
         await prefetchAvatars(avatarUrls);
@@ -230,7 +244,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         await prefetchConversationsOverview(request);
       }
       const convs = conversationsListRef.current || [];
-      // Limiter la concurrence
+      
+      // Précharger les 50 derniers messages pour chaque conversation
       const concurrency = 4;
       let i = 0;
       const worker = async () => {
@@ -241,10 +256,45 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           if (!convId) continue;
           // Éviter de refetch si déjà en cache
           if (messagesCacheRef.current.has(convId)) continue;
-          await prefetchConversation(convId, request);
+          
+          // Précharger avec limite de 50 messages
+          try {
+            const [infoResp, msgsResp] = await Promise.all([
+              request(`${API_BASE_URL}/messaging/conversations/${convId}/`),
+              request(`${API_BASE_URL}/messaging/conversations/${convId}/messages/?limit=50`),
+            ]);
+
+            if (infoResp.ok && msgsResp.ok) {
+              const infoData = await infoResp.json();
+              const msgsData = await msgsResp.json();
+              let messages: CachedMessage[] = Array.isArray(msgsData) ? msgsData : (msgsData.results || []);
+              messages = messages
+                .filter((m: any) => !m.conversation_uuid || m.conversation_uuid === convId)
+                .map((m: any) => ({
+                  id: m.id,
+                  uuid: m.uuid,
+                  sender_username: m.sender_username,
+                  content: m.content,
+                  created_at: m.created_at,
+                  is_read: m.is_read,
+                  conversation_uuid: m.conversation_uuid,
+                }))
+                .sort((a: CachedMessage, b: CachedMessage) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+              infoCacheRef.current.set(convId, infoData);
+              messagesCacheRef.current.set(convId, messages);
+              try {
+                messagesIndexRef.current.add(convId);
+                storage.setItemAsync('cache_messages_index', JSON.stringify(Array.from(messagesIndexRef.current)));
+                storage.setItemAsync(`cache_messages_${convId}`, JSON.stringify(messages));
+              } catch {}
+            }
+          } catch (e) {
+            // Silencieux pour ne pas bloquer l'UI
+          }
         }
       };
-      await Promise.all(Array.from({ length: Math.min(concurrency, convs.length) }).map(() => worker()))
+      await Promise.all(Array.from({ length: Math.min(concurrency, convs.length) }).map(() => worker()));
     } catch {}
   };
 

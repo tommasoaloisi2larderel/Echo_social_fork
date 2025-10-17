@@ -1859,43 +1859,68 @@ json
 
 
 📘 Documentation API - Module ai_agent
-Table des matières
-1. Vue d'ensemble
-2. Authentification
-3. Gestion des Agents
-4. Règles d'interaction
-5. Historique des réponses
-6. Agents dans les conversations
-7. Endpoints utilitaires
-8. Modèles de données
-9. Codes d'erreur
-________________
 
 
-Vue d'ensemble
-Le module ai_agent permet de créer et gérer des agents IA qui peuvent participer automatiquement aux conversations. Les agents peuvent avoir différents types de comportement et règles d'interaction.
-Base URL: Toutes les URLs sont préfixées par /api/agents/ ou /api/conversations/ selon le contexte.
-________________
+## Table des matières
+1. [Vue d'ensemble](#vue-densemble)
+2. [Authentification](#authentification)
+3. [Gestion des Agents](#gestion-des-agents)
+4. [Règles d'interaction](#règles-dinteraction)
+5. [Historique des réponses](#historique-des-réponses)
+6. [Agents dans les conversations](#agents-dans-les-conversations)
+7. [Endpoints utilitaires](#endpoints-utilitaires)
+8. [Modèles de données](#modèles-de-données)
+9. [Codes d'erreur](#codes-derreur)
 
 
-Authentification
+---
+
+
+## Vue d'ensemble
+
+
+Le module **ai_agent** permet de créer et gérer des agents IA qui peuvent participer automatiquement aux conversations. Les agents peuvent avoir différents types de comportement et règles d'interaction.
+
+
+**Base URL:** Toutes les URLs sont préfixées par `/agents/` . Certaines url ont donc /agents/agents/… ou /agents/conversations/….
+---
+
+
+## Authentification
+
+
 Toutes les API nécessitent une authentification JWT. Les headers doivent contenir :
+```
 Authorization: Bearer <votre_access_token>
+```
 
 
-________________
+---
 
 
-Gestion des Agents
-1. Liste des agents de l'utilisateur
-Endpoint: GET /api/agents/
-Description: Récupère tous les agents créés par l'utilisateur authentifié.
-Headers requis:
+## Gestion des Agents
+
+
+### 1. Liste des agents de l'utilisateur
+
+
+**Endpoint:** `GET /agents/agents/`
+
+
+**Description:** Récupère tous les agents créés par l'utilisateur authentifié.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres: Aucun
-Réponse réussie (200 OK):
+**Paramètres:** Aucun
+
+
+**Réponse réussie (200 OK):**
+```json
 [
   {
     "uuid": "123e4567-e89b-12d3-a456-426614174000",
@@ -1907,43 +1932,44 @@ Réponse réussie (200 OK):
     "created_at": "2025-10-10T14:30:00Z",
     "created_by_username": "john_doe",
     "conversation_count": 3
-  },
-  {
-    "uuid": "234e5678-e89b-12d3-a456-426614174001",
-    "name": "Bot Support",
-    "description": "Agent de support technique",
-    "avatar": null,
-    "agent_type": "conditional",
-    "is_active": true,
-    "created_at": "2025-10-11T09:15:00Z",
-    "created_by_username": "john_doe",
-    "conversation_count": 1
   }
 ]
+```
 
 
-Champs de réponse:
-* uuid: Identifiant unique de l'agent
-* name: Nom de l'agent
-* description: Description de l'agent
-* avatar: URL de l'image de l'agent (peut être null)
-* agent_type: Type d'agent (simple, conditional, action)
-* is_active: Si l'agent est actif ou non
-* created_at: Date de création
-* created_by_username: Nom d'utilisateur du créateur
-* conversation_count: Nombre de conversations où l'agent est présent
-________________
+**Champs de réponse:**
+- `uuid`: Identifiant unique de l'agent
+- `name`: Nom de l'agent
+- `description`: Description de l'agent
+- `avatar`: URL de l'image de l'agent (peut être null)
+- `agent_type`: Type d'agent (`simple`, `conditional`, `action`)
+- `is_active`: Si l'agent est actif ou non
+- `created_at`: Date de création
+- `created_by_username`: Nom d'utilisateur du créateur
+- `conversation_count`: Nombre de conversations où l'agent est présent
 
 
-2. Créer un nouvel agent
-Endpoint: POST /api/agents/
-Description: Crée un nouvel agent IA pour l'utilisateur authentifié.
-Headers requis:
+---
+
+
+### 2. Créer un nouvel agent
+
+
+**Endpoint:** `POST/agents /agents/`
+
+
+**Description:** Crée un nouvel agent IA pour l'utilisateur authentifié.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Body (JSON):
+**Body (JSON):**
+```json
 {
   "name": "Mon Agent",
   "description": "Description de mon agent",
@@ -1955,51 +1981,75 @@ Body (JSON):
     "max_response_length": 500
   }
 }
+```
 
 
-Champs obligatoires:
-* name (string, max 100 caractères): Nom de l'agent
-Champs optionnels:
-* description (string, max 500 caractères): Description
-* agent_type (string): Type d'agent - valeurs possibles:
-   * "simple": Agent qui répond à tous les messages (défaut)
-   * "conditional": Agent qui répond selon des règles
-   * "action": Agent qui peut effectuer des actions
-* instructions (objet): Instructions pour l'agent
-   * system_prompt (string): Prompt système pour l'IA
-   * language (string): Langue ("fr", "en", "es", "de", "it") - défaut: "fr"
-   * formality_level (string): Niveau de formalité ("formal", "casual", "friendly", "professional") - défaut: "casual"
-   * max_response_length (integer): Longueur max des réponses en caractères - défaut: 500
-Réponse réussie (201 Created):
+**Champs obligatoires:**
+- `name` (string, max 100 caractères): Nom de l'agent
+
+
+**Champs optionnels:**
+- `description` (string, max 500 caractères): Description
+- `agent_type` (string): Type d'agent - valeurs possibles:
+  - `"simple"`: Agent qui répond à tous les messages (défaut)
+  - `"conditional"`: Agent qui répond selon des règles
+  - `"action"`: Agent qui peut effectuer des actions
+- `instructions` (objet): Instructions pour l'agent
+  - `system_prompt` (string): Prompt système pour l'IA
+  - `language` (string): Langue (`"fr"`, `"en"`, `"es"`, `"de"`, `"it"`) - défaut: `"fr"`
+  - `formality_level` (string): Niveau de formalité (`"formal"`, `"casual"`, `"friendly"`, `"professional"`) - défaut: `"casual"`
+  - `max_response_length` (integer): Longueur max des réponses en caractères - défaut: 500
+
+
+**Réponse réussie (201 Created):**
+```json
 {
   "uuid": "345e6789-e89b-12d3-a456-426614174002",
   "name": "Mon Agent",
   "description": "Description de mon agent",
   "avatar": null,
   "agent_type": "simple",
-  "is_active": true,
-  "created_at": "2025-10-13T10:30:00Z",
-  "created_by_username": "john_doe",
-  "conversation_count": 0
+  "instructions": {
+    "system_prompt": "Tu es un assistant serviable qui répond en français.",
+    "language": "fr",
+    "formality_level": "casual",
+    "max_response_length": 500,
+    "created_at": "2025-10-13T10:30:00Z",
+    "updated_at": "2025-10-13T10:30:00Z"
+  }
 }
+```
 
 
-Erreurs possibles:
-* 400 Bad Request: Données invalides
-* 401 Unauthorized: Token manquant ou invalide
-________________
+**Erreurs possibles:**
+- `400 Bad Request`: Données invalides
+- `401 Unauthorized`: Token manquant ou invalide
 
 
-3. Détails d'un agent
-Endpoint: GET /api/agents/{uuid}/
-Description: Récupère les détails complets d'un agent spécifique.
-Headers requis:
+---
+
+
+### 3. Détails d'un agent
+
+
+**Endpoint:** `GET /agents/agents/{uuid}/`
+
+
+**Description:** Récupère les détails complets d'un agent spécifique.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Réponse réussie (200 OK):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Réponse réussie (200 OK):**
+```json
 {
   "uuid": "123e4567-e89b-12d3-a456-426614174000",
   "name": "Assistant Marketing",
@@ -2042,25 +2092,39 @@ Réponse réussie (200 OK):
   ],
   "conversation_count": 3
 }
+```
 
 
-Erreurs possibles:
-* 404 Not Found: Agent introuvable ou vous n'en êtes pas le créateur
-* 401 Unauthorized: Token manquant ou invalide
-________________
+**Erreurs possibles:**
+- `404 Not Found`: Agent introuvable ou vous n'en êtes pas le créateur
+- `401 Unauthorized`: Token manquant ou invalide
 
 
-4. Modifier un agent
-Endpoint: PUT /api/agents/{uuid}/ ou PATCH /api/agents/{uuid}/
-Description: Met à jour un agent existant. PUT nécessite tous les champs, PATCH permet une mise à jour partielle.
-Headers requis:
+---
+
+
+### 4. Modifier un agent
+
+
+**Endpoint:** `PUT/agents /agents/{uuid}/` ou `PATCH /agents/{uuid}/`
+
+
+**Description:** Met à jour un agent existant. PUT nécessite tous les champs, PATCH permet une mise à jour partielle.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Body (JSON) - Exemple PATCH:
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Body (JSON) - Exemple PATCH:**
+```json
 {
   "name": "Assistant Marketing v2",
   "is_active": true,
@@ -2069,63 +2133,111 @@ Body (JSON) - Exemple PATCH:
     "formality_level": "professional"
   }
 }
+```
 
 
-Champs modifiables:
-* name (string)
-* description (string)
-* avatar (image file - utiliser multipart/form-data)
-* agent_type (string)
-* is_active (boolean)
-* instructions (objet - mise à jour partielle possible)
-Réponse réussie (200 OK): Même structure que GET d'un agent détaillé
-Erreurs possibles:
-* 400 Bad Request: Données invalides
-* 404 Not Found: Agent introuvable
-* 401 Unauthorized: Token manquant ou invalide
-________________
+**Champs modifiables:**
+- `name` (string)
+- `description` (string)
+- `avatar` (image file - utiliser multipart/form-data)
+- `agent_type` (string)
+- `is_active` (boolean)
+- `instructions` (objet - mise à jour partielle possible)
 
 
-5. Désactiver un agent
-Endpoint: DELETE /api/agents/{uuid}/
-Description: Désactive un agent (ne le supprime pas vraiment, met is_active à false).
-Headers requis:
+**Réponse réussie (200 OK):** Même structure que GET d'un agent détaillé
+
+
+**Erreurs possibles:**
+- `400 Bad Request`: Données invalides
+- `404 Not Found`: Agent introuvable
+- `401 Unauthorized`: Token manquant ou invalide
+
+
+---
+
+
+### 5. Désactiver un agent
+
+
+**Endpoint:** `DELETE /agents/agents/{uuid}/`
+
+
+**Description:** Désactive un agent (ne le supprime pas vraiment, met `is_active` à `false`).
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Réponse réussie (204 No Content): Pas de contenu
-Erreurs possibles:
-* 404 Not Found: Agent introuvable
-* 401 Unauthorized: Token manquant ou invalide
-________________
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
 
 
-6. Liste des agents publics
-Endpoint: GET /api/agents/public/
-Description: Récupère la liste de tous les agents actifs (pour usage futur - actuellement retourne tous les agents actifs de tous les utilisateurs).
-Headers requis:
+**Réponse réussie (204 No Content):** Pas de contenu
+
+
+**Erreurs possibles:**
+- `404 Not Found`: Agent introuvable
+- `401 Unauthorized`: Token manquant ou invalide
+
+
+---
+
+
+### 6. Liste des agents publics
+
+
+**Endpoint:** `GET /agents/agents/public/`
+
+
+**Description:** Récupère la liste de tous les agents actifs (pour usage futur).
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Réponse réussie (200 OK): Même structure que la liste des agents
-Note: Cette API est prévue pour un système de partage d'agents publics dans le futur.
-________________
+**Réponse réussie (200 OK):** Même structure que la liste des agents
 
 
-Règles d'interaction
+**Note:** Cette API est prévue pour un système de partage d'agents publics dans le futur.
+
+
+---
+
+
+## Règles d'interaction
+
+
 Les règles d'interaction définissent comment un agent doit se comporter vis-à-vis d'utilisateurs ou d'autres agents spécifiques.
-7. Liste des règles d'interaction d'un agent
-Endpoint: GET /api/agents/{uuid}/interactions/
-Description: Récupère toutes les règles d'interaction configurées pour un agent.
-Headers requis:
+
+
+### 7. Liste des règles d'interaction d'un agent
+
+
+**Endpoint:** `GET/agents /agents/{uuid}/interactions/`
+
+
+**Description:** Récupère toutes les règles d'interaction configurées pour un agent.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Réponse réussie (200 OK):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Réponse réussie (200 OK):**
+```json
 [
   {
     "id": 1,
@@ -2135,132 +2247,182 @@ Réponse réussie (200 OK):
     "target_user_username": "alice",
     "target_agent_name": null,
     "created_at": "2025-10-11T10:00:00Z"
-  },
-  {
-    "id": 2,
-    "interaction_type": "ignore",
-    "target_user": 8,
-    "target_agent": null,
-    "target_user_username": "bob",
-    "target_agent_name": null,
-    "created_at": "2025-10-11T11:30:00Z"
-  },
-  {
-    "id": 3,
-    "interaction_type": "mention_only",
-    "target_user": null,
-    "target_agent": 10,
-    "target_user_username": null,
-    "target_agent_name": "Autre Agent",
-    "created_at": "2025-10-12T09:00:00Z"
   }
 ]
+```
 
 
-Types d'interaction possibles:
-* "respond_to": L'agent répond aux messages de cette cible
-* "ignore": L'agent ignore complètement cette cible
-* "mention_only": L'agent répond uniquement si mentionné par cette cible (avec @nom_agent)
-* "always_respond": L'agent répond toujours à cette cible
-________________
+**Types d'interaction possibles:**
+- `"respond_to"`: L'agent répond aux messages de cette cible
+- `"ignore"`: L'agent ignore complètement cette cible
+- `"mention_only"`: L'agent répond uniquement si mentionné par cette cible (avec @nom_agent)
+- `"always_respond"`: L'agent répond toujours à cette cible
 
 
-8. Créer une règle d'interaction
-Endpoint: POST /api/agents/{uuid}/interactions/
-Description: Crée une nouvelle règle d'interaction pour un agent.
-Headers requis:
+---
+
+
+### 8. Créer une règle d'interaction
+
+
+**Endpoint:** `POST/agents /agents/{uuid}/interactions/`
+
+
+**Description:** Crée une nouvelle règle d'interaction pour un agent.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Body (JSON):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Body (JSON):**
+```json
 {
-  "interaction_type": "respond_to",
-  "target_user": 5,
-  "target_agent": null
+  "interaction_type": "always_respond",
+  "target_user_uuid": "474df5b3-b4e4-46bb-ae54-57eb9365e37d"
 }
+```
 
 
-Champs obligatoires:
-* interaction_type (string): Type d'interaction (voir types ci-dessus)
-* Soit target_user (integer, ID utilisateur), soit target_agent (integer, ID agent) - pas les deux
-Réponse réussie (201 Created):
+**Champs obligatoires:**
+- `interaction_type` (string): Type d'interaction (voir types ci-dessus)
+- Soit `target_user_uuid` (UUID utilisateur), soit `target_agent_uuid` (UUID agent) - **pas les deux**
+
+
+**Réponse réussie (201 Created):**
+```json
 {
   "id": 4,
-  "interaction_type": "respond_to",
+  "interaction_type": "always_respond",
   "target_user": 5,
   "target_agent": null,
   "target_user_username": "alice",
   "target_agent_name": null,
   "created_at": "2025-10-13T10:45:00Z"
 }
+```
 
 
-Erreurs possibles:
-* 400 Bad Request:
-   * Les deux champs target_user et target_agent sont renseignés
-   * Aucun des deux n'est renseigné
-   * Règle en doublon (déjà existante pour cette cible)
-* 404 Not Found: Agent introuvable
-________________
+**Erreurs possibles:**
+- `400 Bad Request`:
+  - Les deux champs `target_user_uuid` et `target_agent_uuid` sont renseignés
+  - Aucun des deux n'est renseigné
+  - Règle en doublon (déjà existante pour cette cible)
+  - UUID utilisateur ou agent introuvable
+- `404 Not Found`: Agent introuvable
 
 
-9. Détails d'une règle d'interaction
-Endpoint: GET /api/agents/{uuid}/interactions/{id}/
-Description: Récupère les détails d'une règle d'interaction spécifique.
-Headers requis:
+---
+
+
+### 9. Détails d'une règle d'interaction
+
+
+**Endpoint:** `GET /agents/agents/{uuid}/interactions/{id}/`
+
+
+**Description:** Récupère les détails d'une règle d'interaction spécifique.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-* id: ID de la règle d'interaction
-Réponse réussie (200 OK): Même structure que la création d'une règle
-________________
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+- `id`: ID de la règle d'interaction
 
 
-10. Modifier une règle d'interaction
-Endpoint: PUT /api/agents/{uuid}/interactions/{id}/ ou PATCH /api/agents/{uuid}/interactions/{id}/
-Description: Met à jour une règle d'interaction existante.
-Headers requis:
+**Réponse réussie (200 OK):** Même structure que la création d'une règle
+
+
+---
+
+
+### 10. Modifier une règle d'interaction
+
+
+**Endpoint:** `PUT/agents /agents/{uuid}/interactions/{id}/` ou `PATCH /agents/{uuid}/interactions/{id}/`
+
+
+**Description:** Met à jour une règle d'interaction existante.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Body (JSON):
+**Body (JSON):**
+```json
 {
   "interaction_type": "always_respond"
 }
+```
 
 
-Réponse réussie (200 OK): Règle mise à jour
-________________
+**Réponse réussie (200 OK):** Règle mise à jour
 
 
-11. Supprimer une règle d'interaction
-Endpoint: DELETE /api/agents/{uuid}/interactions/{id}/
-Description: Supprime une règle d'interaction.
-Headers requis:
+---
+
+
+### 11. Supprimer une règle d'interaction
+
+
+**Endpoint:** `DELETE /agents/agents/{uuid}/interactions/{id}/`
+
+
+**Description:** Supprime une règle d'interaction.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Réponse réussie (204 No Content): Pas de contenu
-________________
+**Réponse réussie (204 No Content):** Pas de contenu
 
 
-Historique des réponses
-12. Historique des réponses d'un agent
-Endpoint: GET /api/agents/{uuid}/responses/
-Description: Récupère l'historique de toutes les réponses générées par un agent.
-Headers requis:
+---
+
+
+## Historique des réponses
+
+
+### 12. Historique des réponses d'un agent
+
+
+**Endpoint:** `GET /agents/agents/{uuid}/responses/`
+
+
+**Description:** Récupère l'historique de toutes les réponses générées par un agent.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Réponse réussie (200 OK):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Réponse réussie (200 OK):**
+```json
 [
   {
     "id": 42,
@@ -2270,50 +2432,48 @@ Réponse réussie (200 OK):
     "was_sent": true,
     "error_message": "",
     "triggered_by_message": 156
-  },
-  {
-    "id": 41,
-    "response_content": "Je peux t'aider avec ça...",
-    "processing_time": 0.87,
-    "created_at": "2025-10-13T08:30:00Z",
-    "was_sent": true,
-    "error_message": "",
-    "triggered_by_message": 155
-  },
-  {
-    "id": 40,
-    "response_content": "Erreur lors de la génération",
-    "processing_time": 2.5,
-    "created_at": "2025-10-12T16:00:00Z",
-    "was_sent": false,
-    "error_message": "Timeout API",
-    "triggered_by_message": 150
   }
 ]
+```
 
 
-Champs de réponse:
-* id: ID de la réponse
-* response_content: Contenu de la réponse générée
-* processing_time: Temps de traitement en secondes
-* created_at: Date de création
-* was_sent: true si la réponse a été envoyée, false sinon
-* error_message: Message d'erreur (vide si pas d'erreur)
-* triggered_by_message: ID du message qui a déclenché cette réponse
-________________
+**Champs de réponse:**
+- `id`: ID de la réponse
+- `response_content`: Contenu de la réponse générée
+- `processing_time`: Temps de traitement en secondes
+- `created_at`: Date de création
+- `was_sent`: `true` si la réponse a été envoyée, `false` sinon
+- `error_message`: Message d'erreur (vide si pas d'erreur)
+- `triggered_by_message`: ID du message qui a déclenché cette réponse
 
 
-Agents dans les conversations
-13. Liste des agents dans une conversation
-Endpoint: GET /api/conversations/{conversation_uuid}/agents/
-Description: Récupère la liste de tous les agents actifs dans une conversation.
-Headers requis:
+---
+
+
+## Agents dans les conversations
+
+
+### 13. Liste des agents dans une conversation
+
+
+**Endpoint:** `GET /agents/conversations/{conversation_uuid}/agents/`
+
+
+**Description:** Récupère la liste de tous les agents actifs dans une conversation.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* conversation_uuid: UUID de la conversation
-Réponse réussie (200 OK):
+**Paramètres URL:**
+- `conversation_uuid`: UUID de la conversation
+
+
+**Réponse réussie (200 OK):**
+```json
 {
   "id": 15,
   "agents": [
@@ -2324,45 +2484,55 @@ Réponse réussie (200 OK):
       "avatar": "http://example.com/media/agents/avatars/agent1.jpg",
       "agent_type": "simple",
       "is_active": true
-    },
-    {
-      "uuid": "234e5678-e89b-12d3-a456-426614174001",
-      "name": "Bot Support",
-      "description": "Agent de support",
-      "avatar": null,
-      "agent_type": "conditional",
-      "is_active": true
     }
   ],
-  "active_agents_count": 2
+  "active_agents_count": 1
 }
+```
 
 
-Erreurs possibles:
-* 404 Not Found: Conversation introuvable ou vous n'êtes pas participant
-* 401 Unauthorized: Token invalide
-________________
+**Erreurs possibles:**
+- `404 Not Found`: Conversation introuvable ou vous n'êtes pas participant
+- `401 Unauthorized`: Token invalide
 
 
-14. Ajouter un agent à une conversation
-Endpoint: POST /api/conversations/{conversation_uuid}/agents/add/
-Description: Ajoute un agent à une conversation. Limite de 5 agents maximum par conversation.
-Headers requis:
+---
+
+
+### 14. Ajouter un agent à une conversation
+
+
+**Endpoint:** `POST /agents/conversations/{conversation_uuid}/agents/add/`
+
+
+**Description:** Ajoute un agent à une conversation. Limite de 5 agents maximum par conversation.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Paramètres URL:
-* conversation_uuid: UUID de la conversation
-Body (JSON):
+**Paramètres URL:**
+- `conversation_uuid`: UUID de la conversation
+
+
+**Body (JSON):**
+```json
 {
   "agent_uuid": "123e4567-e89b-12d3-a456-426614174000"
 }
+```
 
 
-Champs obligatoires:
-* agent_uuid (string): UUID de l'agent à ajouter
-Réponse réussie (200 OK):
+**Champs obligatoires:**
+- `agent_uuid` (string): UUID de l'agent à ajouter
+
+
+**Réponse réussie (200 OK):**
+```json
 {
   "message": "Agent 'Assistant Marketing' ajouté à la conversation.",
   "agent": {
@@ -2374,58 +2544,88 @@ Réponse réussie (200 OK):
     "is_active": true
   }
 }
+```
 
 
-Erreurs possibles:
-* 400 Bad Request:
-   * Agent UUID manquant ou invalide
-   * Limite d'agents atteinte (5 max)
-   * Agent non actif
-* 403 Forbidden: Vous ne pouvez pas utiliser cet agent (pas le créateur)
-* 404 Not Found: Conversation ou agent introuvable
-________________
+**Erreurs possibles:**
+- `400 Bad Request`:
+  - Agent UUID manquant ou invalide
+  - Limite d'agents atteinte (5 max)
+  - Agent non actif
+- `403 Forbidden`: Vous ne pouvez pas utiliser cet agent (pas le créateur)
+- `404 Not Found`: Conversation ou agent introuvable
 
 
-15. Retirer un agent d'une conversation
-Endpoint: POST /api/conversations/{conversation_uuid}/agents/remove/
-Description: Retire un agent d'une conversation.
-Headers requis:
+---
+
+
+### 15. Retirer un agent d'une conversation
+
+
+**Endpoint:** `POST/agents /conversations/{conversation_uuid}/agents/remove/`
+
+
+**Description:** Retire un agent d'une conversation.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Paramètres URL:
-* conversation_uuid: UUID de la conversation
-Body (JSON):
+**Paramètres URL:**
+- `conversation_uuid`: UUID de la conversation
+
+
+**Body (JSON):**
+```json
 {
   "agent_uuid": "123e4567-e89b-12d3-a456-426614174000"
 }
+```
 
 
-Réponse réussie (200 OK):
+**Réponse réussie (200 OK):**
+```json
 {
   "message": "Agent 'Assistant Marketing' retiré de la conversation."
 }
+```
 
 
-Erreurs possibles:
-* 404 Not Found:
-   * Conversation introuvable
-   * Agent introuvable
-   * Agent pas dans cette conversation
-* 400 Bad Request: Agent UUID invalide
-________________
+**Erreurs possibles:**
+- `404 Not Found`:
+  - Conversation introuvable
+  - Agent introuvable
+  - Agent pas dans cette conversation
+- `400 Bad Request`: Agent UUID invalide
 
 
-Endpoints utilitaires
-16. Mes agents disponibles pour conversation
-Endpoint: GET /api/agents/my-available/
-Description: Liste de tous les agents actifs de l'utilisateur disponibles pour être ajoutés à une conversation.
-Headers requis:
+---
+
+
+## Endpoints utilitaires
+
+
+### 16. Mes agents disponibles pour conversation
+
+
+**Endpoint:** `GET /agents/agents/my-available/`
+
+
+**Description:** Liste de tous les agents actifs de l'utilisateur disponibles pour être ajoutés à une conversation.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Réponse réussie (200 OK):
+**Réponse réussie (200 OK):**
+```json
 [
   {
     "uuid": "123e4567-e89b-12d3-a456-426614174000",
@@ -2439,19 +2639,29 @@ Réponse réussie (200 OK):
     "conversation_count": 3
   }
 ]
+```
 
 
-________________
+---
 
 
-17. Types d'agents disponibles
-Endpoint: GET /api/agents/types/
-Description: Récupère la liste des types d'agents disponibles dans le système.
-Headers requis:
+### 17. Types d'agents disponibles
+
+
+**Endpoint:** `GET /agents/agents/types/`
+
+
+**Description:** Récupère la liste des types d'agents disponibles dans le système.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Réponse réussie (200 OK):
+**Réponse réussie (200 OK):**
+```json
 [
   {
     "value": "simple",
@@ -2466,21 +2676,33 @@ Réponse réussie (200 OK):
     "label": "Agent d'Action"
   }
 ]
+```
 
 
-________________
+---
 
 
-18. Statistiques d'un agent
-Endpoint: GET /api/agents/{uuid}/stats/
-Description: Récupère les statistiques d'utilisation d'un agent.
-Headers requis:
+### 18. Statistiques d'un agent
+
+
+**Endpoint:** `GET /agents/agents/{uuid}/stats/`
+
+
+**Description:** Récupère les statistiques d'utilisation d'un agent.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Réponse réussie (200 OK):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Réponse réussie (200 OK):**
+```json
 {
   "total_responses": 127,
   "successful_responses": 122,
@@ -2490,38 +2712,56 @@ Réponse réussie (200 OK):
   "created_at": "2025-10-10T14:30:00Z",
   "last_response": "2025-10-13T09:15:00Z"
 }
+```
 
 
-Champs de réponse:
-* total_responses: Nombre total de réponses générées
-* successful_responses: Nombre de réponses envoyées avec succès
-* failed_responses: Nombre de réponses qui ont échoué
-* active_conversations: Nombre de conversations où l'agent est actif
-* avg_processing_time: Temps moyen de traitement en secondes
-* created_at: Date de création de l'agent
-* last_response: Date de la dernière réponse (null si aucune)
-________________
+**Champs de réponse:**
+- `total_responses`: Nombre total de réponses générées
+- `successful_responses`: Nombre de réponses envoyées avec succès
+- `failed_responses`: Nombre de réponses qui ont échoué
+- `active_conversations`: Nombre de conversations où l'agent est actif
+- `avg_processing_time`: Temps moyen de traitement en secondes
+- `created_at`: Date de création de l'agent
+- `last_response`: Date de la dernière réponse (`null` si aucune)
 
 
-19. Tester un agent
-Endpoint: POST /api/agents/{uuid}/test/
-Description: Teste un agent avec un message fictif sans l'ajouter à une vraie conversation.
-Headers requis:
+---
+
+
+### 19. Tester un agent
+
+
+**Endpoint:** `POST /agents/agents/{uuid}/test/`
+
+
+**Description:** Teste un agent avec un message fictif sans l'ajouter à une vraie conversation.
+
+
+**Headers requis:**
+```
 Authorization: Bearer <access_token>
 Content-Type: application/json
+```
 
 
-Paramètres URL:
-* uuid: UUID de l'agent
-Body (JSON):
+**Paramètres URL:**
+- `uuid`: UUID de l'agent
+
+
+**Body (JSON):**
+```json
 {
   "message": "Bonjour, peux-tu m'aider ?"
 }
+```
 
 
-Champs obligatoires:
-* message (string): Message de test
-Réponse réussie (200 OK):
+**Champs obligatoires:**
+- `message` (string): Message de test
+
+
+**Réponse réussie (200 OK):**
+```json
 {
   "agent_name": "Assistant Marketing",
   "test_message": "Bonjour, peux-tu m'aider ?",
@@ -2530,9 +2770,11 @@ Réponse réussie (200 OK):
   "processing_time": 1.23,
   "error": null
 }
+```
 
 
-Réponse en cas d'erreur (200 OK avec success: false):
+**Réponse en cas d'erreur (200 OK avec success: false):**
+```json
 {
   "agent_name": "Assistant Marketing",
   "test_message": "Bonjour, peux-tu m'aider ?",
@@ -2541,17 +2783,23 @@ Réponse en cas d'erreur (200 OK avec success: false):
   "processing_time": 2.5,
   "error": "Timeout API Mistral"
 }
+```
 
 
-Erreurs possibles:
-* 400 Bad Request: Message manquant
-* 404 Not Found: Agent introuvable
-* 403 Forbidden: Pas le créateur de l'agent
-________________
+**Erreurs possibles:**
+- `400 Bad Request`: Message manquant ou agent inactif
+- `404 Not Found`: Agent introuvable
+- `403 Forbidden`: Pas le créateur de l'agent
 
 
-Modèles de données
-Agent
+---
+
+
+## Modèles de données
+
+
+### Agent
+```json
 {
   "uuid": "uuid",
   "name": "string (max 100 caractères)",
@@ -2563,9 +2811,11 @@ Agent
   "updated_at": "datetime",
   "created_by": "id utilisateur"
 }
+```
 
 
-AgentInstructions
+### AgentInstructions
+```json
 {
   "system_prompt": "string",
   "language": "fr | en | es | de | it",
@@ -2574,9 +2824,11 @@ AgentInstructions
   "created_at": "datetime",
   "updated_at": "datetime"
 }
+```
 
 
-AgentInteraction
+### AgentInteraction
+```json
 {
   "id": "integer",
   "agent": "id agent",
@@ -2585,9 +2837,11 @@ AgentInteraction
   "target_agent": "id agent ou null",
   "created_at": "datetime"
 }
+```
 
 
-AgentResponse
+### AgentResponse
+```json
 {
   "id": "integer",
   "agent": "id agent",
@@ -2599,47 +2853,54 @@ AgentResponse
   "was_sent": "boolean",
   "error_message": "string"
 }
+```
 
 
-________________
+---
 
 
-Codes d'erreur
-Code
-	Description
-	200
-	Succès
-	201
-	Ressource créée
-	204
-	Succès sans contenu
-	400
-	Requête invalide (données incorrectes)
-	401
-	Non authentifié (token manquant/invalide)
-	403
-	Accès refusé (permissions insuffisantes)
-	404
-	Ressource introuvable
-	500
-	Erreur serveur
-	________________
+## Codes d'erreur
 
 
-Notes importantes
-1. Limite d'agents par conversation: Maximum 5 agents actifs par conversation
-2. Règles d'interaction: Une règle ne peut cibler qu'un utilisateur OU un agent, pas les deux
-3. Suppression d'agents: La suppression désactive l'agent (is_active = false) plutôt que de le supprimer définitivement
-4. Unicité des règles: Un agent ne peut avoir qu'une seule règle par cible (utilisateur ou agent)
-5. Permissions: Seul le créateur d'un agent peut le modifier, le supprimer ou accéder à ses détails
-6. IA utilisée: Les agents utilisent l'API Mistral pour générer leurs réponses
-7. Contexte conversationnel: Les agents ont accès aux 5 derniers messages de la conversation pour générer leurs réponses
-________________
+| Code | Description |
+|------|-------------|
+| 200  | Succès |
+| 201  | Ressource créée |
+| 204  | Succès sans contenu |
+| 400  | Requête invalide (données incorrectes) |
+| 401  | Non authentifié (token manquant/invalide) |
+| 403  | Accès refusé (permissions insuffisantes) |
+| 404  | Ressource introuvable |
+| 500  | Erreur serveur |
 
 
-Exemples d'utilisation
-Créer un agent simple
-curl -X POST https://votre-domaine.com/api/agents/ \
+---
+
+
+## Notes importantes
+
+
+- **Limite d'agents par conversation:** Maximum 5 agents actifs par conversation
+- **Règles d'interaction:** Une règle ne peut cibler qu'un utilisateur OU un agent, pas les deux
+- **Utilisation d'UUID:** Les règles d'interaction utilisent maintenant les UUID pour cibler les utilisateurs et agents (et non les ID)
+- **Suppression d'agents:** La suppression désactive l'agent (`is_active = false`) plutôt que de le supprimer définitivement
+- **Unicité des règles:** Un agent ne peut avoir qu'une seule règle par cible (utilisateur ou agent)
+- **Permissions:** Seul le créateur d'un agent peut le modifier, le supprimer ou accéder à ses détails
+- **IA utilisée:** Les agents utilisent l'API Mistral AI pour générer leurs réponses
+- **Contexte conversationnel:** Les agents ont accès aux 5 derniers messages de la conversation pour générer leurs réponses
+- **Déclenchement automatique:** Les agents sont déclenchés automatiquement via Django signals quand un nouveau message est créé dans une conversation où ils sont présents
+- **WebSocket:** Les réponses des agents sont envoyées en temps réel via WebSocket
+
+
+---
+
+
+## Exemples d'utilisation
+
+
+### Créer un agent simple
+```bash
+curl -X POST https://votre-domaine.com/agents/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2652,29 +2913,736 @@ curl -X POST https://votre-domaine.com/api/agents/ \
       "formality_level": "friendly"
     }
   }'
+```
 
 
-Ajouter un agent à une conversation
-curl -X POST https://votre-domaine.com/api/conversations/123e4567-e89b-12d3-a456-426614174000/agents/add/ \
+### Ajouter un agent à une conversation
+```bash
+curl -X POST https://votre-domaine.com/conversations/123e4567-e89b-12d3-a456-426614174000/agents/add/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "agent_uuid": "345e6789-e89b-12d3-a456-426614174002"
   }'
+```
 
 
-Créer une règle d'interaction
-curl -X POST https://votre-domaine.com/api/agents/345e6789-e89b-12d3-a456-426614174002/interactions/ \
+### Créer une règle d'interaction avec UUID
+```bash
+curl -X POST https://votre-domaine.com/agents/345e6789-e89b-12d3-a456-426614174002/interactions/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "interaction_type": "mention_only",
-    "target_user": 5,
-    "target_agent": null
+    "interaction_type": "always_respond",
+    "target_user_uuid": "474df5b3-b4e4-46bb-ae54-57eb9365e37d"
   }'
+```
+
+
+---
+
+
+**Documentation générée le 14 octobre 2025**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Documentation API - Module Jarvis
+Vue d'ensemble
+Le module Jarvis est un assistant intelligent qui permet aux utilisateurs d'interagir avec leur compte via langage naturel. Jarvis utilise l'API Mistral pour comprendre les intentions de l'utilisateur et exécuter des actions en son nom.
+Base URL: /jarvis/
+Authentication: Toutes les routes requièrent un token JWT Bearer dans le header Authorization: Bearer {token}
+________________
+
+
+Endpoints disponibles
+1. Instance Jarvis
+GET /jarvis/instance/
+Récupère les informations de l'instance Jarvis de l'utilisateur connecté. Si l'instance n'existe pas, elle est créée automatiquement.
+Authentication: Requise
+Query Parameters: Aucun
+Request Body: Aucun
+Response (200 OK):
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "user": 1,
+  "user_username": "john_doe",
+  "user_preferences": {
+    "language": "fr",
+    "notifications": true
+  },
+  "is_active": true,
+  "default_language": "fr",
+  "total_requests": 42,
+  "total_actions_performed": 15,
+  "last_interaction": "2025-10-13T14:30:00Z",
+  "created_at": "2025-10-01T10:00:00Z",
+  "updated_at": "2025-10-13T14:30:00Z",
+  "learned_patterns": {},
+  "api_rate_limit": 100
+}
+
+
+Champs:
+* uuid (string): Identifiant unique de l'instance Jarvis
+* user (integer): ID de l'utilisateur
+* user_username (string): Nom d'utilisateur
+* user_preferences (object): Préférences personnalisées de l'utilisateur
+* is_active (boolean): Indique si Jarvis est actif pour cet utilisateur
+* default_language (string): Langue par défaut ("fr" ou "en")
+* total_requests (integer): Nombre total de requêtes effectuées
+* total_actions_performed (integer): Nombre total d'actions exécutées avec succès
+* last_interaction (datetime): Date de la dernière interaction
+* created_at (datetime): Date de création de l'instance
+* updated_at (datetime): Date de dernière mise à jour
+* learned_patterns (object): Patterns comportementaux appris
+* api_rate_limit (integer): Limite de requêtes par jour
+________________
+
+
+PUT/PATCH /jarvis/instance/
+Met à jour les paramètres de l'instance Jarvis de l'utilisateur.
+Authentication: Requise
+Query Parameters: Aucun
+Request Body:
+{
+  "user_preferences": {
+    "language": "en",
+    "notifications": false
+  },
+  "is_active": true,
+  "default_language": "en",
+  "learned_patterns": {},
+  "api_rate_limit": 150
+}
+
+
+Champs modifiables:
+* user_preferences (object, optionnel): Préférences utilisateur
+* is_active (boolean, optionnel): Activer/désactiver Jarvis
+* default_language (string, optionnel): Langue par défaut
+* learned_patterns (object, optionnel): Patterns d'apprentissage
+* api_rate_limit (integer, optionnel): Limite de requêtes journalières
+Response (200 OK): Même structure que GET
+________________
+
+
+2. Chat avec Jarvis
+POST /jarvis/chat/?type={type}
+Point d'entrée principal pour interagir avec Jarvis. Le comportement dépend du paramètre type.
+Authentication: Requise
+Query Parameters:
+* type (string, obligatoire): Type d'interaction
+   * "welcome": Message de bienvenue pour un nouvel utilisateur
+   * "notifications": Récupération et résumé des notifications
+   * "message": Conversation normale avec Jarvis
+________________
+
+
+POST /jarvis/chat/?type=welcome
+Génère un message de bienvenue personnalisé pour l'utilisateur.
+Request Body:
+{
+  "message": "Bonjour, je suis nouveau",
+  "context": {}
+}
+
+
+Champs (tous optionnels):
+* message (string, optionnel): Message personnalisé de l'utilisateur. Si absent, un message par défaut est généré.
+* context (object, optionnel): Contexte additionnel
+Response (200 OK):
+{
+  "response": "Bienvenue sur Echo ! Je suis Jarvis, votre assistant personnel. Je suis là pour vous aider à naviguer sur la plateforme...",
+  "action_performed": "chat",
+  "data": {},
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Erreurs possibles:
+* 403 Forbidden: Jarvis est désactivé pour ce compte
+* 500 Internal Server Error: Erreur lors du traitement
+________________
+
+
+POST /jarvis/chat/?type=notifications
+Jarvis analyse et résume les notifications de l'utilisateur sous forme de JSON structuré.
+Request Body: Aucun (le body peut être vide)
+Response (200 OK):
+{
+  "response": "{\"notifications\": [{\"conversation_uuid\": \"abc-123\", \"username\": \"Antoine\", \"unread_count\": 4, \"summary\": \"Antoine t'invite à dîner ce soir\"}, {\"conversation_uuid\": \"def-456\", \"username\": \"Sophie\", \"unread_count\": 1, \"summary\": \"Sophie demande comment tu vas\"}], \"total_unread\": 5}",
+  "action_performed": "chat",
+  "data": {
+    "notifications": [
+      {
+        "conversation_uuid": "abc-123",
+        "username": "Antoine",
+        "unread_count": 4,
+        "summary": "Antoine t'invite à dîner ce soir"
+      },
+      {
+        "conversation_uuid": "def-456",
+        "username": "Sophie",
+        "unread_count": 1,
+        "summary": "Sophie demande comment tu vas"
+      }
+    ],
+    "total_unread": 5
+  },
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Structure du champ data:
+* notifications (array): Liste des conversations avec messages non lus
+   * conversation_uuid (string): UUID de la conversation
+   * username (string): Nom de l'utilisateur avec qui vous discutez
+   * unread_count (integer): Nombre de messages non lus dans cette conversation
+   * summary (string): Résumé du contenu en une phrase courte (10-15 mots)
+* total_unread (integer): Nombre total de messages non lus
+Note importante: Le champ response contient le JSON sous forme de chaîne de caractères. Pour une utilisation plus pratique, utilisez le champ data qui contient déjà l'objet JSON parsé.
+Erreurs possibles:
+* 403 Forbidden: Jarvis est désactivé pour ce compte
+* 500 Internal Server Error: Erreur lors du traitement
+________________
+
+
+POST /jarvis/chat/?type=message
+Conversation normale avec Jarvis. L'utilisateur peut poser des questions ou demander des actions.
+Request Body (obligatoire):
+{
+  "message": "Montre-moi mes messages non lus",
+  "context": {}
+}
+
+
+Champs:
+* message (string, obligatoire): Message de l'utilisateur (2-5000 caractères)
+* context (object, optionnel): Contexte additionnel
+Response (200 OK):
+{
+  "response": "Message envoyé à Alice : 'J'arrive dans 10 minutes'",
+  "action_performed": "chat",
+  "data": {},
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Note: Après l'exécution d'une action (comme l'envoi d'un message), Jarvis confirme toujours ce qui a été fait. Le champ response contient une confirmation en langage naturel de l'action effectuée.
+Exemples de messages que Jarvis peut traiter:
+* "Montre-moi mes messages non lus"
+* "Envoie un message à Alice pour lui dire que j'arrive"
+* "Marque ma conversation avec Bob comme lue"
+* "Liste mes conversations récentes"
+Actions que Jarvis peut exécuter automatiquement:
+* Récupérer les messages non lus
+* Lire les messages d'une conversation spécifique
+* Envoyer des messages au nom de l'utilisateur
+* Marquer des conversations comme lues
+* Lister les conversations
+Erreurs possibles:
+* 400 Bad Request: Message invalide (vide ou trop court)
+* 403 Forbidden: Jarvis est désactivé pour ce compte
+* 500 Internal Server Error: Erreur lors du traitement
+________________
+
+
+3. Logs d'actions
+GET /jarvis/logs/
+Liste tous les logs d'actions effectuées par Jarvis pour l'utilisateur connecté.
+Authentication: Requise
+Query Parameters:
+* action_type (string, optionnel): Filtrer par type d'action
+   * Valeurs possibles: "read_messages", "send_message", "list_conversations", "summarize", "update_preferences", "search", "mark_as_read", "archive", "other"
+* success (boolean, optionnel): Filtrer par statut de succès (true ou false)
+* limit (integer, optionnel): Nombre maximum de résultats (défaut: 50)
+Exemple:
+GET /jarvis/logs/?action_type=send_message&success=true&limit=10
+
+
+Response (200 OK):
+[
+  {
+    "uuid": "660e8400-e29b-41d4-a716-446655440000",
+    "jarvis_instance": 1,
+    "action_type": "send_message",
+    "action_type_display": "Envoi de message",
+    "action_description": "Envoi d'un message dans la conversation avec Alice",
+    "endpoint_called": "/messaging/conversations/abc123/messages/",
+    "http_method": "POST",
+    "request_payload": {
+      "conversation_uuid": "abc123",
+      "content": "Salut Alice, je serai là à 15h"
+    },
+    "response_status": 201,
+    "user_query": "Envoie un message à Alice pour lui dire que je serai là à 15h",
+    "llm_interpretation": {
+      "function": "send_message",
+      "args": {
+        "conversation_uuid": "abc123",
+        "content": "Salut Alice, je serai là à 15h"
+      }
+    },
+    "success": true,
+    "error_message": "",
+    "processing_time": 1.23,
+    "created_at": "2025-10-13T14:30:00Z"
+  }
+]
+
+
+Champs:
+* uuid (string): Identifiant unique du log
+* jarvis_instance (integer): ID de l'instance Jarvis
+* action_type (string): Type d'action technique
+* action_type_display (string): Libellé lisible du type d'action
+* action_description (string): Description de l'action effectuée
+* endpoint_called (string): URL de l'API appelée
+* http_method (string): Méthode HTTP utilisée (GET, POST, etc.)
+* request_payload (object): Données envoyées dans la requête
+* response_status (integer): Code HTTP de la réponse (200, 201, 404, etc.)
+* user_query (string): Message original de l'utilisateur
+* llm_interpretation (object): Interprétation de l'intention par Mistral AI
+* success (boolean): Indique si l'action a réussi
+* error_message (string): Message d'erreur le cas échéant
+* processing_time (float): Temps de traitement en secondes
+* created_at (datetime): Date de création du log
+________________
+
+
+4. Historique des conversations
+GET /jarvis/history/
+Récupère l'historique complet des conversations entre l'utilisateur et Jarvis.
+Authentication: Requise
+Query Parameters:
+* limit (integer, optionnel): Nombre maximum de messages à retourner (défaut: 50)
+Exemple:
+GET /jarvis/history/?limit=20
+
+
+Response (200 OK):
+[
+  {
+    "uuid": "770e8400-e29b-41d4-a716-446655440000",
+    "user_message": "Montre-moi mes messages non lus",
+    "jarvis_response": "Vous avez 3 messages non lus. Voici les détails:\n- Message de Alice: 'Salut, ça va ?'\n- Message de Bob: 'Rendez-vous à 15h'\n- Message de Charlie: 'Merci pour ton aide'",
+    "related_action": {
+      "uuid": "660e8400-e29b-41d4-a716-446655440000",
+      "action_type": "read_messages",
+      "action_type_display": "Lecture de messages",
+      "success": true,
+      "created_at": "2025-10-13T14:30:00Z"
+    },
+    "created_at": "2025-10-13T14:30:00Z"
+  },
+  {
+    "uuid": "880e8400-e29b-41d4-a716-446655440000",
+    "user_message": "Bonjour Jarvis",
+    "jarvis_response": "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
+    "related_action": null,
+    "created_at": "2025-10-13T14:25:00Z"
+  }
+]
+
+
+Champs:
+* uuid (string): Identifiant unique de l'entrée d'historique
+* user_message (string): Message envoyé par l'utilisateur
+* jarvis_response (string): Réponse de Jarvis
+* related_action (object|null): Log d'action associé si une action a été effectuée
+* created_at (datetime): Date de l'échange
+________________
+
+
+5. Statistiques
+GET /jarvis/stats/
+Fournit des statistiques détaillées sur l'utilisation de Jarvis par l'utilisateur.
+Authentication: Requise
+Query Parameters: Aucun
+Response (200 OK):
+{
+  "total_requests": 42,
+  "total_actions_performed": 15,
+  "total_logs": 15,
+  "successful_actions": 14,
+  "failed_actions": 1,
+  "success_rate": 93.33,
+  "last_interaction": "2025-10-13T14:30:00Z",
+  "actions_by_type": [
+    {
+      "action_type": "read_messages",
+      "count": 8
+    },
+    {
+      "action_type": "send_message",
+      "count": 4
+    },
+    {
+      "action_type": "list_conversations",
+      "count": 2
+    },
+    {
+      "action_type": "other",
+      "count": 1
+    }
+  ],
+  "is_active": true,
+  "api_rate_limit": 100
+}
+
+
+Champs:
+* total_requests (integer): Nombre total de requêtes à Jarvis
+* total_actions_performed (integer): Nombre total d'actions exécutées avec succès
+* total_logs (integer): Nombre total de logs enregistrés
+* successful_actions (integer): Nombre d'actions réussies
+* failed_actions (integer): Nombre d'actions échouées
+* success_rate (float): Taux de succès en pourcentage
+* last_interaction (datetime): Date de la dernière interaction
+* actions_by_type (array): Répartition des actions par type, triée par ordre décroissant de fréquence
+* is_active (boolean): Statut actif de Jarvis
+* api_rate_limit (integer): Limite de requêtes par jour
+________________
+
+
+Fonctionnalités de Jarvis
+Jarvis dispose de plusieurs fonctions qu'il peut exécuter automatiquement en fonction des demandes de l'utilisateur :
+Fonctions disponibles
+1. get_unread_messages: Récupère tous les messages non lus
+2. get_conversation_messages: Récupère les messages d'une conversation spécifique
+3. send_message: Envoie un message au nom de l'utilisateur
+4. mark_conversation_as_read: Marque une conversation comme lue
+5. get_conversations: Liste toutes les conversations de l'utilisateur
+Ces fonctions sont appelées automatiquement par Jarvis lorsqu'il détecte l'intention de l'utilisateur via Mistral AI.
+________________
+
+
+Codes d'erreur
+Erreurs communes
+400 Bad Request
+{
+  "message": [
+    "Le message ne peut pas être vide."
+  ]
+}
+
+
+Le message envoyé est invalide (vide, trop court, ou format incorrect).
+403 Forbidden
+{
+  "error": "Jarvis est désactivé pour votre compte."
+}
+
+
+L'instance Jarvis de l'utilisateur est désactivée (is_active = false).
+500 Internal Server Error
+{
+  "error": "Une erreur est survenue lors du traitement de votre demande.",
+  "detail": "Description détaillée de l'erreur"
+}
+
+
+Erreur serveur lors du traitement de la requête (problème avec l'API Mistral, erreur réseau, etc.).
+Missing type parameter
+{
+  "error": "Une erreur est survenue lors du traitement de votre demande.",
+  "detail": "Il faut un type pour Jarvis parmi welcome ; notifications ; message"
+}
+
+
+Le paramètre type est manquant dans l'URL pour l'endpoint /jarvis/chat/.
+________________
+
+
+Notes d'implémentation
+Authentication
+Toutes les routes nécessitent un token JWT valide dans le header:
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+
+Rate Limiting
+Chaque utilisateur a une limite de requêtes par jour configurée dans api_rate_limit (défaut: 100). Cette limite est gérée au niveau de l'instance Jarvis.
+Langues supportées
+* Français ("fr")
+* Anglais ("en")
+La langue par défaut est configurée dans default_language de l'instance Jarvis.
+Traitement asynchrone
+Les requêtes à Jarvis peuvent prendre plusieurs secondes car elles impliquent:
+1. Analyse du message par Mistral AI
+2. Exécution potentielle de plusieurs appels API
+3. Génération de la réponse finale
+Le temps de traitement est enregistré dans le champ processing_time des logs.
+________________
+
+
+Exemples d'utilisation
+Exemple 1: Message de bienvenue
+Request:
+POST /jarvis/chat/?type=welcome
+Authorization: Bearer {token}
+Content-Type: application/json
+
+
+{}
+
+
+Response:
+{
+  "response": "Bienvenue john_doe sur Echo ! Je suis Jarvis, votre assistant personnel...",
+  "action_performed": "chat",
+  "data": {},
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Exemple 2: Consultation des notifications
+Request:
+POST /jarvis/chat/?type=notifications
+Authorization: Bearer {token}
+Content-Type: application/json
+
+
+{}
+
+
+Response:
+{
+  "response": "{\"notifications\": [{\"conversation_uuid\": \"abc-123\", \"username\": \"Antoine\", \"unread_count\": 4, \"summary\": \"Antoine t'invite à dîner ce soir\"}, {\"conversation_uuid\": \"def-456\", \"username\": \"Sophie\", \"unread_count\": 1, \"summary\": \"Sophie demande comment tu vas\"}], \"total_unread\": 5}",
+  "action_performed": "chat",
+  "data": {
+    "notifications": [
+      {
+        "conversation_uuid": "abc-123",
+        "username": "Antoine",
+        "unread_count": 4,
+        "summary": "Antoine t'invite à dîner ce soir"
+      },
+      {
+        "conversation_uuid": "def-456",
+        "username": "Sophie",
+        "unread_count": 1,
+        "summary": "Sophie demande comment tu vas"
+      }
+    ],
+    "total_unread": 5
+  },
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Exemple 3: Lecture des messages non lus
+Request:
+POST /jarvis/chat/?type=message
+Authorization: Bearer {token}
+Content-Type: application/json
+
+
+{
+  "message": "Montre-moi mes messages non lus"
+}
+
+
+Response:
+{
+  "response": "Vous avez 3 messages non lus:\n- Alice: 'Salut, ça va ?'\n- Bob: 'Rendez-vous à 15h'\n- Charlie: 'Merci pour ton aide'",
+  "action_performed": "chat",
+  "data": {},
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Exemple 4: Envoi d'un message
+Request:
+POST /jarvis/chat/?type=message
+Authorization: Bearer {token}
+Content-Type: application/json
+
+
+{
+  "message": "Envoie un message à Alice pour lui dire que j'arrive dans 10 minutes"
+}
+
+
+Response:
+{
+  "response": "Message envoyé à Alice : 'J'arrive dans 10 minutes'",
+  "action_performed": "chat",
+  "data": {},
+  "timestamp": "2025-10-13T14:30:00Z",
+  "success": true
+}
+
+
+Exemple 5: Consultation des statistiques
+Request:
+GET /jarvis/stats/
+Authorization: Bearer {token}
+
+
+Response:
+{
+  "total_requests": 42,
+  "total_actions_performed": 15,
+  "total_logs": 15,
+  "successful_actions": 14,
+  "failed_actions": 1,
+  "success_rate": 93.33,
+  "last_interaction": "2025-10-13T14:30:00Z",
+  "actions_by_type": [
+    {
+      "action_type": "read_messages",
+      "count": 8
+    }
+  ],
+  "is_active": true,
+  "api_rate_limit": 100
+}
+
+
+Exemple 5: Désactivation de Jarvis
+Request:
+PATCH /jarvis/instance/
+Authorization: Bearer {token}
+Content-Type: application/json
+
+
+{
+  "is_active": false
+}
+
+
+Response:
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "user": 1,
+  "user_username": "john_doe",
+  "user_preferences": {},
+  "is_active": false,
+  "default_language": "fr",
+  "total_requests": 42,
+  "total_actions_performed": 15,
+  "last_interaction": "2025-10-13T14:30:00Z",
+  "created_at": "2025-10-01T10:00:00Z",
+  "updated_at": "2025-10-13T14:35:00Z",
+  "learned_patterns": {},
+  "api_rate_limit": 100
+}
 
 
 ________________
 
 
-Documentation générée le 13 octobre 2025
+Résumé des routes
+Méthode
+	Endpoint
+	Description
+	Auth requise
+	GET
+	/jarvis/instance/
+	Récupère l'instance Jarvis
+	Oui
+	PUT/PATCH
+	/jarvis/instance/
+	Met à jour l'instance Jarvis
+	Oui
+	POST
+	/jarvis/chat/?type=welcome
+	Message de bienvenue
+	Oui
+	POST
+	/jarvis/chat/?type=notifications
+	Résumé des notifications
+	Oui
+	POST
+	/jarvis/chat/?type=message
+	Conversation avec Jarvis
+	Oui
+	GET
+	/jarvis/logs/
+	Liste les logs d'actions
+	Oui
+	GET
+	/jarvis/history/
+	Historique des conversations
+	Oui
+	GET
+	/jarvis/stats/
+	Statistiques d'utilisation
+	Oui

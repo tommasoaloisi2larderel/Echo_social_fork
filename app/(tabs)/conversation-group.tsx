@@ -119,10 +119,9 @@ export default function ConversationGroup() {
         }
       }
 
-      // Messages
-      const response = await fetch(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`,
-        { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      // Messages de la conversation de groupe
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
       );
       if (response.status === 401) { await logout(); return; }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

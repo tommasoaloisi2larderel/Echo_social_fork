@@ -141,7 +141,7 @@ export default function ConversationDirect() {
     }
     try {
       let convDataLocal: any = null;
-      // Détails de la conversation (doit représenter une conversation privée)
+      // Détails de la conversation privée uniquement
       const convResponse = await makeAuthenticatedRequest(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/`
       );
@@ -158,10 +158,10 @@ export default function ConversationDirect() {
         if (otherUsername) setVals.add(otherUsername);
         allowedUsernamesRef.current = setVals;
 
-        // Si on n'a pas pu déterminer l'autre participant ici, tenter via la liste des conversations
+        // Si on n'a pas pu déterminer l'autre participant ici, tenter via la liste des conversations privées
         if (allowedUsernamesRef.current.size < 2) {
           try {
-            const listResp = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/`);
+            const listResp = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/private/`);
             if (listResp.ok) {
               const listData = await listResp.json();
               const convFromList = (Array.isArray(listData) ? listData : (listData.results || [])).find((c: any) => c.uuid === conversationId);
@@ -176,10 +176,9 @@ export default function ConversationDirect() {
         }
       }
 
-      // Messages
-      const response = await fetch(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`,
-        { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      // Messages de la conversation privée
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
       );
       if (response.status === 401) { await logout(); return; }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
