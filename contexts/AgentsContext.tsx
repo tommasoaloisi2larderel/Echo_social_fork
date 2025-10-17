@@ -51,15 +51,19 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
   const fetchMyAgents = async (makeRequest: (url: string, options?: RequestInit) => Promise<Response>) => {
     setLoadingAgents(true);
     try {
-      const response = await makeRequest(`${API_BASE_URL}/api/agents/`);
+      // Using correct endpoint: /agents/agents/
+      const response = await makeRequest(`${API_BASE_URL}/agents/agents/`);
       if (response.ok) {
         const data = await response.json();
         setMyAgents(data);
       } else {
         console.error('Failed to fetch agents:', response.status);
+        // Don't crash if agents endpoint doesn't exist yet
+        setMyAgents([]);
       }
     } catch (error) {
       console.error('Error fetching agents:', error);
+      setMyAgents([]);
     } finally {
       setLoadingAgents(false);
     }
@@ -71,8 +75,9 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
   ) => {
     setLoadingConversationAgents(true);
     try {
+      // Using correct endpoint: /agents/conversations/{uuid}/agents/
       const response = await makeRequest(
-        `${API_BASE_URL}/api/conversations/${conversationId}/agents/`
+        `${API_BASE_URL}/agents/conversations/${conversationId}/agents/`
       );
       if (response.ok) {
         const data = await response.json();
@@ -96,7 +101,8 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
     console.log('Creating agent with data:', agentData);
     
     try {
-      const response = await makeRequest(`${API_BASE_URL}/api/agents/`, {
+      // Using correct endpoint: /agents/agents/
+      const response = await makeRequest(`${API_BASE_URL}/agents/agents/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +119,7 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Non-JSON response:', text);
-        throw new Error('Le serveur a renvoyé une réponse invalide');
+        throw new Error('Le serveur a renvoyé une réponse invalide. L\'endpoint agents n\'est peut-être pas encore implémenté.');
       }
 
       if (!response.ok) {
@@ -137,7 +143,8 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
     agentData: Partial<Agent>,
     makeRequest: (url: string, options?: RequestInit) => Promise<Response>
   ): Promise<Agent> => {
-    const response = await makeRequest(`${API_BASE_URL}/api/agents/${uuid}/`, {
+    // Using correct endpoint: /agents/agents/{uuid}/
+    const response = await makeRequest(`${API_BASE_URL}/agents/agents/${uuid}/`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -161,8 +168,9 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
     agentUuid: string,
     makeRequest: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
+    // Using correct endpoint: /agents/conversations/{uuid}/agents/add/
     const response = await makeRequest(
-      `${API_BASE_URL}/api/conversations/${conversationId}/agents/add/`,
+      `${API_BASE_URL}/agents/conversations/${conversationId}/agents/add/`,
       {
         method: 'POST',
         headers: {
@@ -186,8 +194,9 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
     agentUuid: string,
     makeRequest: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
+    // Using correct endpoint: /agents/conversations/{uuid}/agents/remove/
     const response = await makeRequest(
-      `${API_BASE_URL}/api/conversations/${conversationId}/agents/remove/`,
+      `${API_BASE_URL}/agents/conversations/${conversationId}/agents/remove/`,
       {
         method: 'POST',
         headers: {

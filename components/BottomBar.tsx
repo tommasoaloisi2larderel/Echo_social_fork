@@ -1199,8 +1199,7 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
                 )}
               </View>
             )}
-
-            {/* My Agents History Section */}
+            {/* My Agents Section - Enhanced UI */}
             <View style={{ marginTop: 20 }}>
               <TouchableOpacity
                 onPress={() => setShowAgentsDropdown(!showAgentsDropdown)}
@@ -1208,133 +1207,257 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
                   flexDirection: 'row', 
                   justifyContent: 'space-between', 
                   alignItems: 'center', 
-                  marginBottom: 12,
-                  padding: 12,
-                  backgroundColor: 'rgba(10, 145, 104, 0.05)',
-                  borderRadius: 12,
+                  marginBottom: 16,
+                  padding: 14,
+                  backgroundColor: 'rgba(10, 145, 104, 0.08)',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(10, 145, 104, 0.15)',
                 }}
               >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>
-                  Mes agents ({myAgents.length})
-                </Text>
-                <Ionicons 
-                  name={showAgentsDropdown ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color="rgba(10, 145, 104, 0.8)" 
-                />
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(10, 145, 104, 0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="cube" size={20} color="rgba(10, 145, 104, 1)" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#2c3e50' }}>
+                      Mes Agents
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#7f8c8d', marginTop: 2 }}>
+                      {myAgents.length} agent{myAgents.length !== 1 ? 's' : ''} créé{myAgents.length !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Ionicons 
+                    name={showAgentsDropdown ? "chevron-up" : "chevron-down"} 
+                    size={18} 
+                    color="rgba(10, 145, 104, 1)" 
+                  />
+                </View>
               </TouchableOpacity>
 
               {showAgentsDropdown && (
-                <View style={{ gap: 10 }}>
+                <Animated.View style={{ 
+                  opacity: showAgentsDropdown ? 1 : 0,
+                  transform: [{ 
+                    translateY: showAgentsDropdown ? 0 : -10 
+                  }],
+                }}>
                   {myAgents.length === 0 ? (
                     <View style={{ 
-                      padding: 20, 
-                      backgroundColor: '#f5f5f5', 
-                      borderRadius: 12, 
+                      padding: 32, 
+                      backgroundColor: 'rgba(10, 145, 104, 0.03)', 
+                      borderRadius: 16,
                       alignItems: 'center',
+                      borderWidth: 2,
+                      borderColor: 'rgba(10, 145, 104, 0.1)',
+                      borderStyle: 'dashed',
                     }}>
-                      <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
-                        Vous n'avez pas encore créé d'agents
+                      <View style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 32,
+                        backgroundColor: 'rgba(10, 145, 104, 0.08)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16,
+                      }}>
+                        <Ionicons name="add-circle-outline" size={32} color="rgba(10, 145, 104, 0.5)" />
+                      </View>
+                      <Text style={{ 
+                        fontSize: 16, 
+                        fontWeight: '600',
+                        color: '#2c3e50', 
+                        marginBottom: 8,
+                      }}>
+                        Aucun agent créé
+                      </Text>
+                      <Text style={{ 
+                        fontSize: 13, 
+                        color: '#95a5a6', 
+                        textAlign: 'center',
+                        lineHeight: 20,
+                      }}>
+                        Créez votre premier agent IA{'\n'}pour automatiser vos conversations
                       </Text>
                     </View>
                   ) : (
-                    myAgents.map((agent) => (
-                      <TouchableOpacity
-                        key={agent.uuid}
-                        onPress={() => handleEditAgent(agent)}
-                        activeOpacity={0.8}
-                        style={{
-                          backgroundColor: 'white',
-                          borderRadius: 14,
-                          padding: 14,
-                          borderWidth: 1,
-                          borderColor: 'rgba(10, 145, 104, 0.15)',
-                          shadowColor: 'rgba(0, 0, 0, 0.1)',
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.2,
-                          shadowRadius: 3,
-                          elevation: 2,
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <View style={{
-                            width: 50,
-                            height: 50,
-                            borderRadius: 25,
-                            backgroundColor: agent.is_active ? 'rgba(10, 145, 104, 0.1)' : 'rgba(150, 150, 150, 0.1)',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 12,
-                          }}>
-                            <Ionicons 
-                              name={agent.agent_type === 'simple' ? 'flash' : agent.agent_type === 'conditional' ? 'git-branch' : 'settings'} 
-                              size={24} 
-                              color={agent.is_active ? 'rgba(10, 145, 104, 1)' : '#999'} 
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 2 }}>
-                              {agent.name}
-                            </Text>
-                            <Text style={{ fontSize: 13, color: '#666', marginBottom: 4 }} numberOfLines={2}>
-                              {agent.description || 'Aucune description'}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ gap: 12 }}>
+                      {myAgents.map((agent, index) => {
+                        // Generate unique key using both uuid and index as fallback
+                        const uniqueKey = agent.uuid || `agent-${index}`;
+                        
+                        return (
+                          <TouchableOpacity
+                            key={uniqueKey}
+                            onPress={() => handleEditAgent(agent)}
+                            activeOpacity={0.7}
+                            style={{
+                              backgroundColor: 'white',
+                              borderRadius: 16,
+                              padding: 16,
+                              borderWidth: 1,
+                              borderColor: agent.is_active ? 'rgba(10, 145, 104, 0.2)' : 'rgba(150, 150, 150, 0.2)',
+                              shadowColor: agent.is_active ? 'rgba(10, 145, 104, 0.15)' : '#000',
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.1,
+                              shadowRadius: 8,
+                              elevation: 3,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              {/* Agent Icon */}
                               <View style={{
-                                paddingHorizontal: 8,
-                                paddingVertical: 3,
-                                backgroundColor: agent.is_active ? 'rgba(10, 145, 104, 0.1)' : 'rgba(150, 150, 150, 0.1)',
-                                borderRadius: 8,
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                backgroundColor: agent.is_active 
+                                  ? 'rgba(10, 145, 104, 0.1)' 
+                                  : 'rgba(150, 150, 150, 0.1)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginRight: 14,
                               }}>
-                                <Text style={{ 
-                                  fontSize: 11, 
-                                  color: agent.is_active ? 'rgba(10, 145, 104, 1)' : '#999',
-                                  fontWeight: '500',
-                                }}>
-                                  {agent.is_active ? 'Actif' : 'Inactif'}
-                                </Text>
+                                <Ionicons 
+                                  name={
+                                    agent.agent_type === 'simple' ? 'flash' : 
+                                    agent.agent_type === 'conditional' ? 'git-branch' : 
+                                    'settings'
+                                  } 
+                                  size={26} 
+                                  color={agent.is_active ? 'rgba(10, 145, 104, 1)' : '#95a5a6'}
+                                />
                               </View>
-                              {agent.conversation_count !== undefined && agent.conversation_count > 0 && (
-                                <View style={{
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 3,
-                                  backgroundColor: 'rgba(100, 100, 100, 0.1)',
-                                  borderRadius: 8,
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}>
-                                  <Ionicons name="chatbubbles" size={10} color="#666" />
-                                  <Text style={{ fontSize: 11, color: '#666', fontWeight: '500' }}>
-                                    {agent.conversation_count}
+                              
+                              {/* Agent Info */}
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                  <Text style={{ 
+                                    fontSize: 16, 
+                                    fontWeight: '700', 
+                                    color: '#2c3e50',
+                                    flex: 1,
+                                  }} numberOfLines={1}>
+                                    {agent.name}
                                   </Text>
+                                  {agent.is_active && (
+                                    <View style={{
+                                      backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 3,
+                                      borderRadius: 10,
+                                      marginLeft: 8,
+                                    }}>
+                                      <Text style={{ 
+                                        fontSize: 10, 
+                                        fontWeight: '600',
+                                        color: 'rgba(10, 145, 104, 1)',
+                                      }}>
+                                        ACTIF
+                                      </Text>
+                                    </View>
+                                  )}
                                 </View>
-                              )}
+                                
+                                <Text style={{ 
+                                  fontSize: 13, 
+                                  color: '#7f8c8d',
+                                  marginBottom: 6,
+                                  lineHeight: 18,
+                                }} numberOfLines={2}>
+                                  {agent.description || 'Agent IA personnalisé'}
+                                </Text>
+                                
+                                {/* Agent Stats */}
+                                <View style={{ flexDirection: 'row', gap: 16 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="chatbox-outline" size={12} color="#95a5a6" />
+                                    <Text style={{ 
+                                      fontSize: 11, 
+                                      color: '#95a5a6',
+                                      marginLeft: 4,
+                                    }}>
+                                      {agent.conversation_count || 0} conv.
+                                    </Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="code-slash" size={12} color="#95a5a6" />
+                                    <Text style={{ 
+                                      fontSize: 11, 
+                                      color: '#95a5a6',
+                                      marginLeft: 4,
+                                    }}>
+                                      {agent.agent_type === 'simple' ? 'Simple' : 
+                                      agent.agent_type === 'conditional' ? 'Conditionnel' : 
+                                      'Action'}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </View>
+                              
+                              {/* Arrow */}
+                              <View style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: 'rgba(10, 145, 104, 0.05)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginLeft: 12,
+                              }}>
+                                <Ionicons name="chevron-forward" size={18} color="rgba(10, 145, 104, 0.6)" />
+                              </View>
                             </View>
-                          </View>
-                          <Ionicons name="chevron-forward" size={20} color="rgba(10, 145, 104, 0.4)" />
-                        </View>
-
-                        {/* Show prompt preview when expanded */}
-                        {agent.instructions?.system_prompt && (
-                          <View style={{ 
-                            marginTop: 12, 
-                            paddingTop: 12, 
-                            borderTopWidth: 1, 
-                            borderTopColor: 'rgba(10, 145, 104, 0.1)',
-                          }}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 4 }}>
-                              Prompt système:
-                            </Text>
-                            <Text style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }} numberOfLines={3}>
-                              {agent.instructions.system_prompt}
-                            </Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    ))
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   )}
-                </View>
+                  
+                  {/* Add New Agent Button */}
+                  {myAgents.length > 0 && (
+                    <TouchableOpacity
+                      onPress={handleCreateAgent}
+                      style={{
+                        marginTop: 12,
+                        padding: 14,
+                        backgroundColor: 'rgba(10, 145, 104, 0.05)',
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(10, 145, 104, 0.15)',
+                      }}
+                    >
+                      <Ionicons name="add-circle" size={20} color="rgba(10, 145, 104, 1)" />
+                      <Text style={{ 
+                        fontSize: 14, 
+                        fontWeight: '600',
+                        color: 'rgba(10, 145, 104, 1)', 
+                        marginLeft: 8,
+                      }}>
+                        Créer un nouvel agent
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
               )}
             </View>
 
