@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -187,7 +188,11 @@ export default function AuthScreen() {
           {/* Logo/Header Section */}
           <View style={styles.headerSection}>
             <Animated.View style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}>
-              <Ionicons name="chatbubbles" size={60} color="white" />
+              <Image 
+                source={require('../../assets/images/logo2.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </Animated.View>
             <Text style={styles.appName}>Echo</Text>
             <Text style={styles.appTagline}>
@@ -597,5 +602,10 @@ const styles = StyleSheet.create({
     color: 'rgba(10, 145, 104, 1)',
     textAlign: 'center',
     marginBottom: 8,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
 });
