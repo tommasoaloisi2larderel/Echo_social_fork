@@ -6,28 +6,31 @@ import { ChatProvider } from "../contexts/ChatContext";
 import { JarvisProvider } from "../contexts/JarvisContext";
 import { NavigationProvider } from "../contexts/NavigationContext";
 import { TransitionProvider } from "../contexts/TransitionContext";
+import { UserProfileProvider } from "../contexts/UserProfileContext";
 
 export default function RootLayout() {
   console.log('🔧 RootLayout loaded!');
   
   return (
     <AuthProvider>
-      <ChatProvider>
-        <JarvisProvider>
-          <AgentsProvider>
-          <NavigationProvider>
-            <TransitionProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="(screens)" />
-              </Stack>
-            </TransitionProvider>
-          </NavigationProvider>
-          </AgentsProvider>
-        </JarvisProvider>
-      </ChatProvider>
+      <UserProfileProvider>
+        <ChatProvider>
+          <JarvisProvider>
+            <AgentsProvider>
+              <NavigationProvider>
+                <TransitionProvider>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="(screens)" />
+                  </Stack>
+                </TransitionProvider>
+              </NavigationProvider>
+            </AgentsProvider>
+          </JarvisProvider>
+        </ChatProvider>
+      </UserProfileProvider>
     </AuthProvider>
   );
 }

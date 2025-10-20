@@ -18,11 +18,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 
-// Utilise le proxy local pour éviter CORS en développement web
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
+const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 
 interface ConversationMember {
   id?: number;
@@ -65,12 +63,22 @@ interface GroupDetails {
 interface ConversationDetails {
   uuid: string;
   is_group?: boolean;
+  conversation_type?: 'direct' | 'group_chat';
   name?: string;
   description?: string;
   created_at?: string;
   members?: ConversationMember[];
   participants_detail?: ConversationMember[];
   other_participant?: ConversationMember;
+  group_info?: {
+    id: number;
+    uuid: string;
+    name: string;
+    description?: string;
+    avatar?: string;
+    member_count: number;
+    my_role?: 'owner' | 'moderator' | 'member';
+  };
   media_count?: number;
   link_count?: number;
   document_count?: number;
@@ -79,7 +87,8 @@ interface ConversationDetails {
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
   const { makeAuthenticatedRequest, user } = useAuth();
-  const { prefetchAvatars } = useChat();
+  const { prefetchAvatars, getCachedConversations, getCachedGroups } = useChat();
+  const { getUserProfile, getUserStats } = useUserProfile();
   const insets = useSafeAreaInsets();
   
   const [loading, setLoading] = useState(true);
@@ -88,7 +97,11 @@ export default function ConversationManagement() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [ephemeralMessages, setEphemeralMessages] = useState(false);
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  
+  // Pour les conversations privées
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
 
   useEffect(() => {
     loadConversationDetails();
@@ -96,94 +109,179 @@ export default function ConversationManagement() {
 
   const loadConversationDetails = async () => {
     try {
+      console.log('🔍 Chargement conversation ID:', conversationId);
+      
+      // D'abord, chercher dans le cache des conversations
+      const cachedConversations = getCachedConversations();
+      const cachedConv = cachedConversations?.find((c: any) => c.uuid === conversationId);
+      
+      if (cachedConv) {
+        console.log('✅ Conversation trouvée en cache:', cachedConv);
+        setConversation(cachedConv);
+        
+        // Vérifier si ce conversation_uuid correspond à un groupe
+        const cachedGroups = getCachedGroups();
+        const isGroupConv = cachedGroups?.some((g: any) => g.conversation_uuid === conversationId);
+        
+        console.log('🔍 Type de conversation:', {
+          conversation_uuid: conversationId,
+          isGroup: isGroupConv,
+          has_other_participant: !!cachedConv.other_participant,
+          groups_count: cachedGroups?.length || 0
+        });
+        
+        if (isGroupConv) {
+          // C'est un groupe
+          console.log('🔍 C\'est un groupe, chargement des détails...');
+          await loadGroupDetails();
+        } else {
+          // C'est une conversation privée
+          const otherUserUuid = cachedConv.other_participant?.uuid || cachedConv.other_participant?.user_uuid;
+          console.log('👤 UUID autre utilisateur (depuis cache):', otherUserUuid);
+          
+          if (otherUserUuid) {
+            await loadUserProfile(otherUserUuid);
+          } else {
+            console.error('❌ Pas d\'UUID pour l\'autre participant');
+          }
+        }
+        
+        setLoading(false);
+        return;
+      }
+      
+      // Sinon, fallback sur l'API (mais elle ne retourne pas tout)
+      console.log('⚠️ Pas de cache, appel API...');
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/`
       );
       
-      if (response.ok) {
-        const data = await response.json();
-        setConversation(data);
-        console.log('📋 Conversation chargée ID:', conversationId);
-        console.log('📋 Participants count:', data.participants_detail?.length);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('📋 Conversation chargée depuis API:', data);
+      setConversation(data);
+      
+      // Si c'est une conversation privée
+      if (data.other_participant) {
+        const otherUserUuid = data.other_participant.uuid || data.other_participant.user_uuid;
+        console.log('👤 UUID autre utilisateur:', otherUserUuid);
         
-        // Précharger l'avatar principal si présent
-        try {
-          const avatarUrl = data?.other_participant?.photo_profil_url || data?.avatar;
-          if (avatarUrl) await prefetchAvatars([avatarUrl]);
-        } catch {}
-
-        // D'abord vérifier dans la liste des conversations si c'est un groupe
-        const conversationsResponse = await makeAuthenticatedRequest(
-          `${API_BASE_URL}/messaging/conversations/`
-        );
-        
-        let conversationFromList = null;
-        if (conversationsResponse.ok) {
-          const convList = await conversationsResponse.json();
-          conversationFromList = convList.find((c: any) => c.uuid === conversationId);
-          console.log('📋 Conversation from list - other_participant:', conversationFromList?.other_participant);
-        }
-        
-        // Toujours vérifier dans les groupes d'abord
-        console.log('👥 Recherche dans les groupes...');
-        const groupsResponse = await makeAuthenticatedRequest(
-          `${API_BASE_URL}/groups/my-groups/`
-        );
-        
-        let isGroupConv = false;
-        if (groupsResponse.ok) {
-          const groups = await groupsResponse.json();
-          console.log('📋 Vérification si conversation fait partie des groupes...');
-          
-          // Charger les détails de chaque groupe pour obtenir leur conversation_uuid
-          for (const group of groups) {
-            try {
-              const detailsResponse = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/groups/${group.uuid}/`
-              );
-              
-              if (detailsResponse.ok) {
-                const groupData = await detailsResponse.json();
-                console.log('🔍 Vérif groupe:', groupData.name, 'conv_uuid:', groupData.conversation_uuid);
-                
-                // Vérifier si c'est le bon groupe
-                if (groupData.conversation_uuid === conversationId) {
-                  console.log('✅ C\'est un groupe:', groupData.name);
-                  isGroupConv = true;
-                  setGroupDetails(groupData);
-                  console.log('✅ Détails groupe chargés:', {
-                    name: groupData.name,
-                    memberCount: groupData.member_count,
-                    myRole: groupData.my_membership?.role,
-                    membersLength: groupData.members?.length,
-                    membersPreview: groupData.members?.slice(0, 2)
-                  });
-                  break;
-                }
-              }
-            } catch (error) {
-              console.error('❌ Erreur vérification groupe:', group.uuid, error);
-            }
-          }
-        }
-        
-        if (!isGroupConv) {
-          console.log('✅ C\'est une conversation privée (pas de groupe trouvé)');
+        if (otherUserUuid) {
+          await loadUserProfile(otherUserUuid);
         }
       }
+      
+      // Si c'est un groupe
+      if (data.is_group || !data.other_participant) {
+        await loadGroupDetails();
+      }
+      
     } catch (error) {
-      console.error('Erreur chargement détails:', error);
-      Alert.alert('Erreur', 'Impossible de charger les détails');
+      console.error('❌ Erreur chargement conversation:', error);
+      Alert.alert('Erreur', 'Impossible de charger les détails de la conversation');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadGroupDetails = async (conversationData: ConversationDetails) => {
-    // Cette fonction est maintenant appelée depuis loadConversationDetails
-    // avec le groupData déjà trouvé, donc on peut la simplifier
-    // Mais gardons-la pour compatibilité
-    console.log('🔎 loadGroupDetails appelé');
+  const loadUserProfile = async (uuid: string) => {
+    setLoadingProfile(true);
+    try {
+      console.log('👤 Chargement profil utilisateur UUID:', uuid);
+      
+      // Utiliser le cache pour charger le profil
+      const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
+      
+      if (!profile) {
+        console.error('❌ Profil non reçu');
+        setLoadingProfile(false);
+        return;
+      }
+      
+      console.log('✅ Profil reçu:', {
+        username: profile.username,
+        surnom: profile.surnom,
+        photo_profil_url: profile.photo_profil_url,
+      });
+      
+      setUserProfile(profile);
+      
+      // Charger aussi les stats
+      console.log('📊 Chargement stats utilisateur...');
+      const stats = await getUserStats(uuid, makeAuthenticatedRequest);
+      
+      if (stats) {
+        console.log('✅ Stats reçues:', stats);
+        setUserStats(stats);
+      } else {
+        console.log('⚠️ Pas de stats reçues');
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur chargement profil:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const loadGroupDetails = async () => {
+    const cachedGroups = getCachedGroups();
+    const foundGroup = cachedGroups?.find((g: any) => g.conversation_uuid === conversationId);
+    
+    if (foundGroup) {
+      console.log('📋 Détails groupe trouvés en cache');
+      setGroupDetails(foundGroup);
+      if (foundGroup.avatar) {
+        try { await prefetchAvatars([foundGroup.avatar]); } catch {}
+      }
+      return;
+    }
+
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/my-groups/`);
+      if (response.ok) {
+        const groups = await response.json();
+        const group = groups.find((g: any) => g.conversation_uuid === conversationId);
+        
+        if (group) {
+          const detailResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/${group.uuid}/`);
+          if (detailResponse.ok) {
+            const details = await detailResponse.json();
+            setGroupDetails(details);
+            if (details.avatar) {
+              try { await prefetchAvatars([details.avatar]); } catch {}
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement groupe:', error);
+    }
+  };
+
+  const handleBlockUser = () => {
+    Alert.alert(
+      'Bloquer cet utilisateur',
+      'Voulez-vous vraiment bloquer cet utilisateur ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Bloquer', style: 'destructive', onPress: () => console.log('Bloquer utilisateur') }
+      ]
+    );
+  };
+
+  const handleReportUser = () => {
+    Alert.alert(
+      'Signaler cet utilisateur',
+      'Voulez-vous signaler cet utilisateur pour comportement inapproprié ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Signaler', style: 'destructive', onPress: () => console.log('Signaler utilisateur') }
+      ]
+    );
   };
 
   const handleDeleteConversation = () => {
@@ -232,9 +330,6 @@ export default function ConversationManagement() {
               );
               if (response.ok) {
                 router.back();
-                router.back(); // Retour à la liste des conversations
-              } else {
-                Alert.alert('Erreur', 'Impossible de quitter le groupe');
               }
             } catch (error) {
               Alert.alert('Erreur', 'Impossible de quitter le groupe');
@@ -245,609 +340,346 @@ export default function ConversationManagement() {
     );
   };
 
-  const handleRemoveMember = (member: ConversationMember) => {
-    if (!groupDetails) return;
-    
-    Alert.alert(
-      'Retirer du groupe',
-      `Voulez-vous retirer ${member.surnom || member.username} du groupe ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
+  const handleArchiveConversation = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
         {
-          text: 'Retirer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const memberUuid = member.user_uuid || member.uuid;
-              const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/groups/${groupDetails.uuid}/members/${memberUuid}/`,
-                { method: 'DELETE' }
-              );
-              
-              if (response.ok) {
-                // Recharger les détails du groupe
-                await loadConversationDetails();
-                Alert.alert('Succès', 'Membre retiré du groupe');
-              } else {
-                Alert.alert('Erreur', 'Impossible de retirer ce membre');
-              }
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de retirer ce membre');
-            }
-          }
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'archive' })
         }
-      ]
-    );
-  };
-
-  const handleInviteMember = () => {
-    if (!groupDetails) return;
-    
-    console.log('➕ Ouverture page ajout membres pour:', groupDetails.name);
-    router.push({
-      pathname: '/(tabs)/add-group-members',
-      params: {
-        groupUuid: groupDetails.uuid,
-        groupName: groupDetails.name
+      );
+      
+      if (response.ok) {
+        Alert.alert('Succès', 'Conversation archivée');
+        router.back();
       }
-    });
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible d\'archiver');
+    }
   };
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="rgba(10, 145, 104, 1)" />
       </View>
     );
   }
 
-  // Détecter si c'est un groupe : se baser sur groupDetails ou is_group
-  const isGroup = !!groupDetails || conversation?.is_group === true;
+  // Vérifier si c'est un groupe en checkant dans la liste des groupes
+  const cachedGroups = getCachedGroups();
+  const isGroup = cachedGroups?.some((g: any) => g.conversation_uuid === conversationId);
+  const otherParticipant = conversation?.other_participant;
   
-  console.log('🎯 Détection groupe:', {
-    hasGroupDetails: !!groupDetails,
-    groupDetailsValue: groupDetails ? {
-      name: groupDetails.name,
-      uuid: groupDetails.uuid,
-      membersCount: groupDetails.members?.length
-    } : null,
-    isGroup
-  });
+  console.log('🎨 Render - isGroup:', isGroup);
+  console.log('🎨 Render - userProfile:', userProfile);
+  console.log('🎨 Render - loadingProfile:', loadingProfile);
   
-  // Normaliser les membres : parfois user est un objet, parfois juste un ID
-  const rawMembers = groupDetails?.members || [];
-  console.log('🔄 Normalisation membres:', {
-    rawMembersCount: rawMembers.length,
-    firstMember: rawMembers[0]
-  });
+  // Déterminer le nom et l'avatar à afficher
+  const displayName = isGroup 
+    ? (groupDetails?.name || conversation?.name || 'Groupe')
+    : (userProfile?.surnom || userProfile?.username || otherParticipant?.surnom || otherParticipant?.username || 'Utilisateur');
   
-  const members = rawMembers.map(member => {
-    // Si user est un objet, extraire les infos
-    if (member.user && typeof member.user === 'object') {
-      const normalized = {
-        ...member,
-        user_uuid: member.user.uuid,
-        username: member.user.username || member.username,
-        surnom: member.user.surnom || member.surnom,
-        photo_profil_url: member.user.photo_profil_url || member.photo_profil_url,
-      };
-      return normalized;
-    }
-    return member;
-  });
+  const avatarUrl = isGroup
+    ? groupDetails?.avatar
+    : (userProfile?.photo_profil_url || otherParticipant?.photo_profil_url);
   
-  console.log('✅ Membres normalisés:', {
-    count: members.length,
-    preview: members.slice(0, 2).map(m => ({
-      username: m.username,
-      surnom: m.surnom,
-      role: m.role
-    }))
-  });
-  
-  // Pour les conversations privées, trouver l'autre participant
-  const contact = conversation?.participants_detail?.find(
-    p => p.user_uuid !== user?.uuid
-  );
-  
-  const isAdmin = groupDetails?.my_membership?.role === 'owner' || groupDetails?.my_membership?.role === 'moderator';
-  const currentUserRole = groupDetails?.my_membership?.role;
-  
-  const participantsCount = conversation?.participants_detail?.length || 0;
-  
-  console.log('📊 État affichage:', {
-    isGroup,
-    participantsCount,
-    hasContact: !!contact,
-    contact: contact ? {
-      username: contact.username,
-      surnom: contact.surnom,
-      user_uuid: contact.user_uuid
-    } : null,
-    hasGroupDetails: !!groupDetails,
-    groupDetailsName: groupDetails?.name,
-    memberCount: members.length,
-    membersPreview: members.slice(0, 2).map(m => ({
-      username: m.username,
-      user_uuid: m.user_uuid,
-      role: m.role
-    })),
-    isAdmin,
-    currentUserRole,
-    currentUserUuid: user?.uuid
-  });
-
-  // Composant pour une ligne de paramètre
-  const SettingRow = ({ 
-    icon, 
-    title, 
-    subtitle, 
-    onPress, 
-    showArrow = true, 
-    rightElement,
-    danger = false,
-    first = false,
-    last = false,
-  }: {
-    icon: string;
-    title: string;
-    subtitle?: string;
-    onPress?: () => void;
-    showArrow?: boolean;
-    rightElement?: React.ReactNode;
-    danger?: boolean;
-    first?: boolean;
-    last?: boolean;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.settingRow,
-        first && styles.settingRowFirst,
-        last && styles.settingRowLast,
-      ]}
-      onPress={onPress}
-      disabled={!onPress && !rightElement}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconContainer, danger && styles.iconDanger]}>
-        <Ionicons name={icon as any} size={22} color={danger ? '#ff6b6b' : 'rgba(10, 145, 104, 1)'} />
-      </View>
-      <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, danger && styles.settingTitleDanger]}>{title}</Text>
-        {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
-      </View>
-      {rightElement || (showArrow && (
-        <Ionicons name="chevron-forward" size={20} color="#ccc" />
-      ))}
-    </TouchableOpacity>
-  );
+  console.log('🎨 DisplayName:', displayName);
+  console.log('🎨 AvatarUrl:', avatarUrl);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header unifié */}
-      <FloatingHeader 
-        title={isGroup ? 'Paramètres du groupe' : 'Infos du contact'}
-        icon="settings-outline"
-      />
-
+      <FloatingHeader title="Gestion" icon="settings-outline" />
+      
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Section Photo/Avatar */}
+        {/* Section Profil */}
         <View style={styles.profileSection}>
           <LinearGradient
-            colors={['rgba(10, 145, 104, 0.03)', 'rgba(10, 145, 104, 0.01)']}
+            colors={['rgba(240, 250, 248, 1)', 'rgba(200, 235, 225, 1)']}
             style={styles.profileGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
             <View style={styles.avatarWrapper}>
               {isGroup ? (
                 <View style={styles.groupAvatarContainer}>
-                  <LinearGradient
-                    colors={['rgba(10, 145, 104, 0.9)', 'rgba(10, 145, 104, 0.7)']}
-                    style={styles.largeAvatar}
-                  >
-                    <Ionicons name="people" size={50} color="#fff" />
-                  </LinearGradient>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.largeAvatar} />
+                  ) : (
+                    <View style={[styles.largeAvatar, { backgroundColor: 'rgba(10, 145, 104, 0.2)' }]}>
+                      <Ionicons name="people" size={50} color="rgba(10, 145, 104, 1)" />
+                    </View>
+                  )}
                 </View>
-              ) : (!isGroup && contact) ? (
-                contact.photo_profil_url ? (
-                  <Image
-                    source={{ uri: contact.photo_profil_url }}
-                    style={styles.largeAvatar}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <DefaultAvatar 
-                    name={contact.surnom || contact.username || 'Contact'} 
-                    size={120} 
-                  />
-                )
               ) : (
-                <DefaultAvatar 
-                  name="Contact" 
-                  size={120} 
-                />
+                avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.largeAvatar} />
+                ) : (
+                  <DefaultAvatar name={displayName} size={120} />
+                )
               )}
             </View>
-            <Text style={styles.profileName}>
-              {isGroup 
-                ? groupDetails?.name || conversation?.name || 'Groupe' 
-                : contact?.surnom || contact?.username || 'Contact'
-              }
-            </Text>
-            {contact?.is_ai && !isGroup && (
-              <View style={styles.aiBadgeLarge}>
-                <Ionicons name="flash" size={16} color="#fff" />
-                <Text style={styles.aiBadgeTextLarge}>Agent IA</Text>
-              </View>
+
+            <Text style={styles.profileName}>{displayName}</Text>
+            
+            {/* Affichage spécifique pour conversation privée */}
+            {!isGroup && userProfile && (
+              <>
+                {userProfile.username && (
+                  <Text style={styles.username}>@{userProfile.username}</Text>
+                )}
+                {userProfile.bio && (
+                  <Text style={styles.bioText}>{userProfile.bio}</Text>
+                )}
+                
+                {/* Statistiques de l'utilisateur */}
+                {userStats && (
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Ionicons name="people-outline" size={18} color="rgba(10, 145, 104, 1)" />
+                      <Text style={styles.statNumber}>{userStats.total_connexions || 0}</Text>
+                      <Text style={styles.statLabel}>Amis</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Ionicons name="calendar-outline" size={18} color="rgba(10, 145, 104, 1)" />
+                      <Text style={styles.statNumber}>{userStats.total_evenements || 0}</Text>
+                      <Text style={styles.statLabel}>Événements</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Ionicons name="chatbubbles-outline" size={18} color="rgba(10, 145, 104, 1)" />
+                      <Text style={styles.statNumber}>{userStats.total_reponses || 0}</Text>
+                      <Text style={styles.statLabel}>Réponses</Text>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
-            {isGroup && (groupDetails?.description || conversation?.description) && (
-              <Text style={styles.groupDesc}>
-                {groupDetails?.description || conversation?.description}
-              </Text>
-            )}
-            {!isGroup && contact?.username && (
-              <Text style={styles.username}>@{contact.username}</Text>
+
+            {/* Affichage spécifique pour groupe */}
+            {isGroup && groupDetails && (
+              <>
+                {groupDetails.description && (
+                  <Text style={styles.bioText}>{groupDetails.description}</Text>
+                )}
+                <View style={styles.groupInfo}>
+                  <Ionicons name="people" size={16} color="#666" />
+                  <Text style={styles.groupInfoText}>
+                    {groupDetails.member_count} membre{groupDetails.member_count > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              </>
             )}
           </LinearGradient>
         </View>
 
-        {/* Section Actions rapides - seulement pour conversations privées */}
-        {!isGroup && (
-          <View style={styles.quickActionsContainer}>
-            <View style={styles.quickActions}>
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
-                >
-                  <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Rechercher</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
-                >
-                  <Ionicons name="call-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Appeler</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
-                >
-                  <Ionicons name="videocam-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Vidéo</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Section Membres (si groupe) */}
-        {isGroup && (
-          <View style={styles.floatingCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>
-                <Ionicons name="people" size={16} color="rgba(10, 145, 104, 1)" /> {groupDetails?.member_count || members.length} membre{((groupDetails?.member_count || members.length) > 1) ? 's' : ''}
-              </Text>
-              {isAdmin && (
-                <TouchableOpacity style={styles.addButton} onPress={handleInviteMember}>
-                  <LinearGradient
-                    colors={['rgba(10, 145, 104, 0.2)', 'rgba(10, 145, 104, 0.1)']}
-                    style={styles.addButtonGradient}
-                  >
-                    <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
-                  </LinearGradient>
+        {/* Section Membres (pour les groupes uniquement) */}
+        {isGroup && groupDetails && groupDetails.members && groupDetails.members.length > 0 && (
+          <View style={styles.settingsSection}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={styles.sectionTitle}>Membres ({groupDetails.member_count})</Text>
+              {groupDetails.member_count > 10 && (
+                <TouchableOpacity onPress={() => console.log('Voir tous les membres')}>
+                  <Text style={styles.seeAllText}>Voir tout</Text>
                 </TouchableOpacity>
               )}
             </View>
             
-            <View style={styles.membersList}>
-              {members.length === 0 && (
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <Text style={{ color: '#888', fontSize: 14 }}>
-                    {groupDetails ? 'Aucun membre' : 'Chargement des membres...'}
-                  </Text>
-                </View>
-              )}
-              {members.map((member, index) => {
-                const memberRole = member.role;
-                const isOwner = memberRole === 'owner';
-                const isModerator = memberRole === 'moderator';
-                const canRemove = isAdmin && !isOwner && member.user_uuid !== user?.uuid;
-                const memberName = member.surnom || member.username || 'Membre';
-                const memberUsername = member.username || 'inconnu';
-                
-                return (
-                  <View 
-                    key={member.user_uuid || member.uuid || member.id} 
-                    style={[
-                      styles.memberRow,
-                      index === members.length - 1 && styles.memberRowLast
-                    ]}
-                  >
-                    <DefaultAvatar name={memberName} size={44} />
-                    <View style={styles.memberInfo}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={styles.memberName}>{memberName}</Text>
-                        {isOwner && (
-                          <View style={styles.roleBadge}>
-                            <Ionicons name="star" size={12} color="#FFD700" />
-                            <Text style={styles.roleBadgeText}>Propriétaire</Text>
-                          </View>
-                        )}
-                        {isModerator && (
-                          <View style={[styles.roleBadge, { backgroundColor: 'rgba(10, 145, 104, 0.15)' }]}>
-                            <Ionicons name="shield" size={12} color="rgba(10, 145, 104, 1)" />
-                            <Text style={[styles.roleBadgeText, { color: 'rgba(10, 145, 104, 1)' }]}>Modérateur</Text>
-                          </View>
-                        )}
-                        {member.is_ai && (
-                          <View style={styles.aiBadgeSmall}>
-                            <Ionicons name="flash" size={10} color="#fff" />
-                            <Text style={styles.aiBadgeTextSmall}>IA</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.memberUsername}>@{memberUsername}</Text>
-                    </View>
-                    {canRemove && (
-                      <TouchableOpacity 
-                        style={styles.removeMemberButton}
-                        onPress={() => handleRemoveMember(member)}
-                      >
-                        <Ionicons name="remove-circle" size={24} color="#ff6b6b" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-        
-        {/* Actions pour groupes */}
-        {isGroup && (
-          <View style={styles.quickActionsContainer}>
-            <View style={styles.quickActions}>
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
-                >
-                  <Ionicons name="search-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Rechercher</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+            {groupDetails.members.slice(0, 10).map((member, index) => {
+              const memberUser = typeof member.user === 'object' ? member.user : null;
+              const displayName = member.surnom || memberUser?.surnom || member.username || memberUser?.username || 'Membre';
+              const photoUrl = member.photo_profil_url || memberUser?.photo_profil_url;
+              const memberUuid = member.user_uuid || memberUser?.uuid;
               
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
+              return (
+                <TouchableOpacity 
+                  key={memberUuid || index}
+                  style={styles.memberRow}
+                  onPress={() => {
+                    // Navigation vers le profil du membre
+                    console.log('Voir profil membre:', memberUuid);
+                  }}
                 >
-                  <Ionicons name="create-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Modifier</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.quickAction}>
-                <LinearGradient
-                  colors={['rgba(10, 145, 104, 0.15)', 'rgba(10, 145, 104, 0.08)']}
-                  style={styles.quickActionGradient}
-                >
-                  <Ionicons name="image-outline" size={24} color="rgba(10, 145, 104, 1)" />
-                  <Text style={styles.quickActionText}>Photo</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                  <View style={styles.memberLeft}>
+                    {photoUrl ? (
+                      <Image source={{ uri: photoUrl }} style={styles.memberAvatar} />
+                    ) : (
+                      <DefaultAvatar name={displayName} size={40} />
+                    )}
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{displayName}</Text>
+                      <Text style={styles.memberRole}>
+                        {member.role === 'owner' ? '👑 Propriétaire' : 
+                         member.role === 'moderator' ? '⭐ Modérateur' : 
+                         'Membre'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
-        {/* Section Médias, liens et documents */}
-        <View style={styles.floatingCard}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="folder-outline" size={16} color="rgba(10, 145, 104, 1)" /> Médias, liens et documents
-          </Text>
+        {/* Section Médias */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Médias, liens et documents</Text>
           
-          <View style={styles.mediaGrid}>
-            <TouchableOpacity style={styles.mediaItem}>
-              <LinearGradient
-                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
-                style={styles.mediaItemGradient}
-              >
-                <Ionicons name="image-outline" size={32} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.mediaCount}>{conversation?.media_count || 0}</Text>
-                <Text style={styles.mediaLabel}>Médias</Text>
-              </LinearGradient>
+          <TouchableOpacity style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="image-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Médias</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.settingValue}>{conversation?.media_count || 0}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="link-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Liens</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.settingValue}>{conversation?.link_count || 0}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="document-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Documents</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.settingValue}>{conversation?.document_count || 0}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Options de notification */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Paramètres</Text>
+          
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="notifications-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Notifications</Text>
+            </View>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={setNotificationsEnabled}
+              trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
+              thumbColor={notificationsEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="volume-high-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Sons</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={setSoundEnabled}
+              trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
+              thumbColor={soundEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="time-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.settingLabel}>Messages éphémères</Text>
+            </View>
+            <Switch
+              value={ephemeralMessages}
+              onValueChange={setEphemeralMessages}
+              trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
+              thumbColor={ephemeralMessages ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
+            />
+          </View>
+        </View>
+
+        {/* Actions spécifiques aux groupes */}
+        {isGroup && groupDetails && (
+          <View style={styles.actionsSection}>
+            <Text style={styles.sectionTitle}>Actions du groupe</Text>
+            
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push({
+                pathname: '/(tabs)/add-group-members',
+                params: {
+                  groupUuid: groupDetails.uuid,
+                  groupName: groupDetails.name,
+                }
+              })}
+            >
+              <Ionicons name="person-add-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.actionButtonText}>Ajouter des membres</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mediaItem}>
-              <LinearGradient
-                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
-                style={styles.mediaItemGradient}
-              >
-                <Ionicons name="link-outline" size={32} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.mediaCount}>{conversation?.link_count || 0}</Text>
-                <Text style={styles.mediaLabel}>Liens</Text>
-              </LinearGradient>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => console.log('Voir les membres')}
+            >
+              <Ionicons name="people-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.actionButtonText}>Voir les membres ({groupDetails.member_count})</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mediaItem}>
-              <LinearGradient
-                colors={['rgba(10, 145, 104, 0.12)', 'rgba(10, 145, 104, 0.06)']}
-                style={styles.mediaItemGradient}
-              >
-                <Ionicons name="document-outline" size={32} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.mediaCount}>{conversation?.document_count || 0}</Text>
-                <Text style={styles.mediaLabel}>Fichiers</Text>
-              </LinearGradient>
+
+            <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleLeaveGroup}>
+              <Ionicons name="exit-outline" size={22} color="#dc2626" />
+              <Text style={[styles.actionButtonText, styles.dangerText]}>Quitter le groupe</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* Section Paramètres */}
-        <View style={styles.floatingCard}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="settings-outline" size={16} color="rgba(10, 145, 104, 1)" /> Paramètres
-          </Text>
-          
-          <View style={styles.settingsGroup}>
-            <SettingRow
-              icon="notifications-outline"
-              title="Notifications"
-              subtitle={notificationsEnabled ? "Activées" : "Désactivées"}
-              rightElement={
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
-                  thumbColor={notificationsEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-                />
-              }
-              showArrow={false}
-              first
-            />
+        {/* Actions pour conversations privées */}
+        {!isGroup && (
+          <View style={styles.actionsSection}>
+            <Text style={styles.sectionTitle}>Actions</Text>
             
-            <SettingRow
-              icon="volume-high-outline"
-              title="Son des notifications"
-              subtitle={soundEnabled ? "Activé" : "Désactivé"}
-              rightElement={
-                <Switch
-                  value={soundEnabled}
-                  onValueChange={setSoundEnabled}
-                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
-                  thumbColor={soundEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-                />
-              }
-              showArrow={false}
-            />
-            
-            <SettingRow
-              icon="time-outline"
-              title="Messages éphémères"
-              subtitle={ephemeralMessages ? "Activés - 24h" : "Désactivés"}
-              rightElement={
-                <Switch
-                  value={ephemeralMessages}
-                  onValueChange={setEphemeralMessages}
-                  trackColor={{ false: '#ccc', true: 'rgba(10, 145, 104, 0.3)' }}
-                  thumbColor={ephemeralMessages ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-                />
-              }
-              showArrow={false}
-              last
-            />
+            <TouchableOpacity style={styles.actionButton} onPress={handleArchiveConversation}>
+              <Ionicons name="archive-outline" size={22} color="rgba(10, 145, 104, 1)" />
+              <Text style={styles.actionButtonText}>Archiver la conversation</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleBlockUser}>
+              <Ionicons name="ban-outline" size={22} color="#dc2626" />
+              <Text style={[styles.actionButtonText, styles.dangerText]}>Bloquer l'utilisateur</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleReportUser}>
+              <Ionicons name="flag-outline" size={22} color="#dc2626" />
+              <Text style={[styles.actionButtonText, styles.dangerText]}>Signaler l'utilisateur</Text>
+            </TouchableOpacity>
           </View>
+        )}
+
+        {/* Actions communes */}
+        <View style={styles.actionsSection}>
+          <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleDeleteConversation}>
+            <Ionicons name="trash-outline" size={22} color="#dc2626" />
+            <Text style={[styles.actionButtonText, styles.dangerText]}>
+              {isGroup ? 'Supprimer le groupe' : 'Supprimer la conversation'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Section Personnalisation */}
-        <View style={styles.floatingCard}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="brush-outline" size={16} color="rgba(10, 145, 104, 1)" /> Personnalisation
-          </Text>
-          
-          <View style={styles.settingsGroup}>
-            <SettingRow
-              icon="color-palette-outline"
-              title="Fond d'écran"
-              subtitle="Personnaliser l'arrière-plan"
-              onPress={() => Alert.alert('Fond d\'écran', 'Fonctionnalité à venir')}
-              first
-            />
-            
-            <SettingRow
-              icon="star-outline"
-              title="Messages importants"
-              subtitle="0 messages marqués"
-              onPress={() => Alert.alert('Messages importants', 'Aucun message marqué')}
-              last
-            />
-          </View>
-        </View>
-
-        {/* Section Actions */}
-        <View style={styles.floatingCard}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="shield-checkmark-outline" size={16} color="rgba(10, 145, 104, 1)" /> Sécurité & Actions
-          </Text>
-          
-          <View style={styles.settingsGroup}>
-            <SettingRow
-              icon="lock-closed-outline"
-              title="Cryptage"
-              subtitle="Conversation cryptée de bout en bout"
-              showArrow={false}
-              first
-            />
-            
-            <SettingRow
-              icon="archive-outline"
-              title="Archiver la conversation"
-              onPress={() => Alert.alert('Archiver', 'Conversation archivée')}
-            />
-            
-            <SettingRow
-              icon="share-outline"
-              title="Exporter la conversation"
-              onPress={() => Alert.alert('Exporter', 'Export en cours...')}
-              last
-            />
-          </View>
-        </View>
-
-        {/* Section Danger Zone */}
-        <View style={styles.floatingCard}>
-          <View style={styles.settingsGroup}>
-            {!isGroup && (
-              <SettingRow
-                icon="ban-outline"
-                title="Bloquer le contact"
-                onPress={() => Alert.alert('Bloquer', 'Contact bloqué')}
-                danger
-                first={!isGroup}
-              />
-            )}
-            
-            <SettingRow
-              icon="trash-outline"
-              title="Supprimer la conversation"
-              subtitle="Supprimer tout l'historique"
-              onPress={handleDeleteConversation}
-              danger
-            />
-            
-            {isGroup && (
-              <SettingRow
-                icon="exit-outline"
-                title="Quitter le groupe"
-                onPress={handleLeaveGroup}
-                danger
-                last
-              />
-            )}
-            
-            {!isGroup && (
-              <SettingRow
-                icon="flag-outline"
-                title="Signaler"
-                subtitle="Signaler ce contact"
-                onPress={() => Alert.alert('Signaler', 'Contact signalé aux modérateurs')}
-                danger
-                last
-              />
-            )}
-          </View>
-        </View>
-
-        {/* Informations supplémentaires */}
+        {/* Info de cryptage */}
         <View style={styles.infoSection}>
+          <Ionicons name="lock-closed" size={16} color="#888" />
           <Text style={styles.infoText}>
-            {isGroup 
+            {isGroup
               ? `Groupe créé le ${groupDetails?.created_at ? new Date(groupDetails.created_at).toLocaleDateString('fr-FR') : (conversation?.created_at ? new Date(conversation.created_at).toLocaleDateString('fr-FR') : 'N/A')}`
-              : 'Les messages et appels sont cryptés de bout en bout.'
+              : 'Les messages sont cryptés de bout en bout.'
             }
           </Text>
           {isGroup && groupDetails?.invite_code && (
@@ -914,298 +746,184 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 4,
+    textAlign: 'center',
   },
   username: {
     fontSize: 15,
     color: '#666',
     marginTop: 4,
   },
-  aiBadgeLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginTop: 8,
-    shadowColor: 'rgba(10, 145, 104, 0.4)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  aiBadgeTextLarge: {
-    color: '#fff',
+  bioText: {
     fontSize: 14,
-    fontWeight: '700',
-  },
-  groupDesc: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 12,
-    paddingHorizontal: 20,
-    lineHeight: 22,
-  },
-
-  // Actions rapides - Container flottant
-  quickActionsContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: 'rgba(10, 145, 104, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-    backgroundColor: '#fff',
-  },
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-  },
-  quickAction: {
-    flex: 1,
-    marginHorizontal: 6,
-  },
-  quickActionGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    borderRadius: 18,
-    shadowColor: 'rgba(10, 145, 104, 0.15)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  quickActionText: {
-    marginTop: 10,
-    fontSize: 13,
-    color: 'rgba(10, 145, 104, 1)',
-    fontWeight: '700',
-  },
-
-  // Cards flottantes
-  floatingCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    borderRadius: 20,
-    shadowColor: 'rgba(10, 145, 104, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#555',
-    textTransform: 'uppercase',
-    marginBottom: 16,
-    letterSpacing: 0.8,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  addButton: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: 'rgba(10, 145, 104, 0.2)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  addButtonGradient: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Membres
-  membersList: {
+    textAlign: 'center',
     marginTop: 8,
+    paddingHorizontal: 20,
+    lineHeight: 20,
   },
-  memberRow: {
+  statsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
+    gap: 20,
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(10, 145, 104, 0.1)',
   },
-  memberRowLast: {
-    borderBottomWidth: 0,
-  },
-  memberInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  memberName: {
-    fontSize: 16,
-    color: '#1a1a1a',
-    fontWeight: '600',
-  },
-  memberUsername: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 2,
-  },
-  roleBadge: {
-    flexDirection: 'row',
+  statItem: {
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
-  roleBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B8860B',
-  },
-  removeMemberButton: {
-    padding: 8,
-    marginLeft: 8,
-  },
-  aiBadgeSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  aiBadgeTextSmall: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  viewAllButton: {
-    marginTop: 12,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  viewAllGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-  },
-  viewAllText: {
-    color: 'rgba(10, 145, 104, 1)',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // Médias
-  mediaGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 8,
-  },
-  mediaItem: {
-    flex: 1,
-  },
-  mediaItemGradient: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-  },
-  mediaCount: {
-    fontSize: 22,
+  statNumber: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginTop: 10,
+    color: 'rgba(10, 145, 104, 1)',
   },
-  mediaLabel: {
+  statLabel: {
     fontSize: 12,
     color: '#666',
-    marginTop: 6,
-    fontWeight: '600',
+  },
+  groupInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(10, 145, 104, 0.1)',
+    borderRadius: 20,
+  },
+  groupInfoText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 
-  // Paramètres
-  settingsGroup: {
+  // Section Paramètres
+  settingsSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
     borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#fafafa',
-    marginTop: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 12,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
+    borderBottomColor: '#f0f0f0',
   },
-  settingRowFirst: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  settingRowLast: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    borderBottomWidth: 0,
-  },
-  iconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(10, 145, 104, 0.12)',
+  settingLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
+    gap: 12,
   },
-  iconDanger: {
-    backgroundColor: 'rgba(255, 107, 107, 0.12)',
-  },
-  settingContent: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  settingLabel: {
+    fontSize: 15,
     color: '#1a1a1a',
   },
-  settingTitleDanger: {
-    color: '#ff6b6b',
+  settingValue: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
-  settingSubtitle: {
+  seeAllText: {
+    fontSize: 14,
+    color: 'rgba(10, 145, 104, 1)',
+    fontWeight: '600',
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  memberLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1a1a1a',
+  },
+  memberRole: {
     fontSize: 13,
-    color: '#888',
-    marginTop: 3,
+    color: '#666',
+    marginTop: 2,
   },
 
-  // Info Section
-  infoSection: {
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+  // Section Actions
+  actionsSection: {
+    backgroundColor: '#fff',
     marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  actionButtonText: {
+    fontSize: 15,
+    color: 'rgba(10, 145, 104, 1)',
+    fontWeight: '500',
+  },
+  dangerButton: {
+    backgroundColor: '#fee',
+  },
+  dangerText: {
+    color: '#dc2626',
+  },
+
+  // Section Info
+  infoSection: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
   },
   infoText: {
     fontSize: 13,
-    color: '#999',
+    color: '#888',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
   },
 });
