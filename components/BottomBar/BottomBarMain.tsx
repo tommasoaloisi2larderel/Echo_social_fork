@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { styles } from "../../styles/appStyles";
 
+type SwipeScreen = 'conversations' | 'home' | 'profile';
+
 interface BottomBarMainProps {
   barHeight: number;
   setBarHeight: (height: number) => void;
@@ -32,7 +34,7 @@ interface BottomBarMainProps {
   setJarvisActive: (active: boolean) => void;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<void>;
-  navigateToScreen: (screen: string) => void;
+  navigateToScreen: (screen: SwipeScreen) => void;
   stagedAttachments: any[];
 }
 
