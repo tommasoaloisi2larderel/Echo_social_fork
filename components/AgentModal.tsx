@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Agent, useAgents } from '../contexts/AgentsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -173,7 +173,7 @@ export default function AgentModal({ visible, onClose, agent, conversationId }: 
                 {/* Name */}
                 <View style={{ marginBottom: 16 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                    Nom de l'agent *
+                    Nom de l&apos;agent *
                   </Text>
                   <TextInput
                     value={name}
@@ -248,7 +248,7 @@ export default function AgentModal({ visible, onClose, agent, conversationId }: 
                 {/* Agent Type */}
                 <View style={{ marginBottom: 16 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                    Type d'agent
+                    Type d&apos;agent
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {(['simple', 'conditional', 'action'] as const).map((type) => (

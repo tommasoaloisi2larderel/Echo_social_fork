@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import BottomBar from '../../components/BottomBar';
+import BottomBar from '../../components/BottomBar/index';
 import SwipeableContainer, { SwipeableContainerHandle } from '../../components/SwipeableContainer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';

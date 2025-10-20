@@ -62,7 +62,6 @@ export default function BottomBar({
 
   // translateY du panneau: 0 = ouvert, MAX_TRANSLATE = fermé (caché sous la barre)
   const sheetY = useRef(new Animated.Value(MAX_TRANSLATE)).current;
-  const isPanelOpen = useRef(false);
   const dragStartY = useRef(0);
 
   const [barHeight, setBarHeight] = useState(96); // default, will be measured
@@ -70,9 +69,7 @@ export default function BottomBar({
   const [jarvisKeyboardHeight, setJarvisKeyboardHeight] = useState(0);
   // Jarvis mode ephemeral chat state
   const [jarvisActive, setJarvisActive] = useState(false);
-  const [isJarvisInputFocused, setIsJarvisInputFocused] = useState(false);
   const jarvisScrollRef = useRef<any>(null);
-  const chatInputRef = useRef<TextInput>(null);
   // Cible d’envoi
   const [sendTarget, setSendTarget] = useState<'chat' | 'jarvis'>(isChat ? 'chat' : 'jarvis');
 
@@ -156,8 +153,6 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
     fetchMyAgents(makeAuthenticatedRequest);
   }, []);
 
-  // Debug
-  console.log("BottomBar - currentRoute:", currentRoute, "isChat:", isChat);
   
   // PanResponder pour gérer le swipe
   const panResponder = useRef(
@@ -185,7 +180,6 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
   ).current;
 
   const openPanel = () => {
-    isPanelOpen.current = true;
     Animated.parallel([
       Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }),
       Animated.spring(scaleAnim, { toValue: 1.02, useNativeDriver: true, tension: 40, friction: 7 }),
@@ -194,7 +188,6 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
     });
   };
   const closePanel = () => {
-    isPanelOpen.current = false;
     Animated.parallel([
       Animated.spring(sheetY, { toValue: MAX_TRANSLATE, useNativeDriver: true, tension: 60, friction: 10 }),
       Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
@@ -506,7 +499,7 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9000 }} pointerEvents="auto">
             <TouchableOpacity
               activeOpacity={1}
-              onPress={() => { setIsJarvisInputFocused(false); setJarvisActive(false); Keyboard.dismiss(); }}
+              onPress={() => { setJarvisActive(false); Keyboard.dismiss(); }}
               style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
             />
           </View>
@@ -855,7 +848,6 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
                 </View>
               ) : (
                 <TextInput
-                  ref={chatInputRef}
               style={[styles.chatInput, { flex: 1, marginRight: 8 }]}
               placeholder={
                     sendTarget === 'jarvis' 
@@ -867,8 +859,6 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
               onChangeText={setChatText}
                   onSubmitEditing={handleSend}
                   editable={sendTarget === 'chat' ? !!websocket : true}
-                  onFocus={() => { if (sendTarget === 'jarvis') { setIsJarvisInputFocused(true); } }}
-                  onBlur={() => { if (sendTarget === 'jarvis') { setIsJarvisInputFocused(false); } }}
                 />
               )}
             <TouchableOpacity
@@ -1485,7 +1475,7 @@ const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
                 textAlign: 'center',
                 fontStyle: 'italic',
               }}>
-                ✨ Swipez pour découvrir d'autres agents IA ✨
+                ✨ Swipez pour découvrir d&apos;autres agents IA ✨
               </Text>
             </Animated.View>
           </View>
