@@ -30,6 +30,7 @@ interface AgentPanelProps {
   conversationId?: string;
   isChat: boolean;
   handleRemoveAgent: (agentUuid: string) => Promise<void>;
+  handleAddAgent: (agentUuid: string) => Promise<void>;
   glowOpacity: Animated.AnimatedInterpolation<number>;
   glowScale: Animated.AnimatedInterpolation<number>;
 }
@@ -41,6 +42,7 @@ export default function AgentPanel({
   conversationId,
   isChat,
   handleRemoveAgent,
+  handleAddAgent,
   glowOpacity,
   glowScale,
 }: AgentPanelProps) {
@@ -59,7 +61,11 @@ export default function AgentPanel({
   };
 
   return (
-    <View style={{ flex: 1, padding: 20 }}>
+    <ScrollView 
+      style={{ flex: 1 }} 
+      contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
         <Animated.View style={{ opacity: glowOpacity, transform: [{ scale: glowScale }] }}>
           <Ionicons name="flash" size={40} color="rgba(10, 145, 104, 0.8)" />
@@ -273,6 +279,7 @@ export default function AgentPanel({
               </Text>
               <Text style={{ fontSize: 12, color: '#7f8c8d', marginTop: 2 }}>
                 {myAgents.length} agent{myAgents.length !== 1 ? 's' : ''} créé{myAgents.length !== 1 ? 's' : ''}
+                {isChat && conversationId && ' • Tap pour ajouter/retirer'}
               </Text>
             </View>
           </View>
@@ -339,18 +346,55 @@ export default function AgentPanel({
               <View style={{ gap: 12 }}>
                 {myAgents.map((agent, index) => {
                   const uniqueKey = agent.uuid || `agent-${index}`;
+                  const isInConversation = conversationAgents.some(ca => ca.uuid === agent.uuid);
 
                   return (
                     <TouchableOpacity
                       key={uniqueKey}
-                      onPress={() => handleEditAgent(agent)}
+                      onPress={() => {
+                        // If in a conversation, allow adding/removing agent
+                        if (isChat && conversationId) {
+                          if (isInConversation) {
+                            Alert.alert(
+                              'Retirer l\'agent',
+                              `Voulez-vous retirer "${agent.name}" de cette conversation ?`,
+                              [
+                                { text: 'Annuler', style: 'cancel' },
+                                {
+                                  text: 'Retirer',
+                                  style: 'destructive',
+                                  onPress: () => handleRemoveAgent(agent.uuid)
+                                },
+                              ]
+                            );
+                          } else {
+                            Alert.alert(
+                              'Ajouter l\'agent',
+                              `Voulez-vous ajouter "${agent.name}" à cette conversation ?`,
+                              [
+                                { text: 'Annuler', style: 'cancel' },
+                                {
+                                  text: 'Ajouter',
+                                  onPress: () => handleAddAgent(agent.uuid)
+                                },
+                              ]
+                            );
+                          }
+                        } else {
+                          // If not in conversation, just edit
+                          handleEditAgent(agent);
+                        }
+                      }}
+                      onLongPress={() => handleEditAgent(agent)}
                       activeOpacity={0.7}
                       style={{
                         backgroundColor: 'white',
                         borderRadius: 16,
                         padding: 16,
-                        borderWidth: 1,
-                        borderColor: agent.is_active ? 'rgba(10, 145, 104, 0.2)' : 'rgba(150, 150, 150, 0.2)',
+                        borderWidth: isInConversation ? 2 : 1,
+                        borderColor: isInConversation 
+                          ? 'rgba(10, 145, 104, 0.5)' 
+                          : agent.is_active ? 'rgba(10, 145, 104, 0.2)' : 'rgba(150, 150, 150, 0.2)',
                         shadowColor: agent.is_active ? 'rgba(10, 145, 104, 0.15)' : '#000',
                         shadowOffset: { width: 0, height: 4 },
                         shadowOpacity: 0.1,
@@ -405,6 +449,23 @@ export default function AgentPanel({
                                   color: 'rgba(10, 145, 104, 1)',
                                 }}>
                                   ACTIF
+                                </Text>
+                              </View>
+                            )}
+                            {isInConversation && isChat && (
+                              <View style={{
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
+                                borderRadius: 10,
+                                marginLeft: 8,
+                              }}>
+                                <Text style={{
+                                  fontSize: 10,
+                                  fontWeight: '600',
+                                  color: 'rgba(59, 130, 246, 1)',
+                                }}>
+                                  DANS LA CONV
                                 </Text>
                               </View>
                             )}
@@ -520,6 +581,6 @@ export default function AgentPanel({
         agent={selectedAgent}
         conversationId={conversationId}
       />
-      </View>
-    );
-  }
+    </ScrollView>
+  );
+}

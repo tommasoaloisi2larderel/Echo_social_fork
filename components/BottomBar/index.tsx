@@ -5,7 +5,7 @@ import {
     Animated,
     Dimensions,
     Keyboard,
-    PanResponder
+    PanResponder,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAgents } from '../../contexts/AgentsContext';
@@ -58,6 +58,7 @@ export default function BottomBar({
     loadingConversationAgents,
     fetchConversationAgents,
     removeAgentFromConversation,
+    addAgentToConversation,
     myAgents,
     fetchMyAgents,
   } = useAgents();
@@ -100,7 +101,7 @@ export default function BottomBar({
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
-  }, []);
+  }, [keyboardOffset]);
 
   // Auto-scroll Jarvis messages
   useEffect(() => {
@@ -114,19 +115,19 @@ export default function BottomBar({
     if (jarvisActive && jarvisMessages.length === 0) {
       loadHistory();
     }
-  }, [jarvisActive]);
+  }, [jarvisActive, jarvisMessages.length, loadHistory]);
 
   // Fetch conversation agents
   useEffect(() => {
     if (conversationId && isChat) {
       fetchConversationAgents(conversationId as string, makeAuthenticatedRequest);
     }
-  }, [conversationId, isChat]);
+  }, [conversationId, isChat, fetchConversationAgents, makeAuthenticatedRequest]);
 
   // Fetch user's agents
   useEffect(() => {
     fetchMyAgents(makeAuthenticatedRequest);
-  }, []);
+  }, [fetchMyAgents, makeAuthenticatedRequest]);
 
   // Set send target based on route
   useEffect(() => {
@@ -243,8 +244,8 @@ export default function BottomBar({
         setChatText("");
         await sendJarvisMessage(userText);
       }
-    } catch (error) {
-      console.error("Error sending message:", error);
+    } catch (err) {
+      console.error("Error sending message:", err);
     }
   };
 
@@ -257,6 +258,18 @@ export default function BottomBar({
       Alert.alert('Succès', 'Agent retiré de la conversation');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de retirer l\'agent');
+    }
+  };
+
+  // Handle add agent
+  const handleAddAgent = async (agentUuid: string) => {
+    if (!conversationId) return;
+
+    try {
+      await addAgentToConversation(conversationId as string, agentUuid, makeAuthenticatedRequest);
+      Alert.alert('Succès', 'Agent ajouté à la conversation');
+    } catch (error) {
+      Alert.alert('Erreur', error instanceof Error ? error.message : 'Impossible d\'ajouter l\'agent');
     }
   };
 
@@ -409,7 +422,7 @@ export default function BottomBar({
             setJarvisActive={setJarvisActive}
             startRecording={voiceRecorder.startRecording}
             stopRecording={voiceRecorder.stopRecording}
-            navigateToScreen={navigateToScreen as (screen: string) => void}
+            navigateToScreen={navigateToScreen}
             stagedAttachments={stagedAttachments}
           />
 
@@ -421,6 +434,7 @@ export default function BottomBar({
             conversationId={conversationId}
             isChat={isChat}
             handleRemoveAgent={handleRemoveAgent}
+            handleAddAgent={handleAddAgent}
             glowOpacity={visualEffects.glowOpacity}
             glowScale={visualEffects.glowScale}
           />
