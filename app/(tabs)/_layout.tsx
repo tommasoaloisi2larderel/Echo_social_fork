@@ -16,7 +16,6 @@ export default function TabsLayout() {
   const [chatText, setChatText] = useState("");
   const pathname = usePathname();
   const { conversationId } = useLocalSearchParams();
-  const { registerScrollRef } = useNavigation();
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
   const { isLoggedIn, makeAuthenticatedRequest } = useAuth();
   const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
@@ -38,6 +37,7 @@ export default function TabsLayout() {
   const handleSendMessage = () => {
     console.log("Envoi du message:", chatText);
   };
+  const { registerScrollRef } = useNavigation();
 
   // Enregistrer le ref du swipe container
   React.useEffect(() => {
@@ -94,9 +94,6 @@ export default function TabsLayout() {
         currentRoute={pathname}
         chatText={chatText}
         setChatText={setChatText}
-        chatRecipient={isInConversationDetail ? "Contact" : ""}
-        onSendMessage={isInConversationDetail ? handleSendMessage : undefined}
-        conversationId={isInConversationDetail ? conversationId as string : undefined}
       />
     </View>
   );

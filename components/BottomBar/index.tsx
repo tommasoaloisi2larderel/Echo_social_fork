@@ -27,14 +27,14 @@ export default function BottomBar({
   setChatText,
   conversationId
 }: BottomBarProps) {
-
   const insets = useSafeAreaInsets();
   const isChat = currentRoute.includes("conversation-direct") ||
                  currentRoute.includes("conversation-group") ||
                  currentRoute.includes("conversation-detail");
+
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
-  const { sendMessage: sendChatMessage, websocket } = useChat();
+  const { sendMessage: sendChatMessage, websocket, currentConversationId } = useChat();
   const { messages: jarvisMessages, sendMessage: sendJarvisMessage, clearHistory, loadHistory } = useJarvis();
 
   // Screen dimensions
@@ -119,10 +119,10 @@ export default function BottomBar({
 
   // Fetch conversation agents
   useEffect(() => {
-    if (conversationId && isChat) {
-      fetchConversationAgents(conversationId as string, makeAuthenticatedRequest);
+    if (currentConversationId && isChat) {
+      fetchConversationAgents(currentConversationId as string, makeAuthenticatedRequest);
     }
-  }, [conversationId, isChat, fetchConversationAgents, makeAuthenticatedRequest]);
+  }, [currentConversationId, isChat, fetchConversationAgents, makeAuthenticatedRequest]);
 
   // Fetch user's agents
   useEffect(() => {
@@ -208,10 +208,10 @@ export default function BottomBar({
 
   // Send attachment message
   const sendAttachmentMessage = async (attachmentUuids: string[], caption?: string) => {
-    if (!conversationId) return;
+    if (!currentConversationId) return;
     const payload: any = {
       type: 'chat_message',
-      conversation_uuid: conversationId,
+      conversation_uuid: currentConversationId,
       message: (caption || '').trim(),
       attachment_uuids: attachmentUuids
     };
@@ -219,7 +219,7 @@ export default function BottomBar({
       if (websocket) {
         websocket.send(JSON.stringify(payload));
       } else {
-        await fetch(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`, {
+        await fetch(`${API_BASE_URL}/messaging/conversations/${currentConversationId}/messages/create-with-attachments/`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: payload.message, attachment_uuids: attachmentUuids }),
@@ -251,10 +251,10 @@ export default function BottomBar({
 
   // Handle remove agent
   const handleRemoveAgent = async (agentUuid: string) => {
-    if (!conversationId) return;
+    if (!currentConversationId) return;
 
     try {
-      await removeAgentFromConversation(conversationId as string, agentUuid, makeAuthenticatedRequest);
+      await removeAgentFromConversation(currentConversationId as string, agentUuid, makeAuthenticatedRequest);
       Alert.alert('Succès', 'Agent retiré de la conversation');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de retirer l\'agent');
@@ -263,10 +263,10 @@ export default function BottomBar({
 
   // Handle add agent
   const handleAddAgent = async (agentUuid: string) => {
-    if (!conversationId) return;
+    if (!currentConversationId) return;
 
     try {
-      await addAgentToConversation(conversationId as string, agentUuid, makeAuthenticatedRequest);
+      await addAgentToConversation(currentConversationId as string, agentUuid, makeAuthenticatedRequest);
       Alert.alert('Succès', 'Agent ajouté à la conversation');
     } catch (error) {
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Impossible d\'ajouter l\'agent');
@@ -431,7 +431,7 @@ export default function BottomBar({
             conversationAgents={conversationAgents}
             loadingConversationAgents={loadingConversationAgents}
             myAgents={myAgents}
-            conversationId={conversationId}
+            conversationId={currentConversationId ?? undefined}
             isChat={isChat}
             handleRemoveAgent={handleRemoveAgent}
             handleAddAgent={handleAddAgent}
