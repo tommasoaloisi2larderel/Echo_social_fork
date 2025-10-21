@@ -418,7 +418,7 @@ export default function FriendsScreen() {
                   style={styles.card}
                   onPress={() => {
                     console.log('🔍 Navigation vers profil:', connection.uuid);
-                    router.replace(`/user-profile?uuid=${connection.uuid}`);
+                    router.replace(`/friend-profile?uuid=${connection.uuid}`);
                   }}
                   activeOpacity={0.7}
                 >
