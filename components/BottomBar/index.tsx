@@ -168,19 +168,15 @@ export default function BottomBar({
   ).current;
 
   const openPanel = () => {
-    Animated.parallel([
-      Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }),
-      Animated.spring(scaleAnim, { toValue: 1.02, useNativeDriver: true, tension: 40, friction: 7 }),
-    ]).start(() => {
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }).start();
-    });
+    // Animation instantanée sans effet de montée
+    sheetY.setValue(0);
+    scaleAnim.setValue(1);
   };
 
   const closePanel = () => {
-    Animated.parallel([
-      Animated.spring(sheetY, { toValue: MAX_TRANSLATE, useNativeDriver: true, tension: 60, friction: 10 }),
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
-    ]).start();
+    // Animation instantanée sans effet de montée
+    sheetY.setValue(MAX_TRANSLATE);
+    scaleAnim.setValue(1);
   };
 
   // Delete Jarvis history
