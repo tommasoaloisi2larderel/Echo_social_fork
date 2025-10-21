@@ -327,7 +327,7 @@ export default function FriendsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header harmonisé */}
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.backButton}>
         <Ionicons name="chevron-back" size={24} color="#fff" />
       </TouchableOpacity>
       
@@ -413,7 +413,15 @@ export default function FriendsScreen() {
             </View>
           ) : (
             connections.map((connection) => (
-              <View key={connection.uuid} style={styles.card}>
+                <TouchableOpacity 
+                  key={connection.uuid} 
+                  style={styles.card}
+                  onPress={() => {
+                    console.log('🔍 Navigation vers profil:', connection.uuid);
+                    router.replace(`/friend-profile?uuid=${connection.uuid}`);
+                  }}
+                  activeOpacity={0.7}
+                >
                 <View style={styles.cardContent}>
                   {connection.photo_profil_url ? (
                     <Image
@@ -441,7 +449,7 @@ export default function FriendsScreen() {
                     <Ionicons name="trash-outline" size={20} color="#ff4444" />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )
         ) : activeTab === 'invitations' ? (
