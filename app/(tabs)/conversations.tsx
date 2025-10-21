@@ -1094,7 +1094,7 @@ export default function ConversationsScreen() {
                     renderItem={({ item }) => (
                       <UserSquare
                         user={item}
-                        onPress={() => handleUserPress(item.uuid, item.surnom || item.username)}
+                        onPress={() => router.push(`/(screens)/user-profile?uuid=${item.uuid}` as any)}
                       />
                     )}
                     numColumns={3}
