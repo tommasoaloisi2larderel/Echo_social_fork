@@ -4,15 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
@@ -25,6 +25,7 @@ interface Message {
   content: string;
   created_at: string;
   is_read?: boolean;
+  is_ai_generated?: boolean;
 }
 
 interface GroupInfo {
@@ -41,6 +42,7 @@ export default function ConversationGroup() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
+  const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
 
   const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   const screenDimensions = Dimensions.get('window');
@@ -72,7 +74,14 @@ export default function ConversationGroup() {
             return; // ignorer messages d'autres conversations
           }
           const msg = data.message || data;
-          const newMsg: Message = { id: msg.id, uuid: msg.uuid, sender_username: msg.sender_username, content: msg.content, created_at: msg.created_at };
+          const newMsg: Message = { 
+            id: msg.id, 
+            uuid: msg.uuid, 
+            sender_username: msg.sender_username, 
+            content: msg.content, 
+            created_at: msg.created_at,
+            is_ai_generated: msg.is_ai_generated || false
+          };
           setMessages((prev) => {
             const exists = prev.some((m) => m.uuid === newMsg.uuid);
             if (exists) return prev.map((m) => (m.uuid === newMsg.uuid ? { ...m, ...newMsg } : m));
@@ -96,6 +105,18 @@ export default function ConversationGroup() {
     if (!messageText.trim() || !localWebsocket) return;
     localWebsocket.send(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  const toggleAgentMessage = (messageUuid: string) => {
+    setExpandedAgentMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageUuid)) {
+        newSet.delete(messageUuid);
+      } else {
+        newSet.add(messageUuid);
+      }
+      return newSet;
+    });
   };
 
   const fetchMessages = async () => {
@@ -262,6 +283,62 @@ export default function ConversationGroup() {
                 {isSystemMessage ? (
                   <View style={styles.systemMessageContainer}>
                     <Text style={styles.systemMessageText}>{msg.content}</Text>
+                  </View>
+                ) : msg.is_ai_generated && !isMe ? (
+                  // Message d'agent IA - affichage centré et pliable
+                  <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => toggleAgentMessage(msg.uuid)}
+                      style={{
+                        backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                        borderRadius: 12,
+                        padding: 12,
+                        marginHorizontal: 20,
+                        maxWidth: '80%',
+                        borderWidth: 1,
+                        borderColor: 'rgba(10, 145, 104, 0.3)',
+                        shadowColor: 'rgba(10, 145, 104, 0.2)',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: expandedAgentMessages.has(msg.uuid) ? 8 : 0 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: 'rgba(10, 145, 104, 0.8)', fontWeight: '600' }}>
+                            🤖 {msg.sender_username}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: 'rgba(10, 145, 104, 0.6)' }}>
+                            IA Assistant
+                          </Text>
+                        </View>
+                        <Ionicons 
+                          name={expandedAgentMessages.has(msg.uuid) ? "chevron-up" : "chevron-down"} 
+                          size={16} 
+                          color="rgba(10, 145, 104, 0.6)" 
+                        />
+                      </View>
+                      {expandedAgentMessages.has(msg.uuid) && (
+                        <View>
+                          <Text style={{ 
+                            fontSize: 14, 
+                            color: '#333', 
+                            lineHeight: 20,
+                            marginBottom: 8
+                          }}>
+                            {msg.content}
+                          </Text>
+                          <Text style={{ 
+                            fontSize: 10, 
+                            color: 'rgba(10, 145, 104, 0.6)', 
+                            textAlign: 'right' 
+                          }}>
+                            {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={styles.messageWrapper}>
