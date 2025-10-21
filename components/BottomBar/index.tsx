@@ -120,14 +120,15 @@ export default function BottomBar({
   // Fetch conversation agents
   useEffect(() => {
     if (currentConversationId && isChat) {
-      fetchConversationAgents(currentConversationId as string, makeAuthenticatedRequest);
+        console.log('🤖 Fetching agents for conversation:', currentConversationId);
+        fetchConversationAgents(currentConversationId, makeAuthenticatedRequest);
     }
-  }, [currentConversationId, isChat, fetchConversationAgents, makeAuthenticatedRequest]);
+    }, [currentConversationId, isChat]);
 
   // Fetch user's agents
   useEffect(() => {
     fetchMyAgents(makeAuthenticatedRequest);
-  }, [fetchMyAgents, makeAuthenticatedRequest]);
+}, []);
 
   // Set send target based on route
   useEffect(() => {

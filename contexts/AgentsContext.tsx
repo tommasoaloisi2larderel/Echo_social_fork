@@ -70,29 +70,54 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const fetchConversationAgents = async (
-    conversationId: string,
-    makeRequest: (url: string, options?: RequestInit) => Promise<Response>
-  ) => {
-    setLoadingConversationAgents(true);
-    try {
-      // Using correct endpoint: /agents/conversations/{uuid}/agents/
-      const response = await makeRequest(
-        `${API_BASE_URL}/agents/conversations/${conversationId}/agents/`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setConversationAgents(data.agents || []);
-      } else {
-        console.error('Failed to fetch conversation agents:', response.status);
+  conversationId: string,
+  makeRequest: (url: string, options?: RequestInit) => Promise<Response>
+) => {
+  if (!conversationId || conversationId === 'undefined') {
+    console.warn('⚠️ fetchConversationAgents called with invalid conversationId:', conversationId);
+    setConversationAgents([]);
+    setLoadingConversationAgents(false);
+    return;
+  }
+
+  setLoadingConversationAgents(true);
+  try {
+    console.log('🔍 Fetching agents for conversation:', conversationId);
+    
+    // Using correct endpoint: /agents/conversations/{uuid}/agents/
+    const response = await makeRequest(
+      `${API_BASE_URL}/agents/conversations/${conversationId}/agents/`
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to fetch conversation agents:', response.status, errorText);
+      
+      // If 404 or 500, it might mean no agents exist yet - treat as empty
+      if (response.status === 404 || response.status === 500) {
+        console.log('ℹ️ Treating as empty agent list');
         setConversationAgents([]);
+        setLoadingConversationAgents(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching conversation agents:', error);
-      setConversationAgents([]);
-    } finally {
-      setLoadingConversationAgents(false);
+      
+      throw new Error(`Failed to fetch agents: ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+    console.log('✅ Conversation agents fetched:', data);
+    
+    // Handle both response formats: direct array or object with agents array
+    const agentsList = Array.isArray(data) ? data : (data.agents || []);
+    setConversationAgents(agentsList);
+  } catch (error) {
+    console.error('❌ Error fetching conversation agents:', error);
+    // Don't throw - just set empty array so UI still works
+    setConversationAgents([]);
+  } finally {
+    setLoadingConversationAgents(false);
+  }
+};
 
   const createAgent = async (
     agentData: Partial<Agent>,

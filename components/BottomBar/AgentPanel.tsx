@@ -1,8 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import {
-    ActivityIndicator,
     Alert,
     Animated,
     ScrollView,
@@ -66,60 +64,6 @@ export default function AgentPanel({
       contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
-        <Animated.View style={{ opacity: glowOpacity, transform: [{ scale: glowScale }] }}>
-          <Ionicons name="flash" size={40} color="rgba(10, 145, 104, 0.8)" />
-        </Animated.View>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: 'rgba(10, 145, 104, 1)', marginTop: 10, textAlign: 'center' }}>
-          Agents IA
-        </Text>
-        <Text style={{ fontSize: 14, color: '#666', marginTop: 5, textAlign: 'center' }}>
-          Vos assistants intelligents
-        </Text>
-      </View>
-
-      {/* AI Agent configurator button */}
-      <TouchableOpacity activeOpacity={0.9} style={{ marginBottom: 15 }} onPress={handleCreateAgent}>
-        <LinearGradient
-          colors={['rgba(10, 145, 104, 0.10)', 'rgba(10, 145, 104, 0.04)']}
-          style={{
-            padding: 18,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: 'rgba(10, 145, 104, 0.25)',
-            shadowColor: 'rgba(10, 145, 104, 0.25)',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 5,
-          }}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: 'rgba(10, 145, 104, 0.18)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 12,
-            }}>
-              <Ionicons name="settings" size={24} color="rgba(10, 145, 104, 1)" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>
-                Configurer un agent IA
-              </Text>
-              <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                Créez ou modifiez vos assistants
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="rgba(10, 145, 104, 0.6)" />
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
 
       {/* Agents in conversation section */}
       {isChat && conversationId && (
@@ -147,11 +91,7 @@ export default function AgentPanel({
             </TouchableOpacity>
           </View>
 
-          {loadingConversationAgents ? (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <ActivityIndicator color="rgba(10, 145, 104, 1)" />
-            </View>
-          ) : conversationAgents.length === 0 ? (
+          {conversationAgents.length === 0 ? (
             <View style={{
               padding: 20,
               backgroundColor: '#f5f5f5',
