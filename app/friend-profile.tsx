@@ -8,8 +8,6 @@ import {
   ActivityIndicator,
   Image,
   Alert,
-  TextInput,
-  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,9 +65,7 @@ export default function UserProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [connectionMessage, setConnectionMessage] = useState('');
-  const [sendingRequest, setSendingRequest] = useState(false);
+
 
   useEffect(() => {
     loadProfile();
@@ -97,55 +93,6 @@ export default function UserProfileScreen() {
     }
   };
 
-  const handleSendConnectionRequest = async () => {
-    if (!profile || !connectionMessage.trim()) {
-      Alert.alert('Message requis', 'Veuillez écrire un message de présentation');
-      return;
-    }
-
-    setSendingRequest(true);
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/relations/connections/`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            destinataire_uuid: profile.uuid,
-            message: connectionMessage,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        let errorMessage = 'Impossible d\'envoyer la demande de connexion.';
-        
-        if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (errorData.error) {
-          errorMessage = errorData.error;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      setShowMessageModal(false);
-      setConnectionMessage('');
-      Alert.alert(
-        'Demande envoyée',
-        `Votre demande de connexion a été envoyée à ${profile.surnom || profile.username}.`
-      );
-    } catch (error) {
-      console.error('Erreur envoi demande:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      Alert.alert('Erreur', errorMessage);
-    } finally {
-      setSendingRequest(false);
-    }
-  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Non renseigné';
@@ -324,76 +271,62 @@ export default function UserProfileScreen() {
           </View>
         )}
 
-        {/* Bouton demande d'ami */}
+        {/* Bouton envoyer un message */}
         <View style={styles.actionSection}>
           <TouchableOpacity
-            style={styles.addFriendButton}
-            onPress={() => setShowMessageModal(true)}
+            style={styles.sendMessageButton}
+            onPress={async () => {
+              try {
+                // Chercher si une conversation existe déjà
+                const response = await makeAuthenticatedRequest(
+                  `${API_BASE_URL}/messaging/conversations/`
+                );
+                
+                if (response.ok) {
+                  const conversations = await response.json();
+                  const existingConv = conversations.find((conv: any) => 
+                    conv.other_participant?.uuid === profile?.uuid
+                  );
+                  
+                  if (existingConv) {
+                    // Conversation existante
+                    router.replace({
+                      pathname: '/(tabs)/conversation-direct',
+                      params: { conversationId: existingConv.uuid }
+                    });
+                  } else {
+                    // Créer nouvelle conversation
+                    const createResponse = await makeAuthenticatedRequest(
+                      `${API_BASE_URL}/messaging/conversations/`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ recipient_uuid: profile?.uuid })
+                      }
+                    );
+                    
+                    if (createResponse.ok) {
+                      const newConv = await createResponse.json();
+                      router.replace({
+                        pathname: '/(tabs)/conversation-direct',
+                        params: { conversationId: newConv.uuid }
+                      });
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Erreur navigation conversation:', error);
+                Alert.alert('Erreur', 'Impossible d\'ouvrir la conversation');
+              }
+            }}
           >
-            <Ionicons name="person-add" size={20} color="#fff" />
-            <Text style={styles.addFriendText}>Envoyer une demande d'ami</Text>
+            <Ionicons name="chatbubble" size={20} color="#fff" />
+            <Text style={styles.sendMessageText}>Envoyer un message</Text>
           </TouchableOpacity>
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Modal pour le message personnalisé */}
-      <Modal
-        visible={showMessageModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowMessageModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Message de présentation</Text>
-            <Text style={styles.modalSubtitle}>
-              Présentez-vous à {profile.surnom || profile.username}
-            </Text>
-            
-            <TextInput
-              style={styles.messageInput}
-              multiline
-              placeholder="Écrivez votre message..."
-              value={connectionMessage}
-              onChangeText={setConnectionMessage}
-              maxLength={300}
-            />
-            
-            <Text style={styles.characterCount}>
-              {connectionMessage.length}/300
-            </Text>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButtonCancel}
-                onPress={() => {
-                  setShowMessageModal(false);
-                  setConnectionMessage('');
-                }}
-              >
-                <Text style={styles.modalButtonCancelText}>Annuler</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.modalButtonSend,
-                  (!connectionMessage.trim() || sendingRequest) && styles.modalButtonDisabled
-                ]}
-                onPress={handleSendConnectionRequest}
-                disabled={!connectionMessage.trim() || sendingRequest}
-              >
-                {sendingRequest ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonSendText}>Envoyer</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -576,90 +509,19 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 8,
   },
-  addFriendButton: {
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  addFriendText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  messageInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    minHeight: 120,
-    textAlignVertical: 'top',
-  },
-  characterCount: {
-    fontSize: 12,
-    color: '#999',
-    textAlign: 'right',
-    marginTop: 8,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  modalButtonCancel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-  },
-  modalButtonCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  modalButtonSend: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    alignItems: 'center',
-  },
-  modalButtonSendText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  modalButtonDisabled: {
-    opacity: 0.5,
-  },
+  sendMessageButton: {
+  backgroundColor: 'rgba(10, 145, 104, 1)',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 16,
+  borderRadius: 12,
+  gap: 8,
+},
+sendMessageText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '700',
+},
+
 });
