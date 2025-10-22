@@ -83,11 +83,19 @@ export default function ConversationDirect() {
       };
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log('📡 WebSocket message reçu:', data.type);
+        
         if (data.type === "chat_message") {
-          // Filtrer par conversation_uuid pour éviter d'afficher des messages d'autres conversations (groupes)
           const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
-          if (!incomingConvUuid || incomingConvUuid !== conversationId) {
-            return; // ignorer les messages d'autres conversations
+          
+          console.log('💬 Message WebSocket:');
+          console.log('   - conversationId attendu:', conversationId);
+          console.log('   - conversation_uuid reçu:', incomingConvUuid);
+          
+          // IMPORTANT: Filtrer ici car WebSocket envoie des messages de toutes les conversations
+          if (incomingConvUuid !== conversationId) {
+            console.log('❌ Message ignoré (mauvais conversation_uuid)');
+            return;
           }
           const msg = data.message || data; // fallback si le backend n'imbrique pas sous message
           // Optionnel: filtrer si on connaît les deux participants
@@ -199,8 +207,6 @@ export default function ConversationDirect() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       let messagesList = Array.isArray(data) ? data : (data.results || []);
-      // Le endpoint REST ne renvoie pas toujours conversation_uuid → garder si absent
-      messagesList = messagesList.filter((m: any) => !m.conversation_uuid || m.conversation_uuid === conversationId);
       // Optionnel: filtrer par participants seulement si on les connaît
       if (allowedUsernamesRef.current.size > 0) {
         messagesList = messagesList.filter((m: any) => allowedUsernamesRef.current.has(m.sender_username));
@@ -223,7 +229,7 @@ export default function ConversationDirect() {
     const cachedMsgs = getCachedMessages(String(conversationId));
     if (cachedInfo) setConversationInfo(cachedInfo);
     if (cachedMsgs && cachedMsgs.length >= 0) {
-      const onlyThisConv = (cachedMsgs as any[]).filter((m) => !m.conversation_uuid || m.conversation_uuid === conversationId);
+      const onlyThisConv = cachedMsgs;
       setMessages(onlyThisConv as unknown as Message[]);
       setLoading(false);
     }
