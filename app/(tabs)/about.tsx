@@ -140,7 +140,7 @@ export default function ProfileScreen() {
           <View style={styles.quickStatsRow}>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
               <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{(user as any)?.nb_amis ?? 0}</Text>
+              <Text style={styles.quickStatNum}>{user?.nb_connexions ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>

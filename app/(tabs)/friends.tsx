@@ -75,7 +75,7 @@ interface GroupInvitation {
 }
 
 export default function FriendsScreen() {
-  const { makeAuthenticatedRequest } = useAuth();
+  const { makeAuthenticatedRequest, reloadUser } = useAuth();
   const insets = useSafeAreaInsets();
   
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -182,6 +182,7 @@ export default function FriendsScreen() {
       // Si acceptée, recharger les connexions
       if (action === 'acceptee') {
         await fetchConnections();
+        await reloadUser();
         Alert.alert(
           'Demande acceptée',
           `Vous êtes maintenant connecté avec ${senderName} !`
