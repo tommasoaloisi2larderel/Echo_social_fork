@@ -2,16 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { useAgents } from "../../contexts/AgentsContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -576,29 +576,6 @@ export default function AgentPanel({
                             }} numberOfLines={1}>
                               {agent.name}
                             </Text>
-                              {agent.is_active && (
-                                <View style={{
-                                  backgroundColor: 'rgba(10, 145, 104, 0.12)',
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 4,
-                                  borderRadius: 12,
-                                  marginLeft: 8,
-                                  shadowColor: 'rgba(10, 145, 104, 0.3)',
-                                  shadowOffset: { width: 0, height: 4 },
-                                  shadowOpacity: 0.4,
-                                  shadowRadius: 8,
-                                  elevation: 3,
-                                }}>
-                                  <Text style={{
-                                    fontSize: 10,
-                                    fontWeight: '700',
-                                    color: 'rgba(10, 145, 104, 1)',
-                                    letterSpacing: 0.5,
-                                  }}>
-                                    ACTIF
-                                  </Text>
-                                </View>
-                              )}
                               {isInConversation && isChat && (
                                 <View style={{
                                   backgroundColor: 'rgba(59, 130, 246, 0.12)',
