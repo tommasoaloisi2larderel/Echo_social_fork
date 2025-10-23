@@ -1,6 +1,5 @@
 import { Stack } from "expo-router";
 import React from 'react';
-import JarvisGlobalEffects from '../components/JarvisGlobalEffects';
 import { AgentsProvider } from '../contexts/AgentsContext';
 import { AuthProvider } from "../contexts/AuthContext";
 import { ChatProvider } from "../contexts/ChatContext";
@@ -20,9 +19,6 @@ export default function RootLayout() {
             <AgentsProvider>
               <NavigationProvider>
                 <TransitionProvider>
-                  {/* Global Jarvis visual effects */}
-                  <JarvisGlobalEffects />
-
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="(auth)" />
