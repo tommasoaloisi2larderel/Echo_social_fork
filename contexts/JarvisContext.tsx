@@ -54,7 +54,8 @@ interface JarvisContextType {
   stats: JarvisStats | null;
   isLoading: boolean;
   error: string | null;
-  
+  jarvisActive: boolean;
+
   // Actions
   sendMessage: (message: string) => Promise<void>;
   getWelcomeMessage: () => Promise<void>;
@@ -65,6 +66,7 @@ interface JarvisContextType {
   updateInstance: (updates: Partial<JarvisInstance>) => Promise<void>;
   addMessage: (message: JarvisMessage) => void;
   clearMessages: () => void;
+  setJarvisActive: (active: boolean) => void;
 }
 
 const JarvisContext = createContext<JarvisContextType | undefined>(undefined);
@@ -77,6 +79,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   const [stats, setStats] = useState<JarvisStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jarvisActive, setJarvisActive] = useState(false);
 
   // Initialize Jarvis instance when user logs in
   useEffect(() => {
@@ -288,6 +291,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
         stats,
         isLoading,
         error,
+        jarvisActive,
         sendMessage,
         getWelcomeMessage,
         getNotificationsSummary,
@@ -297,6 +301,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
         updateInstance,
         addMessage,
         clearMessages,
+        setJarvisActive,
       }}
     >
       {children}

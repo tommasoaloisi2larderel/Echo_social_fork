@@ -35,7 +35,7 @@ export default function BottomBar({
   const { accessToken, makeAuthenticatedRequest } = useAuth();
   const { navigateToScreen } = useNavigation();
   const { sendMessage: sendChatMessage, websocket, currentConversationId } = useChat();
-  const { messages: jarvisMessages, sendMessage: sendJarvisMessage, clearHistory, loadHistory } = useJarvis();
+  const { messages: jarvisMessages, sendMessage: sendJarvisMessage, clearHistory, loadHistory, jarvisActive, setJarvisActive } = useJarvis();
 
   // Screen dimensions
   const screenHeight = Dimensions.get('window').height;
@@ -49,7 +49,6 @@ export default function BottomBar({
   const [barHeight, setBarHeight] = useState(96);
   const keyboardOffset = useRef(new Animated.Value(0)).current;
   const [jarvisKeyboardHeight, setJarvisKeyboardHeight] = useState(0);
-  const [jarvisActive, setJarvisActive] = useState(false);
   const [sendTarget, setSendTarget] = useState<'chat' | 'jarvis'>(isChat ? 'chat' : 'jarvis');
 
   // Agents context
