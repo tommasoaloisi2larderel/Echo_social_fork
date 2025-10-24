@@ -4,15 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
@@ -68,10 +68,18 @@ export default function ConversationGroup() {
       };
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log('📡 [GROUP] WebSocket message reçu:', data.type);
+        
         if (data.type === "chat_message") {
           const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
-          if (!incomingConvUuid || incomingConvUuid !== conversationId) {
-            return; // ignorer messages d'autres conversations
+          
+          console.log('💬 [GROUP] Message WebSocket:');
+          console.log('   - conversationId attendu:', conversationId);
+          console.log('   - conversation_uuid reçu:', incomingConvUuid);
+          
+          if (incomingConvUuid !== conversationId) {
+            console.log('❌ [GROUP] Message ignoré (mauvais conversation_uuid)');
+            return;
           }
           const msg = data.message || data;
           const newMsg: Message = { 
@@ -147,7 +155,7 @@ export default function ConversationGroup() {
       if (response.status === 401) { await logout(); return; }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const messagesList = (Array.isArray(data) ? data : (data.results || [])).filter((m: any) => !m.conversation_uuid || m.conversation_uuid === conversationId);
+      const messagesList = (Array.isArray(data) ? data : (data.results || []));
       const sortedMessages = messagesList.sort((a: Message, b: Message) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       setMessages(sortedMessages);
       try { primeCache(String(conversationId), (groupInfo), sortedMessages as any); } catch {}

@@ -35,6 +35,8 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   register: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updatedUser: User) => Promise<void>;
+  reloadUser: () => Promise<void>;
   makeAuthenticatedRequest: (
     url: string,
     options?: RequestInit
@@ -220,7 +222,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const isLoggedIn = !!user && !!accessToken;
+  const updateUser = async (updatedUser: User) => {
+    setUser(updatedUser);
+    await storage.setItemAsync("user", JSON.stringify(updatedUser));
+    console.log('✅ Utilisateur mis à jour dans le contexte');
+  };
 
+  const reloadUser = async () => {
+    if (!accessToken) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile/`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (response.ok) {
+        const freshUser = await response.json();
+        setUser(freshUser);
+        await storage.setItemAsync("user", JSON.stringify(freshUser));
+        console.log('✅ User rechargé depuis l\'API');
+      }
+    } catch (error) {
+      console.error('❌ Erreur rechargement user:', error);
+    }
+  };
   return (
     <AuthContext.Provider
       value={{
@@ -232,7 +257,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         register,
         logout,
+        updateUser,
         makeAuthenticatedRequest,
+        reloadUser,
       }}
     >
       {children}

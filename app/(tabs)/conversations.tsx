@@ -791,15 +791,27 @@ export default function ConversationsScreen() {
 
   if (viewMode === 'direct') {
     // Mode Privé : afficher tous les amis (avec ou sans conversation)
+    // IMPORTANT: Créer un Set des conversation_uuid des groupes pour les filtrer
+    const groupConversationUuids = new Set(
+      groups.map(g => g.conversation_uuid).filter(Boolean)
+    );
+    
     displayItems = myConnections.map(friend => {
       // Utiliser user_uuid si disponible, sinon uuid
       const friendUuid = friend.user_uuid || friend.uuid;
       
       // Trouver la conversation correspondante s'il y en a une
-      const conversation = conversations.find(c => 
-        c.other_participant?.uuid === friendUuid || 
-        c.other_participant?.uuid === friend.uuid
-      );
+      // IMPORTANT: Exclure les conversations qui sont en fait des groupes
+      const conversation = conversations.find(c => {
+        const matchesParticipant = 
+          c.other_participant?.uuid === friendUuid || 
+          c.other_participant?.uuid === friend.uuid;
+        
+        // Ne pas utiliser cette conversation si c'est un groupe
+        const isNotGroup = !groupConversationUuids.has(c.uuid);
+        
+        return matchesParticipant && isNotGroup;
+      });
       
       return {
         uuid: friendUuid,
@@ -810,7 +822,8 @@ export default function ConversationsScreen() {
         hasConversation: !!conversation,
       };
     });
-  } else {
+  }
+  else {
     // Mode Groupe : afficher les groupes depuis l'API /groups/my-groups/
     displayItems = groups.map(group => ({
       uuid: group.uuid,

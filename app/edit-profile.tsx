@@ -20,13 +20,15 @@ import {
     View,
 } from 'react-native';
 import { storage } from '../utils/storage';
+import { useUserProfile } from '@/contexts/UserProfileContext'; 
 
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
   : "https://reseausocial-production.up.railway.app";
 
 export default function EditProfileScreen() {
-  const { user, makeAuthenticatedRequest } = useAuth();
+  const { user, makeAuthenticatedRequest,updateUser, reloadUser   } = useAuth();
+  const { clearCache } = useUserProfile();
   const [loading, setLoading] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -128,7 +130,9 @@ export default function EditProfileScreen() {
         
         // Update user in storage so it persists
         await storage.setItemAsync("user", JSON.stringify(updatedUser));
-        
+        await updateUser(updatedUser);    
+        await clearCache();
+        await reloadUser()
         Alert.alert('Succès', 'Votre profil a été mis à jour avec succès !', [
           { text: 'OK', onPress: () => {
             // Navigate back and the profile will refresh from storage
