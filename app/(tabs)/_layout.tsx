@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
+import { Stack, useGlobalSearchParams, useLocalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import BottomBar from '../../components/BottomBar/index';
@@ -15,10 +15,15 @@ import IndexScreen from './index';
 export default function TabsLayout() {
   const [chatText, setChatText] = useState("");
   const pathname = usePathname();
-  const { conversationId } = useLocalSearchParams();
+  const localParams = useLocalSearchParams();
+  const globalParams = useGlobalSearchParams();
+  const conversationId = (globalParams.conversationId || localParams.conversationId) as string | undefined;
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
   const { isLoggedIn, makeAuthenticatedRequest } = useAuth();
   const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
+  
+  // Debug: voir ce qui est récupéré
+  console.log('📍 _layout - localParams:', localParams, 'globalParams:', globalParams, 'conversationId:', conversationId);
 
   const deriveIndexFromPath = (p: string) => {
     if (p.includes('/conversations')) return 0;
@@ -94,6 +99,7 @@ export default function TabsLayout() {
         currentRoute={pathname}
         chatText={chatText}
         setChatText={setChatText}
+        conversationId={conversationId}
       />
     </View>
   );
@@ -109,7 +115,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    bottom: 70, // Laisser de l'espace pour la BottomBar (MIN_HEIGHT = 60px)
     zIndex: 100,
     backgroundColor: '#f0f2f5', // Fond opaque pour cacher le Stack en dessous
   },
