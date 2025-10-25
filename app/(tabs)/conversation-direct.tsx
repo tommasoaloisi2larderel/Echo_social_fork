@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import {
   ActivityIndicator,
   Animated,
@@ -57,6 +58,7 @@ export default function ConversationDirect() {
   const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);
   const allowedUsernamesRef = useRef<Set<string>>(new Set());
   const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
   const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   const screenDimensions = Dimensions.get('window');
@@ -126,6 +128,23 @@ export default function ConversationDirect() {
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
             return [...prev, newMsg];
           });
+        }
+        if (data.type === "typing_status") {
+          const { username, is_typing } = data;
+          
+          // Ne pas afficher notre propre statut typing
+          if (username === user?.username) return;
+          
+          setTypingUsers(prev => {
+            const newSet = new Set(prev);
+            if (is_typing) {
+              newSet.add(username);
+            } else {
+              newSet.delete(username);
+            }
+            return newSet;
+          });
+          return;
         }
       };
       ws.onerror = (error) => console.error("WS error:", error);
@@ -246,9 +265,23 @@ export default function ConversationDirect() {
   }, []);
 
   useEffect(() => {
-    setSendMessage(() => sendMessageHandler);
-    return () => setSendMessage(null);
-  }, [localWebsocket, conversationId]);
+      if (localWebsocket && conversationId) {
+          const handler = (messageText: string) => {
+              if (!messageText.trim() || !localWebsocket) return;
+              console.log('📤 Envoi du message via WebSocket:', messageText);
+              localWebsocket.send(JSON.stringify({ 
+                  type: "chat_message", 
+                  conversation_uuid: conversationId, 
+                  message: messageText.trim() 
+              }));
+              setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+          };
+          setSendMessage(() => handler);
+      } else {
+          setSendMessage(null);
+      }
+      return () => setSendMessage(null);
+  }, [localWebsocket, conversationId, setSendMessage]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
@@ -456,6 +489,10 @@ export default function ConversationDirect() {
               </React.Fragment>
             );
           })}
+          {/* Indicateur "en train d'écrire" */}
+          {Array.from(typingUsers).map(username => (
+            <TypingIndicator key={username} username={username} />
+          ))}
         </ScrollView>
       </KeyboardAvoidingView>
     </Animated.View>

@@ -181,12 +181,17 @@ export const styles = StyleSheet.create({
 
   timestampText: {
     fontSize: 10,
-    color: "#aaa",
+    color: "#083b0fff",
   },
 
   readStatus: {
     fontSize: 10,
-    color: "#aaa",
+    color: "#083b0fff",
+    fontWeight: "500",
+  },
+  writing : {
+    fontSize: 10,
+    color: "#083b0fff",
     fontWeight: "500",
   },
 
@@ -285,6 +290,7 @@ export const styles = StyleSheet.create({
     marginBottom: 2,
     fontWeight: '600',
   },
+  
 
   ///////////////////////////////////////// STYLES FOR HOME PAGE
   homeContainer: {

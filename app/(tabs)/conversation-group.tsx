@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
@@ -43,7 +44,7 @@ export default function ConversationGroup() {
   const [loading, setLoading] = useState(true);
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
-
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
@@ -69,7 +70,25 @@ export default function ConversationGroup() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log('📡 [GROUP] WebSocket message reçu:', data.type);
-        
+
+          // Gérer le statut "en train d'écrire"
+        if (data.type === "typing_status") {
+          const { username, is_typing } = data;
+          
+          // Ne pas afficher notre propre statut typing
+          if (username === user?.username) return;
+          
+          setTypingUsers(prev => {
+            const newSet = new Set(prev);
+            if (is_typing) {
+              newSet.add(username);
+            } else {
+              newSet.delete(username);
+            }
+            return newSet;
+          });
+          return;
+        }
         if (data.type === "chat_message") {
           const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
           
@@ -382,6 +401,12 @@ export default function ConversationGroup() {
               </React.Fragment>
             );
           })}
+
+          {/* Indicateur "en train d'écrire" */}
+          {Array.from(typingUsers).map(username => (
+            <TypingIndicator key={username} username={username} />
+          ))}
+
         </ScrollView>
       </KeyboardAvoidingView>
     </Animated.View>
