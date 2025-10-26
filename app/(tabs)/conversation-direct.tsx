@@ -64,6 +64,7 @@ export default function ConversationDirect() {
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+  const [unreadMessageUuids, setUnreadMessageUuids] = useState<Set<string>>(new Set());
 
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -88,48 +89,70 @@ export default function ConversationDirect() {
         console.log('📡 WebSocket message reçu:', data.type);
         console.log('📦 Données complètes:', JSON.stringify(data, null, 2));
         
-        if (data.type === "chat_message") {
-          const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
-          
-          console.log('💬 Message WebSocket:');
-          console.log('   - conversationId attendu:', conversationId);
-          console.log('   - conversation_uuid reçu:', incomingConvUuid);
-          
-          // IMPORTANT: Filtrer ici car WebSocket envoie des messages de toutes les conversations
-          if (incomingConvUuid !== conversationId) {
-            console.log('❌ Message ignoré (mauvais conversation_uuid)');
-            return;
-          }
-          const msg = data.message || data; // fallback si le backend n'imbrique pas sous message
-          // Optionnel: filtrer si on connaît les deux participants
-          if (allowedUsernamesRef.current.size > 0) {
-            const senderOk = msg.sender_username && allowedUsernamesRef.current.has(msg.sender_username);
-            const isGroupSystem = typeof msg.content === 'string' && (
-              msg.content.startsWith('🎉') ||
-              msg.content.startsWith('👋') ||
-              msg.content.includes('a rejoint') ||
-              msg.content.includes('Bienvenue')
-            );
-            if (!senderOk || isGroupSystem) {
+          if (data.type === "chat_message") {
+            const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
+            
+            if (incomingConvUuid !== conversationId) {
               return;
             }
-          }
-          const newMsg: Message = {
-            id: msg.id,
-            uuid: msg.uuid,
-            sender_username: msg.sender_username,
-            content: msg.content,
-            created_at: msg.created_at,
-            is_ai_generated: msg.is_ai_generated || false,
-            attachments: msg.attachments || [],
-          };
-          setMessages((prev) => {
-            const exists = prev.some((m) => m.uuid === newMsg.uuid);
-            if (exists) return prev.map((m) => (m.uuid === newMsg.uuid ? { ...m, ...newMsg } : m));
+            
+            const msg = data.message || data;
+            
+            // Filtrage par participants
+            if (allowedUsernamesRef.current.size > 0) {
+              const senderOk = msg.sender_username && allowedUsernamesRef.current.has(msg.sender_username);
+              const isGroupSystem = typeof msg.content === 'string' && (
+                msg.content.startsWith('🎉') ||
+                msg.content.startsWith('👋') ||
+                msg.content.includes('a rejoint') ||
+                msg.content.includes('Bienvenue')
+              );
+              if (!senderOk || isGroupSystem) {
+                return;
+              }
+            }
+            
+            const newMsg: Message = {
+              id: msg.id,
+              uuid: msg.uuid,
+              sender_username: msg.sender_username,
+              content: msg.content,
+              created_at: msg.created_at,
+              is_ai_generated: msg.is_ai_generated || false,
+              attachments: msg.attachments || [],
+            };
+            
+            // 🔴 SI le message vient de l'autre personne, le marquer comme non lu temporairement
+            if (msg.sender_username !== user?.username) {
+              setUnreadMessageUuids(prev => new Set([...prev, newMsg.uuid]));
+              console.log(`📩 Nouveau message non lu reçu: ${newMsg.uuid}`);
+            }
+            
+            setMessages((prev) => {
+              const exists = prev.some((m) => m.uuid === newMsg.uuid);
+              if (exists) return prev.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
+              return [...prev, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            });
+            
+            // 🔴 MARQUER COMME VU après réception
+            if (msg.sender_username !== user?.username && localWebsocket && localWebsocket.readyState === WebSocket.OPEN) {
+              localWebsocket.send(JSON.stringify({ 
+                type: "mark_as_seen", 
+                conversation_uuid: conversationId 
+              }));
+              
+              // Retirer la couleur après 2 secondes
+              setTimeout(() => {
+                setUnreadMessageUuids(prev => {
+                  const updated = new Set(prev);
+                  updated.delete(newMsg.uuid);
+                  return updated;
+                });
+              }, 10000);
+            }
+            
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-            return [...prev, newMsg];
-          });
-        }
+          }
         if (data.type === "typing_status") {
           const { username, is_typing } = data;
           
@@ -206,38 +229,28 @@ export default function ConversationDirect() {
     }
     try {
       let convDataLocal: any = null;
-      // Détails de la conversation privée uniquement
-      const convResponse = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/`
-      );
-      if (convResponse.ok) {
-        const convData = await convResponse.json();
-        convDataLocal = convData;
-        setConversationInfo(convData);
-        // Déterminer les deux participants autorisés (moi + autre) si possible
-        const me = user?.username;
-        const other = convData?.participants_detail?.find((p: any) => p.user_uuid !== user?.uuid);
-        const otherUsername = other?.username || convData?.other_participant?.username;
-        const setVals = new Set<string>();
-        if (me) setVals.add(me);
-        if (otherUsername) setVals.add(otherUsername);
-        allowedUsernamesRef.current = setVals;
-
-        // Si on n'a pas pu déterminer l'autre participant ici, tenter via la liste des conversations privées
-        if (allowedUsernamesRef.current.size < 2) {
-          try {
-            const listResp = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/private/`);
-            if (listResp.ok) {
-              const listData = await listResp.json();
-              const convFromList = (Array.isArray(listData) ? listData : (listData.results || [])).find((c: any) => c.uuid === conversationId);
-              const otherFromList = convFromList?.other_participant?.username;
-              if (otherFromList) {
-                const s = new Set<string>(allowedUsernamesRef.current);
-                s.add(otherFromList);
-                allowedUsernamesRef.current = s;
-              }
-            }
-          } catch {}
+      
+      // Récupérer la liste des conversations privées
+      const listResp = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/private/`);
+      
+      if (listResp.ok) {
+        const listData = await listResp.json();
+        const conversationsList = Array.isArray(listData) ? listData : (listData.results || []);
+        
+        // Trouver la conversation correspondante
+        const conversation = conversationsList.find((c: any) => c.uuid === conversationId);
+        
+        if (conversation) {
+          convDataLocal = conversation;
+          setConversationInfo(conversation);
+          
+          // Déterminer les deux participants autorisés
+          const me = user?.username;
+          const otherUsername = conversation?.other_participant?.username;
+          const setVals = new Set<string>();
+          if (me) setVals.add(me);
+          if (otherUsername) setVals.add(otherUsername);
+          allowedUsernamesRef.current = setVals;
         }
       }
 
@@ -245,18 +258,67 @@ export default function ConversationDirect() {
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
       );
-      if (response.status === 401) { await logout(); return; }
+      
+      if (response.status === 401) { 
+        await logout(); 
+        return; 
+      }
+      
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
       const data = await response.json();
       let messagesList = Array.isArray(data) ? data : (data.results || []);
-      // Optionnel: filtrer par participants seulement si on les connaît
+      
+      // Filtrer par participants si on les connaît
       if (allowedUsernamesRef.current.size > 0) {
-        messagesList = messagesList.filter((m: any) => allowedUsernamesRef.current.has(m.sender_username));
+        messagesList = messagesList.filter((m: any) => 
+          allowedUsernamesRef.current.has(m.sender_username)
+        );
       }
-      const sortedMessages = messagesList.sort((a: Message, b: Message) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      // IDENTIFIER LES MESSAGES NON LUS de l'autre personne AVANT de marquer comme vu
+      const unreadFromOther = messagesList
+      .filter((m: any) => !m.is_read && m.sender_username !== user?.username)
+      .map((m: any) => m.uuid);
+    
+      // Stocker les UUIDs des messages non lus pour l'affichage
+      if (unreadFromOther.length > 0) {
+        setUnreadMessageUuids(new Set(unreadFromOther));
+        console.log(`📩 ${unreadFromOther.length} message(s) non lu(s) détecté(s)`);
+      }
+        
+      const sortedMessages = messagesList.sort(
+        (a: Message, b: Message) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
       setMessages(sortedMessages);
+      //  MARQUER COMME VU après avoir identifié les non-lus
+      if (unreadFromOther.length > 0) {
+        try {
+          await makeAuthenticatedRequest(
+            `${API_BASE_URL}/messaging/conversations/${conversationId}/mark-as-seen/`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({})
+            }
+          );
+          console.log(`✅ ${unreadFromOther.length} message(s) marqué(s) comme vu(s) sur le serveur`);
+          
+          // APRÈS 2 SECONDES, retirer la couleur des messages non lus
+          setTimeout(() => {
+            setUnreadMessageUuids(new Set());
+          }, 10000); // 2 secondes pour voir la couleur
+          
+        } catch (error) {
+          console.error('Erreur mark-as-seen:', error);
+        }
+      }
       // Prime le cache pour ouverture instantanée ultérieure
-      try { primeCache(String(conversationId), (conversationInfo || convDataLocal), sortedMessages as any); } catch {}
+      try { 
+        primeCache(String(conversationId), convDataLocal, sortedMessages as any); 
+      } catch {}
+      
     } catch (error) {
       console.error('Erreur messages:', error);
     } finally {
@@ -482,6 +544,12 @@ export default function ConversationDirect() {
                       !isFirstInGroup && !isLastInGroup && (isMe ? styles.myMessageMiddle : styles.theirMessageMiddle),
                       isFirstInGroup && isSameSenderAsNext && (isMe ? styles.myMessageFirst : styles.theirMessageFirst),
                       isLastInGroup && isSameSenderAsPrev && (isMe ? styles.myMessageLast : styles.theirMessageLast),
+                      //  AJOUT : Style spécial pour les messages non lus
+                      unreadMessageUuids.has(msg.uuid) && !isMe && {
+                        backgroundColor: '#e6b106ff',
+                        borderColor: '#806009ff',
+                        borderWidth: 2,
+                      }
                     ]}>
                       {msg.attachments && msg.attachments.length > 0 ? (
                         <View style={{ gap: 6 }}>
