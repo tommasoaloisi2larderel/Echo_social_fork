@@ -116,6 +116,24 @@ export default function ConversationGroup() {
             return [...prev, newMsg];
           });
         }
+        // Gérer la confirmation de lecture (message vu)
+        if (data.type === "conversation_seen") {
+          const { conversation_uuid } = data;
+          
+          // Vérifier que c'est bien notre conversation
+          if (conversation_uuid === conversationId) {
+            console.log('✓✓ Messages marqués comme lus');
+            
+            // Mettre à jour tous les messages de l'utilisateur comme lus
+            setMessages(prev => prev.map(msg => {
+              if (msg.sender_username === user?.username) {
+                return { ...msg, is_read: true };
+              }
+              return msg;
+            }));
+          }
+          return;
+        }
       };
       ws.onerror = (error) => console.error("WS error:", error);
       ws.onclose = () => {
@@ -231,7 +249,23 @@ export default function ConversationGroup() {
     }
     return () => { if (localWebsocket) localWebsocket.close(); };
   }, [conversationId, accessToken]);
+  // Auto-scroll vers le bas après le chargement des messages
+  useEffect(() => {
+    if (messages.length > 0 && scrollViewRef.current && !loading) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [messages.length, loading]);
 
+  // Auto-scroll quand quelqu'un tape (indicateur typing)
+  useEffect(() => {
+    if (typingUsers.size > 0 && scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [typingUsers.size]);
   if (loading) {
     return (
       <View style={styles.chatContainer}>

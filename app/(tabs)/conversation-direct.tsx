@@ -86,6 +86,7 @@ export default function ConversationDirect() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log('📡 WebSocket message reçu:', data.type);
+        console.log('📦 Données complètes:', JSON.stringify(data, null, 2));
         
         if (data.type === "chat_message") {
           const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
@@ -144,6 +145,28 @@ export default function ConversationDirect() {
             }
             return newSet;
           });
+          return;
+        }
+        // Gérer la confirmation de lecture (message vu)
+        if (data.type === "conversation_seen") {
+          const { conversation_uuid } = data;
+            console.log('👁️ Event conversation_seen reçu !');
+            console.log('   - conversation_uuid:', data.conversation_uuid);
+            console.log('   - username:', data.username);
+            console.log('   - marked_count:', data.marked_count);
+          
+          // Vérifier que c'est bien notre conversation
+          if (conversation_uuid === conversationId) {
+            console.log('✓✓ Messages marqués comme lus');
+            
+            // Mettre à jour tous les messages de l'utilisateur comme lus
+            setMessages(prev => prev.map(msg => {
+              if (msg.sender_username === user?.username) {
+                return { ...msg, is_read: true };
+              }
+              return msg;
+            }));
+          }
           return;
         }
       };
@@ -290,6 +313,22 @@ export default function ConversationDirect() {
     }
     return () => { if (localWebsocket) localWebsocket.close(); };
   }, [conversationId, accessToken]);
+  // Auto-scroll vers le bas après le chargement des messages
+  useEffect(() => {
+    if (messages.length > 0 && scrollViewRef.current && !loading) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [messages.length, loading]);
+  // Auto-scroll quand quelqu'un tape (indicateur typing)
+  useEffect(() => {
+    if (typingUsers.size > 0 && scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [typingUsers.size]);
 
   if (loading) {
     return (
