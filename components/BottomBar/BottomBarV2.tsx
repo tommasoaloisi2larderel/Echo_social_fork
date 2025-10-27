@@ -162,15 +162,13 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       return null;
     }
   };
-  const handleSendVoice = async (uri: string) => {
+  const handleSendVoice = async (attachementUuid: string) => {
     if (!conversationId) {
       console.warn('No conversationId for voice message');
       return;
     }
     
     try {
-      const uuid = await uploadVoiceAttachment(uri);
-      if (!uuid) return;
 
       // Envoyer via WebSocket
       if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -178,7 +176,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
           type: 'chat_message',
           conversation_uuid: conversationId,
           message: '🎤 Message vocal',
-          attachment_uuids: [uuid],
+          attachment_uuids: [attachementUuid],
         };
         websocket.send(JSON.stringify(payload));
       } else {
@@ -192,7 +190,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
             },
             body: JSON.stringify({
               content: '🎤 Message vocal',
-              attachment_uuids: [uuid],
+              attachment_uuids: [attachementUuid],
             }),
           }
         );

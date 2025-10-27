@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
+import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
 
 interface Message {
   id: number;
@@ -561,6 +562,12 @@ export default function ConversationDirect() {
                                   {/* On peut remplacer par expo-image si besoin */}
                                   <Image source={{ uri: att.thumbnail_url || att.file_url }} style={{ width: 220, height: 160 }} contentFit="cover" />
                                 </View>
+                              ) :att.file_type === 'audio' ? (
+                                // Audio player
+                                <AudioPlayer 
+                                  audioUrl={att.file_url}
+                                  isMyMessage={isMe} 
+                                />
                               ) : (
                                 // Fichier générique
                                 <Text style={{ color: isMe ? '#fff' : '#111' }}>{att.original_filename || 'Fichier'}</Text>
