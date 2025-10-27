@@ -430,7 +430,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        enabled={!isJarvisActive && !isExpanded} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
+        enabled={!isJarvisActive && !isExpanded && !isRecording} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
       >
         <Animated.View
           style={[
@@ -442,6 +442,8 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
               marginBottom: bottomMarginValue,
               borderRadius: borderRadiusValue,
               backgroundColor: "rgba(10, 145, 104, 0.7)", // Couleur de fond du panneau
+              opacity: isRecording ? 0 : 1,
+
             },
           ]}
         >

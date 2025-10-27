@@ -55,14 +55,6 @@ export default function VoiceButtonFloating({
   if (isRecording) {
     return (
       <View style={styles.recordingControls}>
-        {/* Timer */}
-        <View style={styles.timerContainer}>
-          <View style={styles.recordingDot} />
-          <Text style={styles.timerText}>
-            {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
-          </Text>
-        </View>
-
         {/* Boutons de contrôle */}
         <View style={styles.controlButtons}>
           {/* Annuler */}
@@ -118,6 +110,14 @@ export default function VoiceButtonFloating({
             </View>
           </TouchableOpacity>
         </View>
+        {/* Timer - maintenant à droite */}
+        <View style={styles.timerContainer}>
+          <View style={styles.recordingDot} />
+          <Text style={styles.timerText}>
+            {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
+          </Text>
+        </View>
+
       </View>
     );
   }
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   floatingButton: {
     position: 'absolute',
     right: -20,
-    bottom: 10,
+    bottom: 50,
     zIndex: 1000,
     shadowColor: 'rgba(10, 145, 104, 0.4)',
     shadowOffset: { width: 0, height: 4 },
@@ -190,11 +190,12 @@ const styles = StyleSheet.create({
   },
   recordingControls: {
     position: 'absolute',
-    right: -10,
-    bottom: 10,
-    alignItems: 'flex-end',
+    right: 64,
+    bottom: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    zIndex: 1000,
+    zIndex: 10000,
   },
   timerContainer: {
     flexDirection: 'row',
@@ -252,9 +253,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
