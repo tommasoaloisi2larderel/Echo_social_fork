@@ -22,6 +22,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import ChatInputBar from './ChatInputBar';
 import JarvisChatBar from './JarvisChatBar';
 import JarvisInteractionButton from './JarvisInteractionButton';
+import VoiceButtonFloating from './VoiceButtonFloating';
+import { useChat } from '../../contexts/ChatContext';
+import VoiceRecorder from './VoiceRecorder';
 
 interface Agent {
   uuid: string;
@@ -89,6 +92,120 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   
   // Ref pour le PanGestureHandler du panneau d'agents
   const panelGestureRef = useRef(null);
+
+  // ========== GESTION DU VOCAL ==========
+
+
+  const {
+    isRecording,
+    recordedUri,
+    recordingSeconds,
+    isPaused,
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    cancelRecorded,
+    sendRecorded,
+  } = VoiceRecorder({ 
+    onSendRecorded: async (uri: string) => {
+      // Upload et envoi
+      const uuid = await uploadVoiceAttachment(uri);
+      if (uuid) {
+        await handleSendVoice(uuid);
+      }
+    }
+  });
+  
+  const { websocket } = useChat();
+
+    
+  const uploadVoiceAttachment = async (uri: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: `voice_${Date.now()}.m4a`,
+        type: 'audio/m4a',
+      } as any);
+
+      // ✅ Utiliser makeAuthenticatedRequest
+      // Il ajoute automatiquement Authorization: Bearer {token}
+      const response = await makeAuthenticatedRequest(
+        'https://reseausocial-production.up.railway.app/messaging/attachments/upload/',
+        {
+          method: 'POST',
+          body: formData,
+          // ❌ NE PAS mettre de header Content-Type
+          // FormData gère automatiquement le multipart/form-data avec boundary
+        }
+      );
+
+      // Vérifier si la réponse est OK
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload failed:', response.status, errorText);
+        Alert.alert('Erreur', `Upload échoué: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (data?.uuid) {
+        console.log('✅ Voice file uploaded:', data.uuid);
+        return data.uuid;
+      }
+      return null;
+    } catch (e) {
+      console.error('uploadVoiceAttachment error', e);
+      Alert.alert('Erreur', "Impossible d'uploader le fichier vocal");
+      return null;
+    }
+  };
+  const handleSendVoice = async (uri: string) => {
+    if (!conversationId) {
+      console.warn('No conversationId for voice message');
+      return;
+    }
+    
+    try {
+      const uuid = await uploadVoiceAttachment(uri);
+      if (!uuid) return;
+
+      // Envoyer via WebSocket
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        const payload = {
+          type: 'chat_message',
+          conversation_uuid: conversationId,
+          message: '🎤 Message vocal',
+          attachment_uuids: [uuid],
+        };
+        websocket.send(JSON.stringify(payload));
+      } else {
+        // Fallback : envoyer via API REST
+        await makeAuthenticatedRequest(
+          `https://reseausocial-production.up.railway.app/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: '🎤 Message vocal',
+              attachment_uuids: [uuid],
+            }),
+          }
+        );
+      }
+      
+      console.log('✅ Voice message sent');
+    } catch (e) {
+      console.error('handleSendVoice error', e);
+      Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
+    }
+  };
+
+
 
   const handleJarvisActivation = () => {
     setIsJarvisActive(true);
@@ -940,6 +1057,24 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
         </View>
         </Animated.View>
       </PanGestureHandler>
+      {/* Bouton vocal flottant */}
+            {isChat && conversationId && !isJarvisActive && (
+        <VoiceButtonFloating 
+          isRecording={isRecording}
+          recordedUri={recordedUri}
+          recordingSeconds={recordingSeconds}
+          isPaused={isPaused}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
+          pauseRecording={pauseRecording}
+          resumeRecording={resumeRecording}
+          cancelRecorded={cancelRecorded}
+          sendRecorded={sendRecorded}
+          disabled={isExpanded}
+        />
+      )}
+
+
     </KeyboardAvoidingView>
   );
 };

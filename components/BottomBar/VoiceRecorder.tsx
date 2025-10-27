@@ -1,3 +1,5 @@
+// je rajoute dans ce fichier la logique qui permet de gérer l'envoie de vocaux dans les conversations.
+
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from 'expo-av';
 import { SymbolView } from "expo-symbols";
@@ -20,6 +22,7 @@ export default function VoiceRecorder({ onSendRecorded }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimerRef = useRef<any>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   const startRecording = async () => {
     try {
@@ -37,6 +40,7 @@ export default function VoiceRecorder({ onSendRecorded }: VoiceRecorderProps) {
       await rec.startAsync();
       setRecording(rec);
       setIsRecording(true);
+      setIsPaused(false);
       setRecordingSeconds(0);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
@@ -52,6 +56,7 @@ export default function VoiceRecorder({ onSendRecorded }: VoiceRecorderProps) {
       const uri = recording.getURI();
       setRecording(null);
       setIsRecording(false);
+      setIsPaused(false);
       if (uri) setRecordedUri(uri);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
@@ -65,6 +70,7 @@ export default function VoiceRecorder({ onSendRecorded }: VoiceRecorderProps) {
   const cancelRecorded = () => {
     setRecordedUri(null);
     setRecordingSeconds(0);
+    setIsPaused(false);
   };
 
   const sendRecorded = async () => {
@@ -72,22 +78,53 @@ export default function VoiceRecorder({ onSendRecorded }: VoiceRecorderProps) {
     await onSendRecorded(recordedUri);
     setRecordedUri(null);
     setRecordingSeconds(0);
+    setIsPaused(false);
   };
+
+
+  const pauseRecording = async () => {
+    try {
+      if (recording && !isPaused) {
+        await recording.pauseAsync();
+        setIsPaused(true);
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      }
+    } catch (e) {
+      console.error('pauseRecording error', e);
+    }
+  };
+
+  const resumeRecording = async () => {
+    try {
+      if (recording && isPaused) {
+        await recording.startAsync();
+        setIsPaused(false);
+        recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+      }
+    } catch (e) {
+      console.error('resumeRecording error', e);
+    }
+  };
+
 
   return {
     isRecording,
     recordedUri,
     recordingSeconds,
+    isPaused,
     startRecording,
     stopRecording,
     cancelRecorded,
     sendRecorded,
+    pauseRecording,
+    resumeRecording,
     RecordingDisplay: () => (
       isRecording ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 12 }}>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="mic" size={18} color="#ef4444" />
-            <Text style={{ marginLeft: 8, color: '#ef4444', fontWeight: '700' }}>Enregistrement...</Text>
+            <Text style={{ marginLeft: 8, color: '#ef4444', fontWeight: '700' }}>{isPaused ? 'En pause...' : 'Enregistrement...'}</Text>
+
             <Text style={{ marginLeft: 8, color: '#ef4444' }}>
               {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
             </Text>
