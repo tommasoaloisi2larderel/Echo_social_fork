@@ -98,6 +98,12 @@ export default function ConversationDirect() {
             }
             
             const msg = data.message || data;
+            console.log('🎤 Message vocal reçu via WebSocket:');
+            console.log('   - content:', msg.content);
+            console.log('   - attachments:', JSON.stringify(msg.attachments, null, 2));
+            console.log('   - file_type:', msg.attachments?.[0]?.file_type);
+            console.log('   - file_url:', msg.attachments?.[0]?.file_url);
+
             
             // Filtrage par participants
             if (allowedUsernamesRef.current.size > 0) {
