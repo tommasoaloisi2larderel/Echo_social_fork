@@ -157,7 +157,7 @@ const ConversationSquare = ({
       <DefaultAvatar name={name} size={110} style={styles.avatar} />
     )}
     <View style={styles.conversationNameBadge}>
-      <Text style={styles.conversationName} numberOfLines={1}>
+      <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="clip">
         {name}
       </Text>
     </View>
@@ -188,7 +188,7 @@ const UserSquare = ({
       <DefaultAvatar name={user.surnom || user.username} size={110} style={styles.avatar} />
     )}
     <View style={styles.conversationNameBadge}>
-      <Text style={styles.conversationName} numberOfLines={1}>
+      <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="clip">
         {user.surnom || user.username}
       </Text>
     </View>
@@ -235,7 +235,7 @@ const GroupSquare = React.memo(({
         </View>
       )}
       <View style={styles.conversationNameBadge}>
-        <Text style={styles.conversationName} numberOfLines={1}>
+        <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="clip">
           {groupName}
         </Text>
         <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>

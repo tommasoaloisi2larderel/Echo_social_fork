@@ -14,7 +14,8 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Alert
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
@@ -69,6 +70,11 @@ export default function ConversationDirect() {
   const zoomAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
   const [unreadMessageUuids, setUnreadMessageUuids] = useState<Set<string>>(new Set());
+
+  // État pour le résumé
+  const [showSummary, setShowSummary] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -428,6 +434,64 @@ export default function ConversationDirect() {
   const otherParticipant = conversationInfo?.participants_detail?.find(p => p.user_uuid !== user?.uuid) || conversationInfo?.other_participant;
   const headerName = otherParticipant ? (otherParticipant.surnom || otherParticipant.username) : 'Conversation';
 
+  const fetchSummary = async () => {
+    if (!conversationId || !accessToken) {
+      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', !!accessToken);
+      return;
+    }
+    
+    console.log('🔍 Début du résumé pour conversation:', conversationId);
+    setLoadingSummary(true);
+    
+    try {
+      const url = `${API_BASE_URL}/messaging/conversations/${conversationId}/summarize/`;
+      console.log('📤 URL appelée:', url);
+      console.log('🔑 Token présent:', !!accessToken);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📥 Statut de la réponse:', response.status);
+      console.log('📥 Headers de la réponse:', response.headers);
+
+      if (response.status === 401) {
+        console.log('🔒 Erreur 401 - Token expiré');
+        await logout();
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        setLoadingSummary(false);
+        console.log('❌ Erreur HTTP:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        
+      }
+
+      const data = await response.json();
+      console.log('✅ Données reçues:', JSON.stringify(data, null, 2));
+      console.log('📝 Résumé:', data.summary);
+      console.log('📊 Nombre de messages non lus:', data.unread_count);
+      console.log('📊 Messages de contexte:', data.context_messages_count);
+      
+      setSummary(data.summary || 'Aucun résumé disponible');
+      setShowSummary(true);
+      setLoadingSummary(false);
+      } catch (error) {
+        console.error('❌ Erreur lors du résumé:', error);
+        console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
+        
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        Alert.alert('Erreur', `Impossible de générer le résumé: ${errorMessage}`);
+      } finally {
+  };}
+
+
   return (
     <Animated.View style={[styles.chatContainer, animatedStyle]}>
       {/* Bouton retour */}
@@ -624,8 +688,40 @@ export default function ConversationDirect() {
           ))}
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* Bouton Résumer - au-dessus de la bottom bar */}
+      <TouchableOpacity
+        style={styles.summaryButton}
+        onPress={fetchSummary}
+        disabled={loadingSummary}
+      >
+        {loadingSummary ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="sparkles" size={18} color="#fff" />
+        )}
+        <Text style={styles.summaryButtonText}>Résumer</Text>
+      </TouchableOpacity>
+      {/* Bulle de résumé */}
+      {showSummary && (
+        <View style={styles.summaryBubble}>
+          <TouchableOpacity 
+            onPress={() => {
+              setShowSummary(false);
+              setLoadingSummary(false);
+            }}
+            style={styles.summaryCloseButton}
+          >
+            <Ionicons name="close" size={20} color="rgba(10, 145, 104, 0.8)" />
+          </TouchableOpacity>
+          
+          <ScrollView showsVerticalScrollIndicator={false} style ={{zIndex :1}}>
+            <Text style={styles.summaryContent}>{summary}</Text>
+          </ScrollView>
+        </View>
+      )}
+
+
+
     </Animated.View>
   );
 }
-
-

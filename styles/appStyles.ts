@@ -35,7 +35,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   row: {
-    justifyContent: "space-between",
+    justifyContent: "center",
     marginBottom: 20,
   },
   conversationSquare: { 
@@ -44,7 +44,7 @@ export const styles = StyleSheet.create({
     alignItems: "center", 
     justifyContent: "center", 
     backgroundColor: LIGHT_GRAY, 
-    marginHorizontal: 8, 
+    marginHorizontal: 6, 
     borderRadius: 25, 
     paddingTop: 0, 
     paddingBottom: 0, 
@@ -62,25 +62,29 @@ export const styles = StyleSheet.create({
   conversationNameBadge: {
     position: "absolute",
     bottom: 8,
-    left: 13,
-    right: 13,
+    left: 10,
+    right: 10,
     opacity: 0.6,
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 12,
     paddingVertical: 2,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     zIndex: 10,
     shadowColor: WHITE,
     shadowOpacity: 0.6,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+    alignItems: "center",
+    justifyContent: "center"
   },
   conversationNameText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#333",
     textAlign: "center",
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
 
   ///////////////////////////////////////// STYLES FOR CHAT PAGE
@@ -467,4 +471,77 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
+
+///////////////////////////////////////// STYLES FOR SUMMARY FEATURE
+  summaryButton: {
+    position: 'absolute',
+    bottom: 112,
+    alignSelf : 'center',
+    backgroundColor: 'rgba(10, 145, 104, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  summaryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  summaryBubble: {
+    position: 'absolute',
+    bottom: 110,
+    left: 0,
+    right: 0,
+    marginHorizontal: 20,
+    alignSelf: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 24, // Coins plus arrondis
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
+    maxHeight: 320,
+    borderWidth: 2,
+    borderColor: 'rgba(10, 145, 104, 0.1)', // Bordure verte subtile
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 4, // Réduire l'espace
+  },
+  summaryCloseButton: {
+    position : 'absolute',
+    top : 8,
+    right : 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(10, 145, 104, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex:10,
+  },
+  summaryContent: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+    paddingRight: 40,
+    paddingTop: 4,
+  },
+  summaryScrollContent: {
+    paddingRight: 4,
+  },
 });
+
+

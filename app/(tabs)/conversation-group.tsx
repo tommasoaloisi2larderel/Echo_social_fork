@@ -12,7 +12,8 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Alert,
 } from 'react-native';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,6 +50,11 @@ export default function ConversationGroup() {
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // État pour le résumé
+  const [showSummary, setShowSummary] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? "http://localhost:3001"
@@ -289,6 +295,46 @@ export default function ConversationGroup() {
 
   const headerName = groupInfo?.name || 'Groupe';
 
+
+  const fetchSummary = async () => {
+    if (!conversationId || !accessToken) return;
+    
+    setLoadingSummary(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/messaging/conversations/${conversationId}/summarize/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.status === 401) {
+        await logout();
+        setLoadingSummary(false);
+        return;
+      }
+
+      if (!response.ok) {
+        setLoadingSummary(false);
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setSummary(data.summary || 'Aucun résumé disponible');
+      setShowSummary(true);
+      setLoadingSummary(false);
+    } catch (error) {
+      console.error('Erreur résumé:', error);
+      Alert.alert('Erreur', 'Impossible de générer le résumé');
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
+
   return (
     <Animated.View style={[styles.chatContainer, animatedStyle]}>
       <TouchableOpacity
@@ -443,6 +489,34 @@ export default function ConversationGroup() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Bouton Résumer - au-dessus de la bottom bar */}
+      <TouchableOpacity
+        style={styles.summaryButton}
+        onPress={fetchSummary}
+        disabled={loadingSummary}
+      >
+        {loadingSummary ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="sparkles" size={18} color="#fff" />
+        )}
+        <Text style={styles.summaryButtonText}>Résumer</Text>
+      </TouchableOpacity>
+
+      {/* Bulle de résumé */}
+      {showSummary && (
+        <View style={styles.summaryBubble}>
+          <View style={styles.summaryHeader}>
+            <TouchableOpacity onPress={() => setShowSummary(false)}>
+              <Ionicons name="close-circle" size={24} color="#999" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={styles.summaryContent}>{summary}</Text>
+          </ScrollView>
+        </View>
+      )}
     </Animated.View>
   );
 }
