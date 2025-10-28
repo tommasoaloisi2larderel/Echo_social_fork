@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
+import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 const { width } = Dimensions.get('window');
@@ -184,30 +186,30 @@ export default function ConversationMedia() {
       Alert.alert('Erreur', 'Impossible d\'ouvrir ce fichier');
     }
   };
-
-  const renderPhotoItem = ({ item }: { item: MediaItem }) => (
-    <TouchableOpacity
-      style={styles.photoItem}
-      onPress={() => openFile(item)}
-      activeOpacity={0.8}
-    >
-      <Image
-        source={{ uri: item.thumbnail_url || item.compressed_url || item.file_url }}
-        style={styles.photoImage}
-        contentFit="cover"
-      />
-      {item.file_type === 'video' && (
-        <View style={styles.videoOverlay}>
-          <Ionicons name="play-circle" size={32} color="#fff" />
-          {item.duration && (
-            <Text style={styles.videoDuration}>
-              {Math.floor(item.duration / 60)}:{String(Math.floor(item.duration % 60)).padStart(2, '0')}
-            </Text>
-          )}
+  
+    const renderPhotoItem = ({ item }: { item: MediaItem }) => {
+    if (item.file_type === 'video') {
+        return (
+        <View style={styles.photoItem}>
+            <AttachmentVideo
+            thumbnailUrl={item.thumbnail_url || item.file_url}
+            videoUrl={item.file_url}
+            />
         </View>
-      )}
-    </TouchableOpacity>
-  );
+        );
+    }
+    
+    // Pour les images
+    return (
+        <View style={styles.photoItem}>
+        <AttachmentImage
+            thumbnailUrl={item.thumbnail_url || item.compressed_url || item.file_url}
+            fullUrl={item.file_url}
+        />
+        </View>
+    );
+    };
+ 
 
   const getDocumentIcon = (mimeType: string): string => {
     if (mimeType.includes('pdf')) return 'document-text';
