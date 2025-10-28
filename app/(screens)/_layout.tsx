@@ -6,6 +6,8 @@ export default function ScreensLayout() {
       screenOptions={{
         headerShown: false,
       }}
-    />
+    >
+      <Stack.Screen name="conversation-media" />
+    </Stack>
   );
 }

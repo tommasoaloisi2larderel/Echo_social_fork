@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useUserProfile } from '../../contexts/UserProfileContext';
+import ConversationMedia from '../(screens)/conversation-media';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 
@@ -114,24 +115,24 @@ export default function ConversationManagement() {
 
   const loadConversationDetails = async () => {
     try {
-      console.log('🔍 Chargement conversation ID:', conversationId);
+      
       
       const cachedConversations = getCachedConversations();
       const cachedConv = cachedConversations?.find((c: any) => c.uuid === conversationId);
       
       if (cachedConv) {
-        console.log('✅ Conversation trouvée en cache:', cachedConv);
+        
         setConversation(cachedConv);
         
         const cachedGroups = getCachedGroups();
         const isGroupConv = cachedGroups?.some((g: any) => g.conversation_uuid === conversationId);
         
         if (isGroupConv) {
-          console.log('🔍 C\'est un groupe, chargement des détails...');
+          
           await loadGroupDetails();
         } else {
           const otherUserUuid = cachedConv.other_participant?.uuid || cachedConv.other_participant?.user_uuid;
-          console.log('👤 UUID autre utilisateur (depuis cache):', otherUserUuid);
+          
           
           if (otherUserUuid) {
             await loadUserProfile(otherUserUuid);
@@ -142,7 +143,7 @@ export default function ConversationManagement() {
         return;
       }
       
-      console.log('⚠️ Pas de cache, appel API...');
+      
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/`
       );
@@ -176,7 +177,7 @@ export default function ConversationManagement() {
   const loadUserProfile = async (uuid: string) => {
     setLoadingProfile(true);
     try {
-      console.log('👤 Chargement profil utilisateur UUID:', uuid);
+      
       
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
       
@@ -201,13 +202,13 @@ export default function ConversationManagement() {
   };
 
   const loadMemberProfile = async (uuid: string) => {
-    console.log('🚀 loadMemberProfile appelé avec UUID:', uuid);
+    
     setLoadingProfile(true);
     
     try {
-      console.log('📥 Appel getUserProfile...');
+      
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
-      console.log('📦 Profile reçu:', profile);
+ 
       
       if (!profile) {
         console.log('❌ Pas de profil reçu');
@@ -215,24 +216,24 @@ export default function ConversationManagement() {
         return;
       }
       
-      console.log('✅ setSelectedMemberProfile');
+
       setSelectedMemberProfile(profile);
       
-      console.log('📊 Appel getUserStats...');
+
       const stats = await getUserStats(uuid, makeAuthenticatedRequest);
-      console.log('📊 Stats reçues:', stats);
+
       
       if (stats) {
         setSelectedMemberStats(stats);
       }
       
-      console.log('🎯 setShowMemberProfile(true)');
+
       setShowMemberProfile(true);
       
     } catch (error) {
       console.error('❌ Erreur chargement profil membre:', error);
     } finally {
-      console.log('🏁 loadMemberProfile terminé');
+
       setLoadingProfile(false);
     }
   };
@@ -242,7 +243,6 @@ export default function ConversationManagement() {
     const foundGroup = cachedGroups?.find((g: any) => g.conversation_uuid === conversationId);
     
     if (foundGroup) {
-      console.log('📋 Détails groupe trouvés en cache');
       setGroupDetails(foundGroup);
       if (foundGroup.avatar) {
         try { await prefetchAvatars([foundGroup.avatar]); } catch {}
@@ -638,11 +638,30 @@ export default function ConversationManagement() {
               })}
             </View>
           )}
-
+          {/* Section Médias et Liens */}
           <View style={styles.settingsSection}>
             <Text style={styles.sectionTitle}>Médias, liens et documents</Text>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={() => {
+                console.log('🎬 Clic sur Médias');
+                console.log('📍 conversationId:', conversationId);
+                console.log('📍 Type:', typeof conversationId);
+                try {
+                  router.push({
+                    pathname: '/(screens)/conversation-media',
+                    params: { 
+                      conversationId: conversationId as string,
+                      initialTab: 'photos'
+                    }
+                  });
+                  console.log('✅ Navigation lancée');
+                } catch (error) {
+                  console.error('❌ Erreur navigation:', error);
+                }
+              }}
+            >
             
-            <TouchableOpacity style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <Ionicons name="image-outline" size={22} color="rgba(10, 145, 104, 1)" />
                 <Text style={styles.settingLabel}>Médias</Text>
@@ -653,7 +672,25 @@ export default function ConversationManagement() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingRow}>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={() => {
+                console.log('📄 Clic sur Documents');
+                console.log('📍 conversationId:', conversationId);
+                try {
+                  router.push({
+                    pathname: '/(screens)/conversation-media',
+                    params: { 
+                      conversationId: conversationId as string,
+                      initialTab: 'documents'
+                    }
+                  });
+                  console.log('✅ Navigation lancée');
+                } catch (error) {
+                  console.error('❌ Erreur navigation:', error);
+                }
+              }}
+            >
               <View style={styles.settingLeft}>
                 <Ionicons name="link-outline" size={22} color="rgba(10, 145, 104, 1)" />
                 <Text style={styles.settingLabel}>Liens</Text>
@@ -664,7 +701,16 @@ export default function ConversationManagement() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingRow}>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={() => router.push({
+                pathname: '/(screens)/conversation-media',
+                params: { 
+                  conversationId: conversationId as string,
+                  initialTab: 'documents'
+                }
+              })}
+            >
               <View style={styles.settingLeft}>
                 <Ionicons name="document-outline" size={22} color="rgba(10, 145, 104, 1)" />
                 <Text style={styles.settingLabel}>Documents</Text>
@@ -674,49 +720,6 @@ export default function ConversationManagement() {
                 <Ionicons name="chevron-forward" size={20} color="#ccc" />
               </View>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.settingsSection}>
-            <Text style={styles.sectionTitle}>Paramètres</Text>
-            
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <Ionicons name="notifications-outline" size={22} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.settingLabel}>Notifications</Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
-                thumbColor={notificationsEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <Ionicons name="volume-high-outline" size={22} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.settingLabel}>Sons</Text>
-              </View>
-              <Switch
-                value={soundEnabled}
-                onValueChange={setSoundEnabled}
-                trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
-                thumbColor={soundEnabled ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <Ionicons name="time-outline" size={22} color="rgba(10, 145, 104, 1)" />
-                <Text style={styles.settingLabel}>Messages éphémères</Text>
-              </View>
-              <Switch
-                value={ephemeralMessages}
-                onValueChange={setEphemeralMessages}
-                trackColor={{ false: '#ddd', true: 'rgba(10, 145, 104, 0.5)' }}
-                thumbColor={ephemeralMessages ? 'rgba(10, 145, 104, 1)' : '#f4f3f4'}
-              />
-            </View>
           </View>
 
           {isGroup && groupDetails && (

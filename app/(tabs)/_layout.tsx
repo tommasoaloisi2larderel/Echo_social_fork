@@ -37,6 +37,7 @@ export default function TabsLayout() {
                                   pathname.includes('conversation-detail') || 
                                   pathname.includes('conversation-management') || 
                                   pathname.includes('add-group-members') || 
+                                  pathname.includes('conversation-media') ||
                                   pathname.includes('/friends');
 
   const handleSendMessage = () => {
@@ -85,7 +86,7 @@ export default function TabsLayout() {
         <View style={styles.swipeContainer}>
           <SwipeableContainer
             initialIndex={deriveIndexFromPath(pathname)}
-            controlRef={swipeControlRef}
+            controlRef={swipeControlRef as any} 
           >
             <ConversationsScreen />
             <IndexScreen />
