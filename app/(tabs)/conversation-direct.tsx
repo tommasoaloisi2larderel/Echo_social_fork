@@ -20,6 +20,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
 import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
+import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
+import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
+
 
 interface Message {
   id: number;
@@ -563,18 +566,24 @@ export default function ConversationDirect() {
                           {msg.attachments.map((att) => (
                             <View key={att.uuid} style={{ borderRadius: 8, overflow: 'hidden' }}>
                               {att.file_type === 'image' ? (
-                                // Image preview
-                                <View>
-                                  {/* On peut remplacer par expo-image si besoin */}
-                                  <Image source={{ uri: att.thumbnail_url || att.file_url }} style={{ width: 220, height: 160 }} contentFit="cover" />
-                                </View>
+                                <AttachmentImage
+                                  thumbnailUrl={att.thumbnail_url || att.file_url}
+                                  fullUrl={att.file_url}
+                                  isMyMessage={isMe}
+                                />
                               ) :att.file_type === 'audio' ? (
                                 // Audio player
                                 <AudioPlayer 
                                   audioUrl={att.file_url}
                                   isMyMessage={isMe} 
                                 />
-                              ) : (
+                              ) : att.file_type == 'video' ? (
+
+                              <AttachmentVideo
+                                thumbnailUrl={att.thumbnail_url as any}
+                                videoUrl={att.file_url}
+                              />  
+                              ) :  (
                                 // Fichier générique
                                 <Text style={{ color: isMe ? '#fff' : '#111' }}>{att.original_filename || 'Fichier'}</Text>
                               )}

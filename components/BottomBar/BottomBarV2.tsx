@@ -25,6 +25,8 @@ import JarvisInteractionButton from './JarvisInteractionButton';
 import VoiceButtonFloating from './VoiceButtonFloating';
 import { useChat } from '../../contexts/ChatContext';
 import VoiceRecorder from './VoiceRecorder';
+import AttachmentButton from './Attachmentbutton';
+
 
 interface Agent {
   uuid: string;
@@ -1058,7 +1060,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
         </Animated.View>
       </PanGestureHandler>
       {/* Bouton vocal flottant */}
-            {isChat && conversationId && !isJarvisActive && (
+        {isChat && conversationId && !isJarvisActive && (
         <VoiceButtonFloating 
           isRecording={isRecording}
           recordedUri={recordedUri}
@@ -1071,8 +1073,16 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
           cancelRecorded={cancelRecorded}
           sendRecorded={sendRecorded}
           disabled={isExpanded}
-        />
+        />        
       )}
+      {isChat && conversationId && !isJarvisActive && (
+      <AttachmentButton 
+        conversationId={conversationId as string}
+        onAttachmentSent={() => {
+          console.log('Pièce jointe envoyée !');
+          // Optionnel : rafraîchir la liste des messages
+        }}
+      />)}
 
 
     </KeyboardAvoidingView>
