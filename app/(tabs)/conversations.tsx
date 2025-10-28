@@ -126,7 +126,6 @@ const SearchBar = ({ query, setQuery }: { query: string; setQuery: (q: string) =
   </View>
 );
 
-
 const ConversationSquare = ({ 
   name, 
   unread, 
@@ -144,13 +143,11 @@ const ConversationSquare = ({
     ref={squareRef}
     style={[
       styles.conversationSquare,
-      {
-        shadowColor: unread ? "rgba(10, 145, 104, 0.8)" : "#777",
-        shadowOpacity: 0.6,
-      },
+      unread && styles.unreadConversationSquare,
     ]}
     onPress={onPress}
   >
+
     {photoUrl ? (
       <Image source={{ uri: photoUrl }} style={styles.avatar} />
     ) : (
@@ -817,7 +814,7 @@ export default function ConversationsScreen() {
         uuid: friendUuid,
         name: friend.surnom || friend.username,
         photoUrl: friend.photo_profil_url,
-        unread: conversation ? conversation.unread_count > 0 : false,
+        unread: conversation ? (conversation.unread_count || 0) > 0 : false,
         conversationId: conversation?.uuid,
         hasConversation: !!conversation,
       };
@@ -829,7 +826,7 @@ export default function ConversationsScreen() {
       uuid: group.uuid,
       name: group.name,
       photoUrl: group.avatar || undefined,
-      unread: false, // L'unread sera géré via group.unread_messages
+      unread: (group.unread_messages || 0) > 0, // L'unread sera géré via group.unread_messages
       conversationId: group.conversation_uuid,
       hasConversation: !!group.conversation_uuid,
       isGroup: true,
@@ -1289,4 +1286,16 @@ const localStyles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+  unreadWrapper: {
+  backgroundColor: "rgba(10,145,104,0.35)",
+  borderRadius: 20,
+  padding: 5,
+},
+
+unreadSquare: {
+  borderWidth: 3,
+  borderColor: "rgba(10,145,104,1)",
+  borderRadius: 18,
+  backgroundColor: "white",
+}
 });

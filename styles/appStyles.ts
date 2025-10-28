@@ -54,6 +54,29 @@ export const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
+  unreadConversationSquare: {
+    shadowColor: "rgba(38, 201, 23, 0.8)",
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 10, // Augmente l'elevation pour Android
+    backgroundColor: "white", // Fond blanc pour contraster
+    borderWidth: 2,
+    borderColor: "rgba(10, 145, 104, 0.4)",
+  },
+  
+  unreadWrapper: {
+    borderRadius: 30,
+    padding: 4,
+    backgroundColor: "rgba(10, 145, 104, 0.2)",
+    shadowColor: "rgba(10, 145, 104, 0.6)",
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+
+
   avatar: {
     width: 110,
     height: 110,
