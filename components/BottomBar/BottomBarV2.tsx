@@ -26,6 +26,9 @@ import VoiceButtonFloating from './VoiceButtonFloating';
 import { useChat } from '../../contexts/ChatContext';
 import VoiceRecorder from './VoiceRecorder';
 import AttachmentButton from './Attachmentbutton';
+import JarvisSplitButton from '../JarvisInteraction/Jarvissplitbutton';
+import VoiceJarvisHandler from '../JarvisInteraction/Voicejarvishandler';
+import JarvisTextInput from '../JarvisInteraction/Jarvistextinput';
 
 
 interface Agent {
@@ -88,7 +91,14 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const [formalityLevel, setFormalityLevel] = useState('casual');
   const [maxResponseLength, setMaxResponseLength] = useState('500');
   const [submitting, setSubmitting] = useState(false);
-  
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [voiceTranscription, setVoiceTranscription] = useState<string | null>(null);
+  const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
+  const [isTextInputActive, setIsTextInputActive] = useState(false);
+  const [lastJarvisMessage, setLastJarvisMessage] = useState<string | null>(null);
+  const [lastJarvisResponse, setLastJarvisResponse] = useState<string | null>(null);
+
+
   // Hauteur de la barre (animée)
   const barHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
   
@@ -214,6 +224,66 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const handleJarvisDeactivation = () => {
     setIsJarvisActive(false);
   };
+
+  const handleTextInputActivate = () => {
+    console.log('📝 Activation de l\'input texte Jarvis');
+    setIsTextInputActive(true);
+  };
+
+
+  const handleTextInputComplete = (message: string, response: string) => {
+    console.log('✅ Message texte envoyé:', message);
+    console.log('✅ Réponse Jarvis:', response);
+    
+    setLastJarvisMessage(message);
+    setLastJarvisResponse(response);
+    
+    // Afficher une alerte avec la réponse
+    Alert.alert(
+      '💬 Jarvis répond',
+      response,
+      [{ text: 'OK' }]
+    );
+    
+    // Rester dans l'input pour permettre d'envoyer un autre message
+    // setIsTextInputActive(false); // Décommenter pour fermer après envoi
+  };
+
+  const handleTextInputQuit = () => {
+    console.log('❌ Fermeture de l\'input texte');
+    setIsTextInputActive(false);
+    setLastJarvisMessage(null);
+    setLastJarvisResponse(null);
+  };
+
+
+  const handleVoiceStart = () => {
+  console.log('🎤 Démarrage de l\'enregistrement vocal');
+  setIsVoiceRecording(true);
+};
+
+const handleVoiceComplete = (transcription: string, response: string) => {
+  console.log('✅ Vocal terminé - Transcription:', transcription);
+  console.log('✅ Réponse Jarvis:', response);
+  
+  setVoiceTranscription(transcription);
+  setVoiceResponse(response);
+  setIsVoiceRecording(false);
+  
+  // Afficher une alerte avec la réponse
+  Alert.alert(
+    '🎤 Message vocal traité',
+    `Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`,
+    [{ text: 'OK' }]
+  );
+};
+
+const handleVoiceCancel = () => {
+  console.log('❌ Enregistrement vocal annulé');
+  setIsVoiceRecording(false);
+  setVoiceTranscription(null);
+  setVoiceResponse(null);
+};
 
   const handleSendMessage = (message: string) => {
     onSendMessage?.(message);
@@ -432,7 +502,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        enabled={!isJarvisActive && !isExpanded && !isRecording} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
+        enabled={!isJarvisActive && !isExpanded && !isRecording && !isVoiceRecording && !isTextInputActive} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
       >
         <Animated.View
           style={[
@@ -471,12 +541,31 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                   onQuit={handleJarvisDeactivation}
                 />
               );
-            } else {
-              console.log('  ✅ Rendering JarvisInteractionButton');
-              return (
-                <JarvisInteractionButton onActivate={handleJarvisActivation} />
-              );
-            }
+              } else if (isVoiceRecording) {
+                console.log('  ✅ Rendering VoiceJarvisHandler');
+                return (
+                  <VoiceJarvisHandler 
+                    onComplete={handleVoiceComplete}
+                    onCancel={handleVoiceCancel}
+                  />
+                );
+              } else if (isTextInputActive) {
+                console.log('  ✅ Rendering JarvisTextInput');
+                return (
+                  <JarvisTextInput 
+                    onComplete={handleTextInputComplete}
+                    onQuit={handleTextInputQuit}
+                  />
+                );
+              } else {
+                console.log('  ✅ Rendering JarvisSplitButton');
+                return (
+                  <JarvisSplitButton 
+                    onTextActivate={handleTextInputActivate}
+                    onVoiceActivate={handleVoiceStart}
+                  />
+                );
+              }
           })()}
         </View>
 
