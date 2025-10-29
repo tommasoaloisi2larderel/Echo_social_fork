@@ -79,8 +79,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     borderRadius: 35,
-    marginHorizontal: 10,
-    marginBottom: 5,
+    marginHorizontal: 0,
+    marginBottom: 0,
     overflow: 'hidden',
     height: 60,
   },

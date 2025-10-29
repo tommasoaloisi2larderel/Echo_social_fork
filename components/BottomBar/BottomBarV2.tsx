@@ -29,7 +29,7 @@ import AttachmentButton from './Attachmentbutton';
 import JarvisSplitButton from '../JarvisInteraction/Jarvissplitbutton';
 import VoiceJarvisHandler from '../JarvisInteraction/Voicejarvishandler';
 import JarvisTextInput from '../JarvisInteraction/Jarvistextinput';
-
+import JarvisResponseModal from '../FIlesLecture/JarvisResponseModal';
 
 interface Agent {
   uuid: string;
@@ -97,6 +97,11 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const [isTextInputActive, setIsTextInputActive] = useState(false);
   const [lastJarvisMessage, setLastJarvisMessage] = useState<string | null>(null);
   const [lastJarvisResponse, setLastJarvisResponse] = useState<string | null>(null);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalIcon, setModalIcon] = useState<keyof typeof Ionicons.glyphMap>('chatbubble-ellipses');
 
 
   // Hauteur de la barre (animée)
@@ -237,16 +242,12 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     
     setLastJarvisMessage(message);
     setLastJarvisResponse(response);
-    
-    // Afficher une alerte avec la réponse
-    Alert.alert(
-      '💬 Jarvis répond',
-      response,
-      [{ text: 'OK' }]
-    );
-    
-    // Rester dans l'input pour permettre d'envoyer un autre message
-    // setIsTextInputActive(false); // Décommenter pour fermer après envoi
+      // Afficher le modal personnalisé
+    setModalTitle('💬 Jarvis répond');
+    setModalMessage(response);
+    setModalIcon('chatbubble-ellipses');
+    setModalVisible(true);
+
   };
 
   const handleTextInputQuit = () => {
@@ -270,12 +271,12 @@ const handleVoiceComplete = (transcription: string, response: string) => {
   setVoiceResponse(response);
   setIsVoiceRecording(false);
   
-  // Afficher une alerte avec la réponse
-  Alert.alert(
-    '🎤 Message vocal traité',
-    `Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`,
-    [{ text: 'OK' }]
-  );
+  // Afficher le modal personnalisé
+  setModalTitle('🎤 Message vocal traité');
+  setModalMessage(`Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`);
+  setModalIcon('mic');
+  setModalVisible(true);
+
 };
 
 const handleVoiceCancel = () => {
@@ -1145,6 +1146,13 @@ const handleVoiceCancel = () => {
             )}
           </View>
           </ScrollView>
+          <JarvisResponseModal
+            visible={modalVisible}
+            onClose={() => setModalVisible(false)}
+            title={modalTitle}
+            message={modalMessage}
+            icon={modalIcon}
+          />
         </View>
         </Animated.View>
       </PanGestureHandler>
