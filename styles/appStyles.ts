@@ -565,6 +565,14 @@ export const styles = StyleSheet.create({
   summaryScrollContent: {
     paddingRight: 4,
   },
+
+  profileAvatar: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  borderWidth: 3,
+  borderColor: '#fff',
+},
 });
 
 

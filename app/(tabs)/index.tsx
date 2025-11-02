@@ -7,6 +7,7 @@ import { ActivityIndicator, Animated, Easing, RefreshControl, ScrollView, StyleS
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { BACKGROUND_GRAY } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { Image } from 'react-native';
 
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
@@ -199,7 +200,14 @@ export default function HomePage() {
         <View style={[styles.blob, styles.blobA]} />
         <View style={[styles.blob, styles.blobB]} />
         <View style={styles.heroContent}>
-          <DefaultAvatar name={user?.username || 'User'} size={60} />
+          {(user as any)?.photo_profil_url ? (
+            <Image 
+              source={{ uri: (user as any).photo_profil_url }} 
+              style={styles.profileAvatar} 
+            />
+          ) : (
+            <DefaultAvatar name={user?.username || 'User'} size={60} />
+          )}
           <View style={styles.heroTextWrap}>
             <Text style={styles.hello}>Bonjour,</Text>
             <Text style={styles.name}>{user?.first_name || user?.username || 'Utilisateur'}</Text>
@@ -350,4 +358,11 @@ const styles = StyleSheet.create({
   senderInitial: { color: 'rgba(10, 145, 104, 1)', fontWeight: '800' },
   senderName: { color: '#365a3a', fontWeight: '700', marginBottom: 2 },
   messageText: { color: '#55685a', lineHeight: 22, marginBottom: 4 },
+  profileAvatar: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  borderWidth: 3,
+  borderColor: '#fff',
+},
 });

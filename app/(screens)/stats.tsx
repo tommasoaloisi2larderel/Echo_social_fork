@@ -51,27 +51,47 @@ export default function StatsScreen() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`);
+      setLoading(true);
+      
+      // Appel à l'API réelle
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/auth/profile/stats/`
+      );
+
       if (response.ok) {
         const data = await response.json();
         
+        // Calculer les jours depuis l'inscription
         const inscriptionDate = new Date(data.date_inscription);
         const now = new Date();
-        const daysSinceInscription = Math.floor((now.getTime() - inscriptionDate.getTime()) / (1000 * 60 * 60 * 24));
+        const daysSinceInscription = Math.floor(
+          (now.getTime() - inscriptionDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
         
-        const extendedData: ExtendedStats = {
-          ...data,
-          nb_amis: (user as any)?.nb_amis ?? 0,
-          conversations_actives: Math.floor(Math.random() * 15) + 5,
-          messages_envoyes: Math.floor(Math.random() * 150) + 50,
-          messages_recus: Math.floor(Math.random() * 180) + 60,
-          agents_crees: Math.floor(Math.random() * 8) + 1,
-          posts_publies: Math.floor(Math.random() * 25) + 5,
+        // Utiliser directement les données de l'API
+        const extendedData = {
+          // Vue d'ensemble
+          nb_amis: data.total_connexions,
+          total_connexions: data.total_connexions,
+          conversations_actives: data.conversations_actives,
+          messages_envoyes: data.messages_envoyes,
+          messages_recus: data.messages_recus,
+          
+          // Activité
+          total_evenements: data.total_evenements,
+          evenements_ce_mois: data.evenements_ce_mois,
+          total_reponses: data.total_reponses,
+          posts_publies: data.posts_publies,
+          
+          // Intelligence & Engagement
+          agents_crees: data.agents_crees,
+          taux_reponse: data.taux_reponse,
+          moyenne_messages_jour: data.moyenne_messages_jour,
+          
+          // Informations du compte
+          date_inscription: data.date_inscription,
+          derniere_activite: data.derniere_activite,
           jours_depuis_inscription: daysSinceInscription,
-          moyenne_messages_jour: daysSinceInscription > 0 
-            ? Math.round((Math.floor(Math.random() * 150) + 50) / daysSinceInscription * 10) / 10
-            : 0,
-          taux_reponse: Math.floor(Math.random() * 30) + 70,
         };
         
         setStats(extendedData);
@@ -82,7 +102,7 @@ export default function StatsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [makeAuthenticatedRequest, user]);
+  }, [makeAuthenticatedRequest]);
 
   useEffect(() => {
     fetchStats();
