@@ -1,12 +1,15 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
+import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
+import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { TypingIndicator } from '@/components/TypingIndicator';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
@@ -14,15 +17,11 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View,
-  Alert
+  View
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
-import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
-import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
-import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 
 
 interface Message {
@@ -550,7 +549,7 @@ export default function ConversationDirect() {
                   <View style={styles.systemMessageContainer}>
                     <Text style={styles.systemMessageText}>{msg.content}</Text>
                   </View>
-                ) : msg.is_ai_generated && !isMe ? (
+                ) : msg.is_ai_generated ? (
                   // Message d'agent IA - affichage centré et pliable
                   <View style={{ alignItems: 'center', marginVertical: 8 }}>
                     <TouchableOpacity
@@ -619,7 +618,7 @@ export default function ConversationDirect() {
                       isFirstInGroup && isSameSenderAsNext && (isMe ? styles.myMessageFirst : styles.theirMessageFirst),
                       isLastInGroup && isSameSenderAsPrev && (isMe ? styles.myMessageLast : styles.theirMessageLast),
                       //  AJOUT : Style spécial pour les messages non lus
-                      unreadMessageUuids.has(msg.uuid) && !isMe && {
+                      unreadMessageUuids.has(msg.uuid) && {
                         backgroundColor: '#e6b106ff',
                         borderColor: '#806009ff',
                         borderWidth: 2,
