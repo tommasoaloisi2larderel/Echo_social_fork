@@ -2,7 +2,7 @@
   "expo": {
     "name": "Echo",
     "slug": "echo-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/logo2.png",
     "scheme": "echo",
@@ -12,6 +12,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.echo.social",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/logo2.png",
@@ -39,11 +41,18 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8f022843-e7b5-4a0b-abc2-7bbb67dd828b"
+      }
     }
   }
 }

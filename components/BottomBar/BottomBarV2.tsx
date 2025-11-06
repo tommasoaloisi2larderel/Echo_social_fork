@@ -142,8 +142,8 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       const formData = new FormData();
       formData.append('file', {
         uri,
-        name: `voice_${Date.now()}.m4a`,
-        type: 'audio/m4a',
+        name: `voice_${Date.now()}.mp3`,
+        type: 'audio/mpeg',
       } as any);
 
       // ✅ Utiliser makeAuthenticatedRequest
