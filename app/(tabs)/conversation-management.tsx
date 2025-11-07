@@ -272,54 +272,51 @@ export default function ConversationManagement() {
     }
   };
 
-  const handleBlockUser = () => {
-    Alert.alert(
-      'Bloquer cet utilisateur',
-      'Voulez-vous vraiment bloquer cet utilisateur ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Bloquer', style: 'destructive', onPress: () => console.log('Bloquer utilisateur') }
-      ]
-    );
-  };
-
-  const handleReportUser = () => {
-    Alert.alert(
-      'Signaler cet utilisateur',
-      'Voulez-vous signaler cet utilisateur pour comportement inapproprié ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Signaler', style: 'destructive', onPress: () => console.log('Signaler utilisateur') }
-      ]
-    );
-  };
-
-  const handleDeleteConversation = () => {
-    Alert.alert(
-      'Supprimer la conversation',
-      'Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/messaging/conversations/${conversationId}/`,
-                { method: 'DELETE' }
-              );
-              if (response.ok) {
-                router.back();
+const handleBlockUser = async () => {
+  if (!otherParticipant?.uuid) {
+    Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
+    return;
+  }
+  
+  Alert.alert(
+    'Bloquer cet utilisateur',
+    'Voulez-vous vraiment bloquer cet utilisateur ? Il ne pourra plus vous envoyer de messages.',
+    [
+      { text: 'Annuler', style: 'cancel' },
+      { 
+        text: 'Bloquer', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            const response = await makeAuthenticatedRequest(
+              `${API_BASE_URL}/messaging/block-user/`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_uuid: otherParticipant.uuid })
               }
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de supprimer');
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              Alert.alert('Succès', data.message || 'Utilisateur bloqué');
+              router.back();
+            } else {
+              const errorData = await response.json();
+              Alert.alert('Erreur', errorData.message || 'Impossible de bloquer');
             }
+          } catch (error) {
+            console.error('Erreur blocage:', error);
+            Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
           }
         }
-      ]
-    );
-  };
+      }
+    ]
+  );
+};
+
+
+
 
   const handleLeaveGroup = () => {
     if (!groupDetails) return;
@@ -771,21 +768,10 @@ export default function ConversationManagement() {
                 <Text style={[styles.actionButtonText, styles.dangerText]}>Bloquer l'utilisateur</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleReportUser}>
-                <Ionicons name="flag-outline" size={22} color="#dc2626" />
-                <Text style={[styles.actionButtonText, styles.dangerText]}>Signaler l'utilisateur</Text>
-              </TouchableOpacity>
             </View>
           )}
 
-          <View style={styles.actionsSection}>
-            <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleDeleteConversation}>
-              <Ionicons name="trash-outline" size={22} color="#dc2626" />
-              <Text style={[styles.actionButtonText, styles.dangerText]}>
-                {isGroup ? 'Supprimer le groupe' : 'Supprimer la conversation'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+
 
           <View style={styles.infoSection}>
             <Ionicons name="lock-closed" size={16} color="#888" />
