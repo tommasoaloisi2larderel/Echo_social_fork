@@ -1,10 +1,12 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
@@ -13,9 +15,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
-import { TypingIndicator } from '@/components/TypingIndicator';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
@@ -391,7 +391,7 @@ export default function ConversationGroup() {
                   <View style={styles.systemMessageContainer}>
                     <Text style={styles.systemMessageText}>{msg.content}</Text>
                   </View>
-                ) : msg.is_ai_generated && !isMe ? (
+                ) : msg.is_ai_generated ? (
                   // Message d'agent IA - affichage centré et pliable
                   <View style={{ alignItems: 'center', marginVertical: 8 }}>
                     <TouchableOpacity
