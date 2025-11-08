@@ -43,7 +43,11 @@ interface ArchivedConversation {
 
 export default function ArchivedConversationsScreen() {
   const { makeAuthenticatedRequest } = useAuth();
-  const { setCachedConversations } = useChat();
+  const { 
+  setCachedPrivateConversations,  // 🆕
+  setCachedGroupConversations,     // 🆕
+  prefetchConversationsOverview,
+} = useChat();
   const [conversations, setConversations] = useState<ArchivedConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [unarchiving, setUnarchiving] = useState<string | null>(null);
@@ -94,6 +98,7 @@ export default function ArchivedConversationsScreen() {
                 // Retirer de la liste locale
                 setConversations(prev => prev.filter(item => item.uuid !== conversationUuid));
                 
+                
                 // Rafraîchir le cache des conversations pour l'écran principal
                 try {
                   const convsResponse = await makeAuthenticatedRequest(
@@ -102,7 +107,7 @@ export default function ArchivedConversationsScreen() {
                   if (convsResponse.ok) {
                     const data = await convsResponse.json();
                     const list = data.results || data;
-                    setCachedConversations(list);
+                    await prefetchConversationsOverview(makeAuthenticatedRequest);
                   }
                 } catch (error) {
                   console.error('Erreur rafraîchissement cache:', error);

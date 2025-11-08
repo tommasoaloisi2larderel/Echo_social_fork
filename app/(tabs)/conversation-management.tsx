@@ -88,10 +88,18 @@ interface ConversationDetails {
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
   const { makeAuthenticatedRequest, user } = useAuth();
-  const { prefetchAvatars, getCachedConversations, getCachedGroups, removeFromConversationsCache } = useChat();
+  
   const { getUserProfile, getUserStats } = useUserProfile();
   const insets = useSafeAreaInsets();
-  
+  const { 
+    prefetchAvatars, 
+    getCachedPrivateConversations,  // 🆕
+    getCachedGroupConversations,    // 🆕
+    getCachedGroups, 
+    removeFromPrivateConversationsCache,   // 🆕
+    removeFromGroupConversationsCache      // 🆕
+  } = useChat();
+
   const [loading, setLoading] = useState(true);
   const [conversation, setConversation] = useState<ConversationDetails | null>(null);
   const [groupDetails, setGroupDetails] = useState<GroupDetails | null>(null);
@@ -116,10 +124,11 @@ export default function ConversationManagement() {
   const loadConversationDetails = async () => {
     try {
       
-      
-      const cachedConversations = getCachedConversations();
-      const cachedConv = cachedConversations?.find((c: any) => c.uuid === conversationId);
-      
+      // Chercher dans les deux types de conversations
+      const privateConvs = getCachedPrivateConversations() || [];
+      const groupConvs = getCachedGroupConversations() || [];
+      const allConversations = [...privateConvs, ...groupConvs];
+      const cachedConv = allConversations.find((c: any) => c.uuid === conversationId);
       if (cachedConv) {
         
         setConversation(cachedConv);
@@ -364,11 +373,14 @@ const handleBlockUser = async () => {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ action: 'archive' }),
                 }
+                
               );
 
               if (response.ok) {
-                // ✅ AJOUTER CES 2 LIGNES :
-                removeFromConversationsCache(conversationId as string);
+                // Essayer de retirer des deux caches
+                removeFromPrivateConversationsCache(conversationId as string);
+                removeFromGroupConversationsCache(conversationId as string);
+
                 Alert.alert('Succès', 'Conversation archivée', [
                   {
                     text: 'OK',
