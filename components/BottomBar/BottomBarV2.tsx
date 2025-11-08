@@ -1,8 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -10,26 +8,23 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAgents } from '../../contexts/AgentsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChat } from '../../contexts/ChatContext';
+import JarvisResponseModal from '../FIlesLecture/JarvisResponseModal';
+import JarvisSplitButton from '../JarvisInteraction/Jarvissplitbutton';
+import JarvisTextInput from '../JarvisInteraction/Jarvistextinput';
+import VoiceJarvisHandler from '../JarvisInteraction/Voicejarvishandler';
+import AgentPanel from './AgentPanel';
+import AttachmentButton from './Attachmentbutton';
 import ChatInputBar from './ChatInputBar';
 import JarvisChatBar from './JarvisChatBar';
-import JarvisInteractionButton from './JarvisInteractionButton';
 import VoiceButtonFloating from './VoiceButtonFloating';
-import { useChat } from '../../contexts/ChatContext';
 import VoiceRecorder from './VoiceRecorder';
-import AttachmentButton from './Attachmentbutton';
-import JarvisSplitButton from '../JarvisInteraction/Jarvissplitbutton';
-import VoiceJarvisHandler from '../JarvisInteraction/Voicejarvishandler';
-import JarvisTextInput from '../JarvisInteraction/Jarvistextinput';
-import JarvisResponseModal from '../FIlesLecture/JarvisResponseModal';
 
 interface Agent {
   uuid: string;
@@ -78,19 +73,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   
   const [isJarvisActive, setIsJarvisActive] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // Suivre si la barre est étendue
-  const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
-  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  
-  // Form states for editing
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [agentType, setAgentType] = useState<'simple' | 'conditional' | 'action'>('simple');
-  const [language, setLanguage] = useState('fr');
-  const [formalityLevel, setFormalityLevel] = useState('casual');
-  const [maxResponseLength, setMaxResponseLength] = useState('500');
-  const [submitting, setSubmitting] = useState(false);
+
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [voiceTranscription, setVoiceTranscription] = useState<string | null>(null);
   const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
@@ -109,6 +92,8 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   
   // Ref pour le PanGestureHandler du panneau d'agents
   const panelGestureRef = useRef(null);
+  const glowOpacity = useRef(new Animated.Value(1)).current;
+  const glowScale = useRef(new Animated.Value(1)).current;
 
   // ========== GESTION DU VOCAL ==========
 
@@ -294,82 +279,6 @@ const handleVoiceCancel = () => {
     if (chatText.trim() && onSendMessage) {
       onSendMessage(chatText);
       setChatText?.('');
-    }
-  };
-
-  const handleCreateAgent = () => {
-    setEditingAgent(null);
-    setName('');
-    setDescription('');
-    setSystemPrompt('');
-    setAgentType('simple');
-    setLanguage('fr');
-    setFormalityLevel('casual');
-    setMaxResponseLength('500');
-    setExpandedAgent('new');
-  };
-
-  const handleEditAgent = (agent: Agent) => {
-    setEditingAgent(agent);
-    setName(agent.name);
-    setDescription(agent.description || '');
-    setSystemPrompt(agent.instructions?.system_prompt || '');
-    setAgentType(agent.agent_type);
-    setLanguage(agent.instructions?.language || 'fr');
-    setFormalityLevel(agent.instructions?.formality_level || 'casual');
-    setMaxResponseLength(String(agent.instructions?.max_response_length || 500));
-    setExpandedAgent(agent.uuid);
-  };
-
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom de l\'agent est requis');
-      return;
-    }
-
-    if (!systemPrompt.trim()) {
-      Alert.alert('Erreur', 'Le prompt système est requis');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const agentData = {
-        name: name.trim(),
-        description: description.trim(),
-        agent_type: agentType,
-        instructions: {
-          system_prompt: systemPrompt.trim(),
-          language,
-          formality_level: formalityLevel,
-          max_response_length: parseInt(maxResponseLength) || 500,
-        },
-      };
-
-      if (editingAgent) {
-        // Update existing agent
-        await updateAgent(editingAgent.uuid, agentData, makeAuthenticatedRequest);
-        Alert.alert('Succès', 'Agent mis à jour avec succès');
-      } else {
-        // Create new agent
-        const newAgent = await createAgent(agentData, makeAuthenticatedRequest);
-        
-        // If creating from conversation, automatically add to conversation
-        if (conversationId) {
-          await addAgentToConversation(conversationId, newAgent.uuid, makeAuthenticatedRequest);
-          Alert.alert('Succès', `Agent "${name}" créé et ajouté à la conversation`);
-        } else {
-          Alert.alert('Succès', `Agent "${name}" créé avec succès`);
-        }
-      }
-
-      setExpandedAgent(null);
-      setEditingAgent(null);
-    } catch (error) {
-      console.error('Error submitting agent:', error);
-      Alert.alert('Erreur', error instanceof Error ? error.message : 'Une erreur est survenue');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -591,601 +500,66 @@ const handleVoiceCancel = () => {
             style={styles.scrollableContent}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            scrollEnabled={isExpanded} // Désactiver le scroll quand la barre est repliée
+            scrollEnabled={isExpanded}
           >
-            {/* Agents actifs dans la conversation */}
-          {isChat && conversationId && (
-            <View style={styles.activeAgentsSection}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.headerLeft}>
-                  <View style={styles.iconCircle}>
-                    <Ionicons name="people" size={18} color="rgba(10, 145, 104, 1)" />
-                  </View>
-                  <Text style={styles.sectionTitle}>Agents actifs</Text>
-                </View>
-              </View>
-
-              {conversationAgents.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <Ionicons name="cube-outline" size={32} color="rgba(10, 145, 104, 0.4)" />
-                  </View>
-                  <Text style={styles.emptyTitle}>Aucun agent actif</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Créez votre premier agent IA pour automatiser cette conversation
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                  <View style={styles.agentCardsContainer}>
-                    {conversationAgents.map((agent) => (
-                      <TouchableOpacity
-                        key={agent.uuid}
-                        onPress={() => handleEditAgent(agent)}
-                        onLongPress={() => {
-                          Alert.alert(
-                            'Retirer l\'agent',
-                            `Voulez-vous retirer "${agent.name}" de cette conversation ?`,
-                            [
-                              { text: 'Annuler', style: 'cancel' },
-                              {
-                                text: 'Retirer',
-                                style: 'destructive',
-                                onPress: () => handleRemoveAgent(agent.uuid)
-                              },
-                            ]
-                          );
-                        }}
-                        activeOpacity={0.8}
-                        style={styles.agentCard}
-                      >
-                        <View style={styles.agentCardIcon}>
-                          <Ionicons
-                            name={agent.agent_type === 'simple' ? 'flash' : agent.agent_type === 'conditional' ? 'git-branch' : 'settings'}
-                            size={28}
-                            color="rgba(10, 145, 104, 1)"
-                          />
-                        </View>
-                        <Text style={styles.agentCardName} numberOfLines={1}>
-                          {agent.name}
-                        </Text>
-                        <Text style={styles.agentCardDesc} numberOfLines={2}>
-                          {agent.description || 'Agent IA personnalisé'}
-                        </Text>
-                        <View style={styles.agentCardBadge}>
-                          <Text style={styles.agentCardBadgeText}>
-                            {agent.agent_type === 'simple' ? 'Simple' : agent.agent_type === 'conditional' ? 'Conditionnel' : 'Action'}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              )}
-            </View>
-          )}
-
-          {/* Mes agents */}
-          <View style={styles.myAgentsSection}>
-            <TouchableOpacity
-              onPress={() => setShowAgentsDropdown(!showAgentsDropdown)}
-              style={styles.myAgentsHeader}
-            >
-              <View style={styles.headerLeft}>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="library" size={22} color="rgba(10, 145, 104, 1)" />
-                </View>
-                <View>
-                  <Text style={styles.sectionTitle}>Mes agents</Text>
-                  <Text style={styles.agentCount}>
-                    {myAgents.length} agent{myAgents.length !== 1 ? 's' : ''} créé{myAgents.length !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.chevronCircle}>
-                <Ionicons
-                  name={showAgentsDropdown ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color="rgba(10, 145, 104, 1)"
-                />
-              </View>
-            </TouchableOpacity>
-
-            {showAgentsDropdown && (
-              <View>
-                {/* Bouton créer un agent */}
-                <TouchableOpacity onPress={handleCreateAgent} style={styles.createAgentButton}>
-                  <View style={styles.createAgentIcon}>
-                    <Ionicons name="add-circle" size={22} color="rgba(10, 145, 104, 1)" />
-                  </View>
-                  <Text style={styles.createAgentText}>Créer un nouvel agent</Text>
-                </TouchableOpacity>
-
-                {myAgents.length === 0 ? (
-                  <View style={styles.emptyAgentsList}>
-                    <View style={styles.emptyAgentsIcon}>
-                      <Ionicons name="add-circle-outline" size={32} color="rgba(10, 145, 104, 0.5)" />
-                    </View>
-                    <Text style={styles.emptyAgentsTitle}>Aucun agent créé</Text>
-                    <Text style={styles.emptyAgentsSubtitle}>
-                      Créez votre premier agent IA{'\n'}pour automatiser vos conversations
-                    </Text>
-                  </View>
-                ) : (
-                  <View>
-                    {myAgents.map((agent: Agent, index: number) => {
-                      const uniqueKey = agent.uuid || `agent-${index}`;
-                      const isInConversation = conversationAgents.some(ca => ca.uuid === agent.uuid);
-                      const isExpanded = expandedAgent === agent.uuid;
-
-                      return (
-                        <View key={uniqueKey} style={styles.agentItem}>
-                          {/* Header de l'agent */}
-                          <TouchableOpacity
-                            onPress={() => {
-                              if (isExpanded) {
-                                setExpandedAgent(null);
-                                setEditingAgent(null);
-                              } else {
-                                handleEditAgent(agent);
-                              }
-                            }}
-                            activeOpacity={0.7}
-                            style={[
-                              styles.agentItemHeader,
-                              isExpanded && styles.agentItemHeaderExpanded
-                            ]}
-                          >
-                            <View style={styles.agentItemLeft}>
-                              <View style={[
-                                styles.agentItemIcon,
-                                { backgroundColor: agent.is_active ? 'rgba(10, 145, 104, 0.08)' : 'rgba(150, 150, 150, 0.08)' }
-                              ]}>
-                                <Ionicons
-                                  name={
-                                    agent.agent_type === 'simple' ? 'flash' :
-                                    agent.agent_type === 'conditional' ? 'git-branch' :
-                                    'settings'
-                                  }
-                                  size={30}
-                                  color={agent.is_active ? 'rgba(10, 145, 104, 1)' : '#95a5a6'}
-                                />
-                              </View>
-
-                              <View style={styles.agentItemInfo}>
-                                <View style={styles.agentItemNameRow}>
-                                  <Text style={styles.agentItemName} numberOfLines={1}>
-                                    {agent.name}
-                                  </Text>
-                                  {isInConversation && isChat && (
-                                    <View style={styles.inConversationBadge}>
-                                      <Text style={styles.inConversationText}>DANS LA CONV</Text>
-                                    </View>
-                                  )}
-                                </View>
-
-                                <Text style={styles.agentItemDesc} numberOfLines={2}>
-                                  {agent.description || 'Agent IA personnalisé'}
-                                </Text>
-
-                                <View style={styles.agentItemStats}>
-                                  <View style={styles.agentStat}>
-                                    <Ionicons name="chatbox-outline" size={12} color="#95a5a6" />
-                                    <Text style={styles.agentStatText}>
-                                      {agent.conversation_count || 0} conv.
-                                    </Text>
-                                  </View>
-                                  <View style={styles.agentStat}>
-                                    <Ionicons name="code-slash" size={12} color="#95a5a6" />
-                                    <Text style={styles.agentStatText}>
-                                      {agent.agent_type === 'simple' ? 'Simple' :
-                                      agent.agent_type === 'conditional' ? 'Conditionnel' :
-                                      'Action'}
-                                    </Text>
-                                  </View>
-                                </View>
-                              </View>
-                            </View>
-
-                            <View style={styles.agentItemRight}>
-                              {isChat && conversationId && (
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    if (isInConversation) {
-                                      Alert.alert(
-                                        'Retirer l\'agent',
-                                        `Voulez-vous retirer "${agent.name}" de cette conversation ?`,
-                                        [
-                                          { text: 'Annuler', style: 'cancel' },
-                                          {
-                                            text: 'Retirer',
-                                            style: 'destructive',
-                                            onPress: () => handleRemoveAgent(agent.uuid)
-                                          },
-                                        ]
-                                      );
-                                    } else {
-                                      Alert.alert(
-                                        'Ajouter l\'agent',
-                                        `Voulez-vous ajouter "${agent.name}" à cette conversation ?`,
-                                        [
-                                          { text: 'Annuler', style: 'cancel' },
-                                          {
-                                            text: 'Ajouter',
-                                            onPress: () => handleAddAgent(agent.uuid)
-                                          },
-                                        ]
-                                      );
-                                    }
-                                  }}
-                                  style={[
-                                    styles.addRemoveButton,
-                                    { backgroundColor: isInConversation ? 'rgba(255, 59, 48, 0.12)' : 'rgba(10, 145, 104, 0.12)' }
-                                  ]}
-                                >
-                                  <Ionicons 
-                                    name={isInConversation ? "remove" : "add"} 
-                                    size={18} 
-                                    color={isInConversation ? "rgba(255, 59, 48, 1)" : "rgba(10, 145, 104, 1)"} 
-                                  />
-                                </TouchableOpacity>
-                              )}
-                              <View style={styles.chevronCircle}>
-                                <Ionicons
-                                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                                  size={18}
-                                  color="rgba(10, 145, 104, 1)"
-                                />
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-
-                          {/* Formulaire d'édition */}
-                          {isExpanded && (
-                            <View style={styles.agentForm}>
-                              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                                <View style={styles.formContent}>
-                                  {/* Nom */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Nom de l'agent *</Text>
-                                    <TextInput
-                                      value={name}
-                                      onChangeText={setName}
-                                      placeholder="Ex: Assistant Marketing"
-                                      placeholderTextColor="#999"
-                                      maxLength={100}
-                                      style={styles.textInput}
-                                    />
-                                  </View>
-
-                                  {/* Description */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Description</Text>
-                                    <TextInput
-                                      value={description}
-                                      onChangeText={setDescription}
-                                      placeholder="Ex: Spécialisé dans le marketing digital"
-                                      placeholderTextColor="#999"
-                                      maxLength={500}
-                                      multiline
-                                      numberOfLines={2}
-                                      style={[styles.textInput, styles.textInputMultiline]}
-                                    />
-                                  </View>
-
-                                  {/* Prompt système */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Prompt système *</Text>
-                                    <TextInput
-                                      value={systemPrompt}
-                                      onChangeText={setSystemPrompt}
-                                      placeholder="Ex: Tu es un expert en marketing qui répond de manière créative..."
-                                      placeholderTextColor="#999"
-                                      multiline
-                                      numberOfLines={3}
-                                      style={[styles.textInput, styles.textInputLarge]}
-                                    />
-                                  </View>
-
-                                  {/* Type d'agent */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Type d'agent</Text>
-                                    <View style={styles.typeSelector}>
-                                      {(['simple', 'conditional', 'action'] as const).map((type) => (
-                                        <TouchableOpacity
-                                          key={type}
-                                          onPress={() => setAgentType(type)}
-                                          style={[
-                                            styles.typeButton,
-                                            agentType === type && styles.typeButtonActive
-                                          ]}
-                                        >
-                                          <Text style={[
-                                            styles.typeButtonText,
-                                            agentType === type && styles.typeButtonTextActive
-                                          ]}>
-                                            {type === 'simple' ? 'Simple' : type === 'conditional' ? 'Conditionnel' : 'Action'}
-                                          </Text>
-                                        </TouchableOpacity>
-                                      ))}
-                                    </View>
-                                  </View>
-
-                                  {/* Niveau de formalité */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Niveau de formalité</Text>
-                                    <View style={styles.formalitySelector}>
-                                      {['casual', 'friendly', 'professional', 'formal'].map((level) => (
-                                        <TouchableOpacity
-                                          key={level}
-                                          onPress={() => setFormalityLevel(level)}
-                                          style={[
-                                            styles.formalityButton,
-                                            formalityLevel === level && styles.formalityButtonActive
-                                          ]}
-                                        >
-                                          <Text style={[
-                                            styles.formalityButtonText,
-                                            formalityLevel === level && styles.formalityButtonTextActive
-                                          ]}>
-                                            {level.charAt(0).toUpperCase() + level.slice(1)}
-                                          </Text>
-                                        </TouchableOpacity>
-                                      ))}
-                                    </View>
-                                  </View>
-
-                                  {/* Longueur max */}
-                                  <View style={styles.formField}>
-                                    <Text style={styles.formLabel}>Longueur max des réponses</Text>
-                                    <TextInput
-                                      value={maxResponseLength}
-                                      onChangeText={setMaxResponseLength}
-                                      placeholder="500"
-                                      placeholderTextColor="#999"
-                                      keyboardType="numeric"
-                                      style={styles.textInput}
-                                    />
-                                    <Text style={styles.formHelper}>
-                                      Nombre de caractères maximum par réponse
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                {/* Submit button */}
-                                <View style={styles.formFooter}>
-                                  <TouchableOpacity
-                                    onPress={handleSubmit}
-                                    disabled={submitting}
-                                    activeOpacity={0.8}
-                                  >
-                                    <LinearGradient
-                                      colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.85)']}
-                                      start={{ x: 0, y: 0 }}
-                                      end={{ x: 1, y: 0 }}
-                                      style={styles.submitButton}
-                                    >
-                                      {submitting ? (
-                                        <ActivityIndicator color="white" />
-                                      ) : (
-                                        <Text style={styles.submitButtonText}>
-                                          {editingAgent ? 'Mettre à jour' : 'Créer l\'agent'}
-                                        </Text>
-                                      )}
-                                    </LinearGradient>
-                                  </TouchableOpacity>
-                                </View>
-                              </KeyboardAvoidingView>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Nouveau formulaire d'agent */}
-                {expandedAgent === 'new' && (
-                  <View style={styles.newAgentCard}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setExpandedAgent(null);
-                        setEditingAgent(null);
-                      }}
-                      style={styles.newAgentHeader}
-                    >
-                      <View style={styles.agentItemLeft}>
-                        <View style={styles.newAgentIcon}>
-                          <Ionicons name="add-circle" size={28} color="rgba(10, 145, 104, 1)" />
-                        </View>
-                        <View>
-                          <Text style={styles.newAgentTitle}>Nouvel agent IA</Text>
-                          <Text style={styles.newAgentSubtitle}>Créer un nouvel agent</Text>
-                        </View>
-                      </View>
-                      <View style={styles.closeButton}>
-                        <Ionicons name="close" size={18} color="rgba(255, 59, 48, 1)" />
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Même formulaire que pour l'édition */}
-                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                      <View style={styles.formContent}>
-                        {/* Nom */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Nom de l'agent *</Text>
-                          <TextInput
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Ex: Assistant Marketing"
-                            placeholderTextColor="#999"
-                            maxLength={100}
-                            style={styles.textInput}
-                          />
-                        </View>
-
-                        {/* Description */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Description</Text>
-                          <TextInput
-                            value={description}
-                            onChangeText={setDescription}
-                            placeholder="Ex: Spécialisé dans le marketing digital"
-                            placeholderTextColor="#999"
-                            maxLength={500}
-                            multiline
-                            numberOfLines={2}
-                            style={[styles.textInput, styles.textInputMultiline]}
-                          />
-                        </View>
-
-                        {/* Prompt système */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Prompt système *</Text>
-                          <TextInput
-                            value={systemPrompt}
-                            onChangeText={setSystemPrompt}
-                            placeholder="Ex: Tu es un expert en marketing qui répond de manière créative..."
-                            placeholderTextColor="#999"
-                            multiline
-                            numberOfLines={3}
-                            style={[styles.textInput, styles.textInputLarge]}
-                          />
-                        </View>
-
-                        {/* Type d'agent */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Type d'agent</Text>
-                          <View style={styles.typeSelector}>
-                            {(['simple', 'conditional', 'action'] as const).map((type) => (
-                              <TouchableOpacity
-                                key={type}
-                                onPress={() => setAgentType(type)}
-                                style={[
-                                  styles.typeButton,
-                                  agentType === type && styles.typeButtonActive
-                                ]}
-                              >
-                                <Text style={[
-                                  styles.typeButtonText,
-                                  agentType === type && styles.typeButtonTextActive
-                                ]}>
-                                  {type === 'simple' ? 'Simple' : type === 'conditional' ? 'Conditionnel' : 'Action'}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-
-                        {/* Niveau de formalité */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Niveau de formalité</Text>
-                          <View style={styles.formalitySelector}>
-                            {['casual', 'friendly', 'professional', 'formal'].map((level) => (
-                              <TouchableOpacity
-                                key={level}
-                                onPress={() => setFormalityLevel(level)}
-                                style={[
-                                  styles.formalityButton,
-                                  formalityLevel === level && styles.formalityButtonActive
-                                ]}
-                              >
-                                <Text style={[
-                                  styles.formalityButtonText,
-                                  formalityLevel === level && styles.formalityButtonTextActive
-                                ]}>
-                                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-
-                        {/* Longueur max */}
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Longueur max des réponses</Text>
-                          <TextInput
-                            value={maxResponseLength}
-                            onChangeText={setMaxResponseLength}
-                            placeholder="500"
-                            placeholderTextColor="#999"
-                            keyboardType="numeric"
-                            style={styles.textInput}
-                          />
-                          <Text style={styles.formHelper}>
-                            Nombre de caractères maximum par réponse
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Submit button */}
-                      <View style={styles.formFooter}>
-                        <TouchableOpacity
-                          onPress={handleSubmit}
-                          disabled={submitting}
-                          activeOpacity={0.8}
-                        >
-                          <LinearGradient
-                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.85)']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.submitButton}
-                          >
-                            {submitting ? (
-                              <ActivityIndicator color="white" />
-                            ) : (
-                              <Text style={styles.submitButtonText}>Créer l'agent</Text>
-                            )}
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      </View>
-                    </KeyboardAvoidingView>
-                  </View>
-                )}
-              </View>
+            {/* Agent Panel Component - replaces all the agent UI */}
+            { (
+              <AgentPanel
+                conversationAgents={conversationAgents}
+                loadingConversationAgents={false}
+                myAgents={myAgents}
+                conversationId={conversationId}
+                isChat={isChat}
+                handleRemoveAgent={handleRemoveAgent}
+                handleAddAgent={handleAddAgent}
+                glowOpacity={glowOpacity}
+                glowScale={glowScale}
+                backgroundColor="rgba(249, 250, 251, 1)" 
+              />
+              
             )}
-          </View>
           </ScrollView>
-          <JarvisResponseModal
-            visible={modalVisible}
-            onClose={() => setModalVisible(false)}
-            title={modalTitle}
-            message={modalMessage}
-            icon={modalIcon}
-          />
         </View>
+
+        {/* Bouton vocal flottant */}
+        {isChat && conversationId && !isJarvisActive && (
+          <VoiceButtonFloating 
+            isRecording={isRecording}
+            recordedUri={recordedUri}
+            recordingSeconds={recordingSeconds}
+            isPaused={isPaused}
+            startRecording={startRecording}
+            stopRecording={stopRecording}
+            pauseRecording={pauseRecording}
+            resumeRecording={resumeRecording}
+            cancelRecorded={cancelRecorded}
+            sendRecorded={sendRecorded}
+            disabled={isExpanded}
+          />        
+        )}
+        
+        {isChat && conversationId && !isJarvisActive && (
+          <AttachmentButton 
+            conversationId={conversationId as string}
+            onAttachmentSent={() => {
+              console.log('Pièce jointe envoyée !');
+              // Optionnel : rafraîchir la liste des messages
+            }}
+          />
+        )}
         </Animated.View>
       </PanGestureHandler>
-      {/* Bouton vocal flottant */}
-        {isChat && conversationId && !isJarvisActive && (
-        <VoiceButtonFloating 
-          isRecording={isRecording}
-          recordedUri={recordedUri}
-          recordingSeconds={recordingSeconds}
-          isPaused={isPaused}
-          startRecording={startRecording}
-          stopRecording={stopRecording}
-          pauseRecording={pauseRecording}
-          resumeRecording={resumeRecording}
-          cancelRecorded={cancelRecorded}
-          sendRecorded={sendRecorded}
-          disabled={isExpanded}
-        />        
-      )}
-      {isChat && conversationId && !isJarvisActive && (
-      <AttachmentButton 
-        conversationId={conversationId as string}
-        onAttachmentSent={() => {
-          console.log('Pièce jointe envoyée !');
-          // Optionnel : rafraîchir la liste des messages
-        }}
-      />)}
-
-
+      
+      <JarvisResponseModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title={modalTitle}
+        message={modalMessage}
+        icon={modalIcon}
+      />
     </KeyboardAvoidingView>
   );
 };
-
 const styles = StyleSheet.create({
   keyboardAvoidingView: {
     position: 'absolute',
