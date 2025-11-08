@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
@@ -35,6 +35,7 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -100,7 +101,6 @@ export default function ProfileScreen() {
     );
   }
 
-  // Fixed profile picture logic - using photo_profil_url directly
   const profilePictureUrl = (user as any)?.photo_profil_url;
 
   return (
@@ -115,9 +115,14 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
             <Ionicons name="log-out-outline" size={22} color="rgba(10, 145, 104, 1)" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/edit-profile' as any)} style={styles.iconButton}>
-            <Ionicons name="create-outline" size={22} color="rgba(10, 145, 104, 1)" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={() => router.push('/edit-profile' as any)} style={styles.iconButton}>
+              <Ionicons name="create-outline" size={22} color="rgba(10, 145, 104, 1)" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSettingsMenu(true)} style={styles.iconButton}>
+              <Ionicons name="settings-outline" size={22} color="rgba(10, 145, 104, 1)" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.avatarWrap}>
@@ -146,185 +151,263 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
               <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Calendrier</Text>
+              <Text style={styles.quickStatLabel}>Événements</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/stats' as any)}>
-              <Ionicons name="bar-chart-outline" size={18} color={ECHO_COLOR} />
+            <View style={styles.quickStatCard}>
+              <Ionicons name="chatbubble-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Statistiques</Text>
-            </TouchableOpacity>
+              <Text style={styles.quickStatLabel}>Réponses</Text>
+            </View>
           </View>
         )}
       </LinearGradient>
 
-      <View style={styles.cardsGrid}>
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="document-text-outline" size={18} color={ECHO_COLOR} />
-            <Text style={styles.cardTitle}>Posts</Text>
-            <TouchableOpacity style={styles.newPostBtn} onPress={() => router.push('/posts/new' as any)}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.newPostText}>Nouveau</Text>
-            </TouchableOpacity>
+      {stats ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>Statistiques</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Membre depuis</Text>
+            <Text style={styles.infoValue}>{formatDate(stats.date_inscription)}</Text>
           </View>
-          <View style={styles.emptyState}>
-            <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
-            <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Événements ce mois</Text>
+            <Text style={styles.infoValue}>{stats.evenements_ce_mois}</Text>
           </View>
         </View>
-      </View>
+      ) : null}
 
-      <View style={styles.footerSpace} />
+      {lastAnswer && isDerniereReponse(lastAnswer) ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>Dernière réponse</Text>
+          <Text style={styles.questionText}>{lastAnswer.question}</Text>
+          <Text style={styles.answerText}>{lastAnswer.reponse}</Text>
+          <Text style={styles.dateText}>{formatDate(lastAnswer.date)}</Text>
+        </View>
+      ) : null}
+
+      {/* Modal de paramètres */}
+      <Modal
+        visible={showSettingsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSettingsMenu(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1}
+          onPress={() => setShowSettingsMenu(false)}
+        >
+          <View style={styles.settingsMenu}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                router.push('/(screens)/blocked-users' as any);
+              }}
+            >
+              <Ionicons name="ban-outline" size={22} color="#333" />
+              <Text style={styles.menuItemText}>Utilisateurs bloqués</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                router.push('/(screens)/archived-conversations' as any);
+              }}
+            >
+              <Ionicons name="archive-outline" size={22} color="#333" />
+              <Text style={styles.menuItemText}>Conversations archivées</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BACKGROUND_GRAY,
-  },
-  content: {
-    paddingBottom: 40,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: BACKGROUND_GRAY,
   },
+  container: {
+    flex: 1,
+    backgroundColor: BACKGROUND_GRAY,
+  },
+  content: {
+    paddingBottom: 100,
+  },
   hero: {
     paddingTop: 60,
-    paddingBottom: 30,
+    paddingBottom: 24,
     paddingHorizontal: 20,
-    alignItems: 'center',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignSelf: 'stretch',
     marginBottom: 20,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   avatarWrap: {
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   avatarImage: {
     width: 110,
     height: 110,
     borderRadius: 55,
-    borderWidth: 4,
-    borderColor: 'white',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   nameText: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#1b5e20',
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   tagline: {
-    fontSize: 15,
-    color: '#5a7a5f',
-    marginTop: 4,
+    fontSize: 16,
     fontStyle: 'italic',
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   bioText: {
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    color: '#375a3b',
-    marginTop: 8,
-    paddingHorizontal: 24,
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   quickStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
+    justifyContent: 'space-around',
+    gap: 12,
   },
   quickStatCard: {
     flex: 1,
-    backgroundColor: 'white',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    marginHorizontal: 4,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   quickStatNum: {
-    marginTop: 6,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1b5e20',
+    color: '#333',
+    marginTop: 4,
   },
   quickStatLabel: {
     fontSize: 11,
-    color: '#6c8a6e',
+    color: '#888',
     marginTop: 2,
   },
-  cardsGrid: {
-    paddingHorizontal: 16,
+  infoCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
     marginTop: 16,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  cardTitle: {
-    fontSize: 16,
+  infoCardTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#333',
-    marginLeft: 8,
+    marginBottom: 12,
   },
-  newPostBtn: {
-    marginLeft: 'auto',
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#888',
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  questionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  answerText: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 8,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 110,
+    paddingRight: 20,
+  },
+  settingsMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  newPostText: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    marginLeft: 6 
+  menuItemText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
-  emptyState: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 8 
-  },
-  emptyText: { 
-    marginLeft: 8, 
-    color: '#6e7f71' 
-  },
-  footerSpace: {
-    height: 60,
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 16,
   },
 });

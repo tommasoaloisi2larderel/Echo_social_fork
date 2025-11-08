@@ -44,6 +44,7 @@ interface ChatContextType {
   prefetchConversationsOverview: (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
+  removeFromConversationsCache: (conversationUuid: string) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -145,6 +146,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const setCachedConversations = (list: any[]) => {
     conversationsListRef.current = Array.isArray(list) ? list : [];
     try { storage.setItemAsync('cache_conversations', JSON.stringify(conversationsListRef.current)); } catch {}
+  };
+
+
+  const removeFromConversationsCache = (conversationUuid: string) => {
+    if (!conversationsListRef.current) return;
+    
+    // Retirer du cache en mémoire
+    conversationsListRef.current = conversationsListRef.current.filter(
+      (conv: any) => conv.uuid !== conversationUuid
+    );
+    
+    // Mettre à jour le storage
+    try {
+      storage.setItemAsync('cache_conversations', JSON.stringify(conversationsListRef.current));
+    } catch (error) {
+      console.error('Erreur mise à jour cache:', error);
+    }
+    
+    console.log(`🗑️ Conversation ${conversationUuid} retirée du cache`);
   };
   const getCachedConnections = () => connectionsListRef.current;
   const setCachedConnections = (list: any[]) => {
@@ -333,6 +353,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         prefetchAllMessages,
         getCachedConversations,
         setCachedConversations,
+        removeFromConversationsCache,
         getCachedConnections,
         setCachedConnections,
         getCachedGroups,

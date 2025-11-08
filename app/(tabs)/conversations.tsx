@@ -312,12 +312,26 @@ export default function ConversationsScreen() {
       const data = await response.json();
       console.log('Conversations récupérées:', data);
       const list = data.results || data;
-      setConversations(list);
-      setCachedConversations(list);
+      
+      // ✅ FILTRER les conversations archivées
+      const nonArchivedConversations = list.filter((conv: any) => {
+        // Exclure si is_archived est true
+        if (conv.is_archived === true) {
+          console.log(`🗄️ Conversation archivée filtrée: ${conv.uuid}`);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log(`📊 Total: ${list.length}, Non archivées: ${nonArchivedConversations.length}`);
+      
+      setConversations(nonArchivedConversations);
+      setCachedConversations(nonArchivedConversations);
+      
       // Précharger avatars de la liste de conversations
       try {
         const avatarUrls: string[] = [];
-        (Array.isArray(data.results ? data.results : data) ? (data.results || data) : []).forEach((c: any) => {
+        nonArchivedConversations.forEach((c: any) => {
           const url = c.other_participant?.photo_profil_url || c.group?.avatar;
           if (url) avatarUrls.push(url);
         });

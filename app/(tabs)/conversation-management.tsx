@@ -88,7 +88,7 @@ interface ConversationDetails {
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
   const { makeAuthenticatedRequest, user } = useAuth();
-  const { prefetchAvatars, getCachedConversations, getCachedGroups } = useChat();
+  const { prefetchAvatars, getCachedConversations, getCachedGroups, removeFromConversationsCache } = useChat();
   const { getUserProfile, getUserStats } = useUserProfile();
   const insets = useSafeAreaInsets();
   
@@ -347,24 +347,45 @@ const handleBlockUser = async () => {
     );
   };
 
-  const handleArchiveConversation = async () => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
+  const handleArchive = async () => {
+    Alert.alert(
+      'Archiver',
+      'Voulez-vous archiver cette conversation ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'archive' })
-        }
-      );
-      
-      if (response.ok) {
-        Alert.alert('Succès', 'Conversation archivée');
-        router.back();
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible d\'archiver');
-    }
+          text: 'Archiver',
+          onPress: async () => {
+            try {
+              const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'archive' }),
+                }
+              );
+
+              if (response.ok) {
+                // ✅ AJOUTER CES 2 LIGNES :
+                removeFromConversationsCache(conversationId as string);
+                Alert.alert('Succès', 'Conversation archivée', [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/(tabs)/conversations'),
+                  },
+                ]);
+              } else {
+                Alert.alert('Erreur', 'Impossible d\'archiver cette conversation');
+              }
+            } catch (error) {
+              console.error('Erreur:', error);
+              Alert.alert('Erreur', 'Une erreur est survenue');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -758,7 +779,7 @@ const handleBlockUser = async () => {
             <View style={styles.actionsSection}>
               <Text style={styles.sectionTitle}>Actions</Text>
               
-              <TouchableOpacity style={styles.actionButton} onPress={handleArchiveConversation}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleArchive}>
                 <Ionicons name="archive-outline" size={22} color="rgba(10, 145, 104, 1)" />
                 <Text style={styles.actionButtonText}>Archiver la conversation</Text>
               </TouchableOpacity>
