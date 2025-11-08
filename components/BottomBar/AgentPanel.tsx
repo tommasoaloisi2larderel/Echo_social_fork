@@ -2,16 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { useAgents } from "../../contexts/AgentsContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -43,6 +43,7 @@ interface AgentPanelProps {
   handleAddAgent: (agentUuid: string) => Promise<void>;
   glowOpacity: Animated.AnimatedInterpolation<number>;
   glowScale: Animated.AnimatedInterpolation<number>;
+  backgroundColor?: string;
 }
 
 export default function AgentPanel({
@@ -55,6 +56,7 @@ export default function AgentPanel({
   handleAddAgent,
   glowOpacity,
   glowScale,
+  backgroundColor = 'rgba(249, 250, 251, 1)',
 }: AgentPanelProps) {
   const { makeAuthenticatedRequest } = useAuth();
   const { createAgent, updateAgent, addAgentToConversation } = useAgents();
@@ -72,6 +74,20 @@ export default function AgentPanel({
   const [formalityLevel, setFormalityLevel] = useState('casual');
   const [maxResponseLength, setMaxResponseLength] = useState('500');
   const [submitting, setSubmitting] = useState(false);
+  const [interactionRules, setInteractionRules] = useState<{
+    interaction_type: 'respond_to' | 'ignore' | 'mention_only' | 'always_respond';
+    target_user_uuid?: string;
+    target_agent_uuid?: string;
+  }[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<{uuid: string; username: string; surnom: string}[]>([]);
+  const [selectedTargetType, setSelectedTargetType] = useState<'user' | 'agent'>('user');
+  const [showInteractionRuleForm, setShowInteractionRuleForm] = useState(false);
+  const [newRuleType, setNewRuleType] = useState<'respond_to' | 'ignore' | 'mention_only' | 'always_respond'>('respond_to');
+  const [selectedTarget, setSelectedTarget] = useState<string>('');
+  const [agentStats, setAgentStats] = useState<any>(null);
+  const [testMessage, setTestMessage] = useState('');
+  const [testResponse, setTestResponse] = useState<{response: string; success: boolean; processing_time: number} | null>(null);
+  const [testingAgent, setTestingAgent] = useState(false);
 
   const handleCreateAgent = () => {
     setEditingAgent(null);
@@ -85,7 +101,7 @@ export default function AgentPanel({
     setExpandedAgent('new');
   };
 
-  const handleEditAgent = (agent: Agent) => {
+  const handleEditAgent = async (agent: Agent) => {
     setEditingAgent(agent);
     setName(agent.name);
     setDescription(agent.description || '');
@@ -95,6 +111,147 @@ export default function AgentPanel({
     setFormalityLevel(agent.instructions?.formality_level || 'casual');
     setMaxResponseLength(String(agent.instructions?.max_response_length || 500));
     setExpandedAgent(agent.uuid);
+    // Charger les données complètes
+    await loadAvailableUsers();
+    await loadAgentDetails(agent.uuid);
+    await loadAgentStats(agent.uuid);
+  };
+
+  const loadAvailableUsers = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        'https://reseausocial-production.up.railway.app/api/connections/',
+        { method: 'GET' }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableUsers(data.results || data);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+  
+  const loadAgentDetails = async (agentUuid: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `https://reseausocial-production.up.railway.app/agents/agents/${agentUuid}/`,
+        { method: 'GET' }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setInteractionRules(data.interaction_rules || []);
+        return data;
+      }
+    } catch (error) {
+      console.error('Error loading agent details:', error);
+    }
+  };
+  
+  const loadAgentStats = async (agentUuid: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `https://reseausocial-production.up.railway.app/agents/agents/${agentUuid}/stats/`,
+        { method: 'GET' }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAgentStats(data);
+      }
+    } catch (error) {
+      console.error('Error loading agent stats:', error);
+    }
+  };
+
+  const handleAddInteractionRule = async () => {
+    if (!selectedTarget || !editingAgent) {
+      Alert.alert('Erreur', 'Veuillez sélectionner une cible');
+      return;
+    }
+
+    try {
+      const ruleData = {
+        interaction_type: newRuleType,
+        ...(selectedTargetType === 'user' 
+          ? { target_user_uuid: selectedTarget }
+          : { target_agent_uuid: selectedTarget }
+        )
+      };
+
+      const response = await makeAuthenticatedRequest(
+        `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/interactions/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ruleData)
+        }
+      );
+
+      if (response.ok) {
+        Alert.alert('Succès', 'Règle d\'interaction ajoutée');
+        await loadAgentDetails(editingAgent.uuid);
+        setShowInteractionRuleForm(false);
+        setSelectedTarget('');
+      } else {
+        const error = await response.json();
+        Alert.alert('Erreur', error.message || 'Impossible d\'ajouter la règle');
+      }
+    } catch (error) {
+      console.error('Error adding interaction rule:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    }
+  };
+
+  const handleDeleteInteractionRule = async (ruleId: number) => {
+    if (!editingAgent) return;
+
+    try {
+      const response = await makeAuthenticatedRequest(
+        `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/interactions/${ruleId}/`,
+        { method: 'DELETE' }
+      );
+
+      if (response.ok || response.status === 204) {
+        Alert.alert('Succès', 'Règle supprimée');
+        await loadAgentDetails(editingAgent.uuid);
+      }
+    } catch (error) {
+      console.error('Error deleting rule:', error);
+    }
+  };
+
+  const handleTestAgent = async () => {
+    if (!testMessage.trim() || !editingAgent) {
+      Alert.alert('Erreur', 'Veuillez entrer un message de test');
+      return;
+    }
+
+    setTestingAgent(true);
+    try {
+      const response = await makeAuthenticatedRequest(
+        `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/test/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: testMessage })
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestResponse(data);
+      } else {
+        Alert.alert('Erreur', 'Impossible de tester l\'agent');
+      }
+    } catch (error) {
+      console.error('Error testing agent:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    } finally {
+      setTestingAgent(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -797,69 +954,375 @@ export default function AgentPanel({
                                   }}
                                 />
                               </View>
-
-                              {/* Agent Type */}
-                              <View style={{ marginBottom: 16 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                                  Type d&apos;agent
-                                </Text>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                  {(['simple', 'conditional', 'action'] as const).map((type) => (
+                              {/* Section Règles d'interaction */}
+                              {editingAgent && (
+                                <View style={{ marginTop: 20 }}>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#2c3e50' }}>
+                                      Règles d&apos;interaction
+                                    </Text>
                                     <TouchableOpacity
-                                      key={type}
-                                      onPress={() => setAgentType(type)}
+                                      onPress={() => setShowInteractionRuleForm(!showInteractionRuleForm)}
                                       style={{
-                                        flex: 1,
+                                        backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 6,
+                                        borderRadius: 8,
+                                      }}
+                                    >
+                                      <Text style={{ color: 'rgba(10, 145, 104, 1)', fontWeight: '600' }}>
+                                        + Ajouter
+                                      </Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                
+                                  {/* Liste des règles existantes */}
+                                  {interactionRules.map((rule: any) => (
+                                    <View
+                                      key={rule.id}
+                                      style={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
                                         padding: 12,
-                                        borderRadius: 10,
-                                        backgroundColor: agentType === type ? 'rgba(10, 145, 104, 0.1)' : '#f5f5f5',
-                                        borderWidth: 2,
-                                        borderColor: agentType === type ? 'rgba(10, 145, 104, 0.5)' : 'transparent',
+                                        borderRadius: 12,
+                                        marginBottom: 8,
+                                        flexDirection: 'row',
+                                        justifyContent: 'space-between',
                                         alignItems: 'center',
                                       }}
                                     >
-                                      <Text style={{ 
-                                        fontSize: 14, 
-                                        fontWeight: agentType === type ? '600' : '400',
-                                        color: agentType === type ? 'rgba(10, 145, 104, 1)' : '#666',
-                                      }}>
-                                        {type === 'simple' ? 'Simple' : type === 'conditional' ? 'Conditionnel' : 'Action'}
-                                      </Text>
-                                    </TouchableOpacity>
+                                      <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#2c3e50', marginBottom: 4 }}>
+                                          {rule.interaction_type === 'respond_to' && '💬 Répond à'}
+                                          {rule.interaction_type === 'ignore' && '🚫 Ignore'}
+                                          {rule.interaction_type === 'mention_only' && '@ Mention uniquement'}
+                                          {rule.interaction_type === 'always_respond' && '✅ Répond toujours'}
+                                        </Text>
+                                        <Text style={{ fontSize: 12, color: '#7f8c8d' }}>
+                                          {rule.target_user_username || rule.target_agent_name || 'Cible'}
+                                        </Text>
+                                      </View>
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          Alert.alert(
+                                            'Supprimer la règle',
+                                            'Voulez-vous supprimer cette règle d\'interaction ?',
+                                            [
+                                              { text: 'Annuler', style: 'cancel' },
+                                              { text: 'Supprimer', style: 'destructive', onPress: () => handleDeleteInteractionRule(rule.id) }
+                                            ]
+                                          );
+                                        }}
+                                      >
+                                        <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+                                      </TouchableOpacity>
+                                    </View>
                                   ))}
-                                </View>
-                              </View>
-
-                              {/* Formality Level */}
-                              <View style={{ marginBottom: 16 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                                  Niveau de formalité
-                                </Text>
-                                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                                  {['casual', 'friendly', 'professional', 'formal'].map((level) => (
-                                    <TouchableOpacity
-                                      key={level}
-                                      onPress={() => setFormalityLevel(level)}
-                                      style={{
-                                        paddingHorizontal: 16,
-                                        paddingVertical: 10,
-                                        borderRadius: 20,
-                                        backgroundColor: formalityLevel === level ? 'rgba(10, 145, 104, 0.1)' : '#f5f5f5',
-                                        borderWidth: 1.5,
-                                        borderColor: formalityLevel === level ? 'rgba(10, 145, 104, 0.5)' : 'transparent',
-                                      }}
-                                    >
-                                      <Text style={{ 
-                                        fontSize: 13, 
-                                        fontWeight: formalityLevel === level ? '600' : '400',
-                                        color: formalityLevel === level ? 'rgba(10, 145, 104, 1)' : '#666',
-                                      }}>
-                                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                                
+                                  {/* Formulaire d'ajout de règle */}
+                                  {showInteractionRuleForm && (
+                                    <View style={{
+                                      backgroundColor: 'rgba(240, 248, 255, 0.8)',
+                                      padding: 16,
+                                      borderRadius: 12,
+                                      marginTop: 8,
+                                    }}>
+                                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#2c3e50', marginBottom: 12 }}>
+                                        Nouvelle règle d&apos;interaction
                                       </Text>
-                                    </TouchableOpacity>
-                                  ))}
+                                
+                                      {/* Type de règle */}
+                                      <Text style={{ fontSize: 12, color: '#7f8c8d', marginBottom: 8 }}>Type de règle</Text>
+                                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                        {[
+                                          { value: 'respond_to', label: '💬 Répond à', icon: 'chatbubble' },
+                                          { value: 'ignore', label: '🚫 Ignore', icon: 'close-circle' },
+                                          { value: 'mention_only', label: '@ Mention', icon: 'at' },
+                                          { value: 'always_respond', label: '✅ Toujours', icon: 'checkmark-circle' },
+                                        ].map((type) => (
+                                          <TouchableOpacity
+                                            key={type.value}
+                                            onPress={() => setNewRuleType(type.value as any)}
+                                            style={{
+                                              paddingHorizontal: 12,
+                                              paddingVertical: 8,
+                                              borderRadius: 8,
+                                              backgroundColor: newRuleType === type.value
+                                                ? 'rgba(10, 145, 104, 0.15)'
+                                                : 'rgba(255, 255, 255, 0.8)',
+                                              borderWidth: 1,
+                                              borderColor: newRuleType === type.value
+                                                ? 'rgba(10, 145, 104, 0.5)'
+                                                : 'rgba(0, 0, 0, 0.1)',
+                                            }}
+                                          >
+                                            <Text style={{
+                                              fontSize: 12,
+                                              color: newRuleType === type.value ? 'rgba(10, 145, 104, 1)' : '#7f8c8d',
+                                              fontWeight: '600',
+                                            }}>
+                                              {type.label}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        ))}
+                                      </View>
+                                
+                                      {/* Type de cible */}
+                                      <Text style={{ fontSize: 12, color: '#7f8c8d', marginBottom: 8 }}>Cible</Text>
+                                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                                        <TouchableOpacity
+                                          onPress={() => setSelectedTargetType('user')}
+                                          style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            borderRadius: 8,
+                                            backgroundColor: selectedTargetType === 'user'
+                                              ? 'rgba(10, 145, 104, 0.15)'
+                                              : 'rgba(255, 255, 255, 0.8)',
+                                            borderWidth: 1,
+                                            borderColor: selectedTargetType === 'user'
+                                              ? 'rgba(10, 145, 104, 0.5)'
+                                              : 'rgba(0, 0, 0, 0.1)',
+                                            alignItems: 'center',
+                                          }}
+                                        >
+                                          <Text style={{
+                                            color: selectedTargetType === 'user' ? 'rgba(10, 145, 104, 1)' : '#7f8c8d',
+                                            fontWeight: '600',
+                                          }}>
+                                            Utilisateur
+                                          </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          onPress={() => setSelectedTargetType('agent')}
+                                          style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            borderRadius: 8,
+                                            backgroundColor: selectedTargetType === 'agent'
+                                              ? 'rgba(10, 145, 104, 0.15)'
+                                              : 'rgba(255, 255, 255, 0.8)',
+                                            borderWidth: 1,
+                                            borderColor: selectedTargetType === 'agent'
+                                              ? 'rgba(10, 145, 104, 0.5)'
+                                              : 'rgba(0, 0, 0, 0.1)',
+                                            alignItems: 'center',
+                                          }}
+                                        >
+                                          <Text style={{
+                                            color: selectedTargetType === 'agent' ? 'rgba(10, 145, 104, 1)' : '#7f8c8d',
+                                            fontWeight: '600',
+                                          }}>
+                                            Agent
+                                          </Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                
+                                      {/* Sélection de la cible */}
+                                      <ScrollView style={{ maxHeight: 150, marginBottom: 12 }}>
+                                        {selectedTargetType === 'user' ? (
+                                          availableUsers.map((user) => (
+                                            <TouchableOpacity
+                                              key={user.uuid}
+                                              onPress={() => setSelectedTarget(user.uuid)}
+                                              style={{
+                                                padding: 12,
+                                                borderRadius: 8,
+                                                backgroundColor: selectedTarget === user.uuid
+                                                  ? 'rgba(10, 145, 104, 0.1)'
+                                                  : 'rgba(255, 255, 255, 0.8)',
+                                                marginBottom: 6,
+                                                borderWidth: 1,
+                                                borderColor: selectedTarget === user.uuid
+                                                  ? 'rgba(10, 145, 104, 0.3)'
+                                                  : 'rgba(0, 0, 0, 0.05)',
+                                              }}
+                                            >
+                                              <Text style={{
+                                                color: selectedTarget === user.uuid ? 'rgba(10, 145, 104, 1)' : '#2c3e50',
+                                                fontWeight: selectedTarget === user.uuid ? '600' : '400',
+                                              }}>
+                                                {user.surnom || user.username}
+                                              </Text>
+                                            </TouchableOpacity>
+                                          ))
+                                        ) : (
+                                          myAgents
+                                            .filter(a => a.uuid !== editingAgent?.uuid)
+                                            .map((agent) => (
+                                              <TouchableOpacity
+                                                key={agent.uuid}
+                                                onPress={() => setSelectedTarget(agent.uuid)}
+                                                style={{
+                                                  padding: 12,
+                                                  borderRadius: 8,
+                                                  backgroundColor: selectedTarget === agent.uuid
+                                                    ? 'rgba(10, 145, 104, 0.1)'
+                                                    : 'rgba(255, 255, 255, 0.8)',
+                                                  marginBottom: 6,
+                                                  borderWidth: 1,
+                                                  borderColor: selectedTarget === agent.uuid
+                                                    ? 'rgba(10, 145, 104, 0.3)'
+                                                    : 'rgba(0, 0, 0, 0.05)',
+                                                }}
+                                              >
+                                                <Text style={{
+                                                  color: selectedTarget === agent.uuid ? 'rgba(10, 145, 104, 1)' : '#2c3e50',
+                                                  fontWeight: selectedTarget === agent.uuid ? '600' : '400',
+                                                }}>
+                                                  {agent.name}
+                                                </Text>
+                                              </TouchableOpacity>
+                                            ))
+                                        )}
+                                      </ScrollView>
+                                
+                                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TouchableOpacity
+                                          onPress={() => setShowInteractionRuleForm(false)}
+                                          style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            borderRadius: 8,
+                                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                                            alignItems: 'center',
+                                          }}
+                                        >
+                                          <Text style={{ color: '#e74c3c', fontWeight: '600' }}>Annuler</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          onPress={handleAddInteractionRule}
+                                          disabled={!selectedTarget}
+                                          style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            borderRadius: 8,
+                                            backgroundColor: selectedTarget
+                                              ? 'rgba(10, 145, 104, 1)'
+                                              : 'rgba(149, 165, 166, 0.3)',
+                                            alignItems: 'center',
+                                          }}
+                                        >
+                                          <Text style={{ color: '#fff', fontWeight: '600' }}>Ajouter</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    </View>
+                                  )}
                                 </View>
-                              </View>
+                              )}
+                              {/* Section Test de l'agent */}
+                              {editingAgent && (
+                                <View style={{ marginTop: 20 }}>
+                                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#2c3e50', marginBottom: 12 }}>
+                                    Tester l&apos;agent
+                                  </Text>
+                                  
+                                  <TextInput
+                                    style={{
+                                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                      borderRadius: 12,
+                                      padding: 12,
+                                      fontSize: 14,
+                                      color: '#2c3e50',
+                                      borderWidth: 1,
+                                      borderColor: 'rgba(0, 0, 0, 0.1)',
+                                      marginBottom: 12,
+                                      minHeight: 60,
+                                    }}
+                                    placeholder="Message de test..."
+                                    placeholderTextColor="#95a5a6"
+                                    multiline
+                                    value={testMessage}
+                                    onChangeText={setTestMessage}
+                                  />
+                                
+                                  <TouchableOpacity
+                                    onPress={handleTestAgent}
+                                    disabled={testingAgent || !testMessage.trim()}
+                                    style={{
+                                      backgroundColor: testingAgent || !testMessage.trim()
+                                        ? 'rgba(149, 165, 166, 0.3)'
+                                        : 'rgba(59, 130, 246, 1)',
+                                      paddingVertical: 12,
+                                      borderRadius: 12,
+                                      alignItems: 'center',
+                                      marginBottom: 12,
+                                    }}
+                                  >
+                                    {testingAgent ? (
+                                      <ActivityIndicator color="#fff" />
+                                    ) : (
+                                      <Text style={{ color: '#fff', fontWeight: '600' }}>Tester</Text>
+                                    )}
+                                  </TouchableOpacity>
+                                
+                                  {/* Affichage de la réponse de test */}
+                                  {testResponse && (
+                                    <View style={{
+                                      backgroundColor: testResponse.success
+                                        ? 'rgba(46, 204, 113, 0.1)'
+                                        : 'rgba(231, 76, 60, 0.1)',
+                                      padding: 16,
+                                      borderRadius: 12,
+                                      borderLeftWidth: 4,
+                                      borderLeftColor: testResponse.success
+                                        ? 'rgba(46, 204, 113, 1)'
+                                        : 'rgba(231, 76, 60, 1)',
+                                    }}>
+                                      <Text style={{
+                                        fontSize: 14,
+                                        color: '#2c3e50',
+                                        marginBottom: 8,
+                                        lineHeight: 20,
+                                      }}>
+                                        {testResponse.response}
+                                      </Text>
+                                      <Text style={{ fontSize: 11, color: '#95a5a6' }}>
+                                        ⏱️ {testResponse.processing_time.toFixed(2)}s
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                              {/* Section Statistiques */}
+                              {editingAgent && agentStats && (
+                                <View style={{ marginTop: 20 }}>
+                                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#2c3e50', marginBottom: 12 }}>
+                                    Statistiques
+                                  </Text>
+                                  
+                                  <View style={{
+                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                    padding: 16,
+                                    borderRadius: 12,
+                                    gap: 12,
+                                  }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 13, color: '#7f8c8d' }}>Messages envoyés</Text>
+                                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#2c3e50' }}>
+                                        {agentStats.total_responses || 0}
+                                      </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 13, color: '#7f8c8d' }}>Temps moyen de réponse</Text>
+                                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#2c3e50' }}>
+                                        {agentStats.avg_processing_time?.toFixed(2) || 0}s
+                                      </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 13, color: '#7f8c8d' }}>Conversations actives</Text>
+                                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#2c3e50' }}>
+                                        {agentStats.active_conversations || 0}
+                                      </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 13, color: '#7f8c8d' }}>Taux de succès</Text>
+                                      <Text style={{ fontSize: 14, fontWeight: '700', color: agentStats.success_rate > 90 ? '#27ae60' : '#e67e22' }}>
+                                        {agentStats.success_rate?.toFixed(1) || 100}%
+                                      </Text>
+                                    </View>
+                                  </View>
+                                </View>
+                              )}
 
                               {/* Max Response Length */}
                               <View style={{ marginBottom: 16 }}>
@@ -1082,69 +1545,6 @@ export default function AgentPanel({
                           textAlignVertical: 'top',
                         }}
                       />
-                    </View>
-
-                    {/* Agent Type */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Type d&apos;agent
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {(['simple', 'conditional', 'action'] as const).map((type) => (
-                          <TouchableOpacity
-                            key={type}
-                            onPress={() => setAgentType(type)}
-                            style={{
-                              flex: 1,
-                              padding: 12,
-                              borderRadius: 10,
-                              backgroundColor: agentType === type ? 'rgba(10, 145, 104, 0.1)' : '#f5f5f5',
-                              borderWidth: 2,
-                              borderColor: agentType === type ? 'rgba(10, 145, 104, 0.5)' : 'transparent',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text style={{ 
-                              fontSize: 14, 
-                              fontWeight: agentType === type ? '600' : '400',
-                              color: agentType === type ? 'rgba(10, 145, 104, 1)' : '#666',
-                            }}>
-                              {type === 'simple' ? 'Simple' : type === 'conditional' ? 'Conditionnel' : 'Action'}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    {/* Formality Level */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Niveau de formalité
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                        {['casual', 'friendly', 'professional', 'formal'].map((level) => (
-                          <TouchableOpacity
-                            key={level}
-                            onPress={() => setFormalityLevel(level)}
-                            style={{
-                              paddingHorizontal: 16,
-                              paddingVertical: 10,
-                              borderRadius: 20,
-                              backgroundColor: formalityLevel === level ? 'rgba(10, 145, 104, 0.1)' : '#f5f5f5',
-                              borderWidth: 1.5,
-                              borderColor: formalityLevel === level ? 'rgba(10, 145, 104, 0.5)' : 'transparent',
-                            }}
-                          >
-                            <Text style={{ 
-                              fontSize: 13, 
-                              fontWeight: formalityLevel === level ? '600' : '400',
-                              color: formalityLevel === level ? 'rgba(10, 145, 104, 1)' : '#666',
-                            }}>
-                              {level.charAt(0).toUpperCase() + level.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
                     </View>
 
                     {/* Max Response Length */}

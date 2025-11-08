@@ -70,55 +70,54 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const fetchConversationAgents = async (
-  conversationId: string,
-  makeRequest: (url: string, options?: RequestInit) => Promise<Response>
-) => {
-  if (!conversationId || conversationId === 'undefined') {
-    console.warn('⚠️ fetchConversationAgents called with invalid conversationId:', conversationId);
-    setConversationAgents([]);
-    setLoadingConversationAgents(false);
-    return;
-  }
-
-  setLoadingConversationAgents(true);
-  try {
-    console.log('🔍 Fetching agents for conversation:', conversationId);
-    
-    // Using correct endpoint: /agents/conversations/{uuid}/agents/
-    const response = await makeRequest(
-      `${API_BASE_URL}/agents/conversations/${conversationId}/agents/`
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Failed to fetch conversation agents:', response.status, errorText);
-      
-      // If 404 or 500, it might mean no agents exist yet - treat as empty
-      if (response.status === 404 || response.status === 500) {
-        console.log('ℹ️ Treating as empty agent list');
-        setConversationAgents([]);
-        setLoadingConversationAgents(false);
-        return;
-      }
-      
-      throw new Error(`Failed to fetch agents: ${response.status}`);
+    conversationId: string,
+    makeRequest: (url: string, options?: RequestInit) => Promise<Response>
+  ): Promise<void> => {
+    if (!conversationId || conversationId === 'undefined') {
+      console.warn('⚠️ fetchConversationAgents called with invalid conversationId:', conversationId);
+      setConversationAgents([]);
+      setLoadingConversationAgents(false);
+      return;
     }
 
-    const data = await response.json();
-    console.log('✅ Conversation agents fetched:', data);
-    
-    // Handle both response formats: direct array or object with agents array
-    const agentsList = Array.isArray(data) ? data : (data.agents || []);
-    setConversationAgents(agentsList);
-  } catch (error) {
-    console.error('❌ Error fetching conversation agents:', error);
-    // Don't throw - just set empty array so UI still works
-    setConversationAgents([]);
-  } finally {
-    setLoadingConversationAgents(false);
-  }
-};
+    setLoadingConversationAgents(true);
+    try {
+      console.log('🔍 Fetching agents for conversation:', conversationId);
+      
+      // Using correct endpoint: /agents/conversations/{uuid}/agents/
+      const response = await makeRequest(
+        `${API_BASE_URL}/agents/conversations/${conversationId}/agents/`
+      );
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch conversation agents:', response.status, errorText);
+        
+        // If 404 or 500, it might mean no agents exist yet - treat as empty
+        if (response.status === 404 || response.status === 500) {
+          console.log('ℹ️ Treating as empty agent list');
+          setConversationAgents([]);
+          setLoadingConversationAgents(false);
+          return;
+        }
+        // ⚠️ Si le status n'est ni 404 ni 500, on throw l'erreur
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Conversation agents fetched:', data);
+      
+      // Handle both response formats: direct array or object with agents array
+      const agentsList = Array.isArray(data) ? data : (data.agents || []);
+      setConversationAgents(agentsList);
+    } catch (error) {
+      console.error('❌ Error fetching conversation agents:', error);
+      // Don't throw - just set empty array so UI still works
+      setConversationAgents([]);
+    } finally {
+      setLoadingConversationAgents(false);
+    }
+  };
   const createAgent = async (
     agentData: Partial<Agent>,
     makeRequest: (url: string, options?: RequestInit) => Promise<Response>
@@ -260,10 +259,10 @@ export function AgentsProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAgents() {
+export const useAgents = () => {
   const context = useContext(AgentsContext);
   if (!context) {
     throw new Error('useAgents must be used within an AgentsProvider');
   }
   return context;
-}
+};
