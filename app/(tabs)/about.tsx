@@ -143,7 +143,7 @@ export default function ProfileScreen() {
 
         {(
           <View style={styles.quickStatsRow}>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/friends' as any)}>
               <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{user?.nb_connexions ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
@@ -153,28 +153,14 @@ export default function ProfileScreen() {
               <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Événements</Text>
             </TouchableOpacity>
-            <View style={styles.quickStatCard}>
-              <Ionicons name="chatbubble-outline" size={18} color={ECHO_COLOR} />
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/stats' as any)}>
+              <Ionicons name="stats-chart-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Réponses</Text>
-            </View>
+              <Text style={styles.quickStatLabel}>Statistiques</Text>
+            </TouchableOpacity>
           </View>
         )}
       </LinearGradient>
-
-      {stats ? (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>Statistiques</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Membre depuis</Text>
-            <Text style={styles.infoValue}>{formatDate(stats.date_inscription)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Événements ce mois</Text>
-            <Text style={styles.infoValue}>{stats.evenements_ce_mois}</Text>
-          </View>
-        </View>
-      ) : null}
 
       {lastAnswer && isDerniereReponse(lastAnswer) ? (
         <View style={styles.infoCard}>

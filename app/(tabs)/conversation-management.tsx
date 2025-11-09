@@ -287,6 +287,11 @@ const handleBlockUser = async () => {
     return;
   }
   
+  if (otherParticipant.uuid === user?.uuid) {
+    Alert.alert('Erreur', 'Vous ne pouvez pas vous bloquer vous-même');
+    return;
+  }
+  
   Alert.alert(
     'Bloquer cet utilisateur',
     'Voulez-vous vraiment bloquer cet utilisateur ? Il ne pourra plus vous envoyer de messages.',
@@ -302,29 +307,38 @@ const handleBlockUser = async () => {
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_uuid: otherParticipant.uuid })
+                body: JSON.stringify({ 
+                  user_uuid: otherParticipant.uuid,
+                  action: 'block'
+                })
               }
             );
             
+            // Ne pas essayer de parser si ce n'est pas du JSON
             if (response.ok) {
-              const data = await response.json();
-              Alert.alert('Succès', data.message || 'Utilisateur bloqué');
+              // L'action a réussi, pas besoin de parser
+              Alert.alert('Succès', 'Utilisateur bloqué avec succès');
               router.back();
             } else {
-              const errorData = await response.json();
-              Alert.alert('Erreur', errorData.message || 'Impossible de bloquer');
+              // Essayer de lire l'erreur
+              const contentType = response.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json();
+                Alert.alert('Erreur', errorData.message || errorData.error || 'Impossible de bloquer');
+              } else {
+                Alert.alert('Erreur', 'Une erreur est survenue');
+              }
             }
           } catch (error) {
-            console.error('Erreur blocage:', error);
-            Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
+            console.error('❌ Erreur blocage:', error);
+            // Si on arrive ici mais que l'action a marché, c'est juste un problème de parsing
+            Alert.alert('Erreur', 'Une erreur est survenue lors du blocage');
           }
         }
       }
     ]
   );
 };
-
-
 
 
   const handleLeaveGroup = () => {

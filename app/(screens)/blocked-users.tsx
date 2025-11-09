@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View , Image} from 'react-native';
 
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
@@ -30,65 +30,92 @@ export default function BlockedUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [unblocking, setUnblocking] = useState<string | null>(null);
 
-  const fetchBlockedUsers = useCallback(async () => {
-    try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/blocked-users/`);
+    const fetchBlockedUsers = useCallback(async () => {
+  console.log('🔍 Fetching blocked users...');
+  setLoading(true);
+  
+  try {
+    const response = await makeAuthenticatedRequest(
+      `${API_BASE_URL}/messaging/blocked-users/`
+    );
+    
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Content-Type:', response.headers.get('content-type'));
+    
+    // Vérifier si c'est vraiment du JSON
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType && contentType.includes('application/json');
+    
+    if (response.ok && isJson) {
+      const data = await response.json();
+      console.log('✅ Blocked users:', data);
+      setBlockedUsers(data);
+    } else if (response.ok && !isJson) {
+      // Succès mais pas de JSON (possible si liste vide)
+      console.log('⚠️ Réponse OK mais pas JSON, liste vide?');
+      setBlockedUsers([]);
+    } else {
+      // Erreur serveur
+      const errorText = await response.text();
+      console.error('❌ Error status:', response.status);
+      console.error('❌ Error preview:', errorText.substring(0, 200));
       
-      if (response.ok) {
-        const data = await response.json();
-        setBlockedUsers(data);
-      } else {
-        console.error('Erreur lors de la récupération des utilisateurs bloqués');
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      Alert.alert('Erreur', 'Impossible de charger la liste des utilisateurs bloqués');
-    } finally {
-      setLoading(false);
+      Alert.alert(
+        'Erreur', 
+        `Le serveur a rencontré une erreur (${response.status}). Veuillez réessayer.`
+      );
     }
-  }, [makeAuthenticatedRequest]);
-
+  } catch (error) {
+    console.error('❌ Fetch error:', error);
+    Alert.alert('Erreur', 'Impossible de charger la liste des utilisateurs bloqués');
+  } finally {
+    setLoading(false);
+  }
+}, [makeAuthenticatedRequest]);
   useEffect(() => {
     fetchBlockedUsers();
   }, [fetchBlockedUsers]);
 
   const handleUnblock = async (userUuid: string, username: string) => {
     Alert.alert(
-      'Débloquer',
-      `Voulez-vous débloquer ${username} ?`,
-      [
+        'Débloquer',
+        `Voulez-vous débloquer ${username} ?`,
+        [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Débloquer',
-          onPress: async () => {
+            text: 'Débloquer',
+            onPress: async () => {
             setUnblocking(userUuid);
             try {
-              const response = await makeAuthenticatedRequest(
+                const response = await makeAuthenticatedRequest(
                 `${API_BASE_URL}/messaging/unblock-user/`,
                 {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ user_uuid: userUuid }),
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                    user_uuid: userUuid,
+                    action: 'unblock'  // ← AJOUTER CE CHAMP
+                    }),
                 }
-              );
+                );
 
-              if (response.ok) {
+                if (response.ok) {
                 setBlockedUsers(prev => prev.filter(item => item.blocked_user.uuid !== userUuid));
                 Alert.alert('Succès', `${username} a été débloqué`);
-              } else {
+                } else {
                 Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
-              }
+                }
             } catch (error) {
-              console.error('Erreur:', error);
-              Alert.alert('Erreur', 'Une erreur est survenue');
+                console.error('Erreur:', error);
+                Alert.alert('Erreur', 'Une erreur est survenue');
             } finally {
-              setUnblocking(null);
+                setUnblocking(null);
             }
-          },
+            },
         },
-      ]
+        ]
     );
-  };
+    };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -106,15 +133,13 @@ export default function BlockedUsersScreen() {
       <View style={styles.userCard}>
         <View style={styles.userInfo}>
           {item.blocked_user.photo_profil_url ? (
-            <img 
-              src={item.blocked_user.photo_profil_url} 
-              style={styles.avatar as any}
-              alt={item.blocked_user.username}
+            <Image 
+              source={{ uri: item.blocked_user.photo_profil_url }} 
+              style={styles.avatar}
             />
           ) : (
             <DefaultAvatar name={item.blocked_user.username} size={50} />
           )}
-          
           <View style={styles.userDetails}>
             <Text style={styles.username}>
               {item.blocked_user.surnom || item.blocked_user.username}
