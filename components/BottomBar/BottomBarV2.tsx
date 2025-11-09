@@ -24,10 +24,11 @@ import AgentPanel from './AgentPanel';
 import AttachmentButtonInline from './AttachmentButtonInline';
 import JarvisChatBar from './JarvisChatBar';
 // import VoiceButtonFloating from './VoiceButtonFloating';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
+import ComposingMessageBubble from './ComposingMessageBubble';
 import SummaryButton from './SummaryButton';
 import VoiceRecorder from './VoiceRecorder';
-import WriteButton from './WriteButton';
-import WritingBubble from './WritingBubble';
 
 interface Agent {
   uuid: string;
@@ -428,8 +429,6 @@ const handleVoiceCancel = () => {
               marginBottom: bottomMarginValue,
               borderRadius: borderRadiusValue,
               backgroundColor: "rgba(10, 145, 104, 0.7)", // Couleur de fond du panneau
-              opacity: isRecording ? 0 : 1,
-
             },
           ]}
         >
@@ -460,10 +459,48 @@ const handleVoiceCancel = () => {
                   </View>
 
                   <View style={styles.actionButtonWrapper}>
-                    <WriteButton
-                      onPress={() => setIsWriting(true)}
-                      disabled={!conversationId}
-                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        isWriting && styles.actionButtonActive,
+                      ]}
+                      onPress={() => {
+                        if (isWriting) {
+                          // Send the message
+                          handleChatSend();
+                          setIsWriting(false);
+                        } else {
+                          // Start writing
+                          setIsWriting(true);
+                        }
+                      }}
+                      disabled={!conversationId || (isWriting && !chatText.trim())}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={
+                          isWriting
+                            ? ['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)'] // Green when ready to send
+                            : ['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)'] // Normal color
+                        }
+                        style={styles.gradient}
+                      >
+                        {Platform.OS === 'ios' ? (
+                          <SymbolView
+                            name={isWriting ? 'paperplane.fill' : 'pencil'}
+                            size={20}
+                            tintColor="white"
+                            type="hierarchical"
+                          />
+                        ) : (
+                          <Ionicons
+                            name={isWriting ? 'send' : 'create-outline'}
+                            size={20}
+                            color="white"
+                          />
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.actionButtonWrapper}>
@@ -572,13 +609,9 @@ const handleVoiceCancel = () => {
       
       {/* Writing bubble overlay for chat mode */}
       {isChat && isWriting && (
-        <WritingBubble
+        <ComposingMessageBubble
           chatText={chatText}
           onChangeText={(text) => setChatText?.(text)}
-          onSendMessage={() => {
-            handleChatSend();
-            setIsWriting(false);
-          }}
           onCancel={() => {
             setIsWriting(false);
             setChatText?.('');
@@ -669,6 +702,24 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     // Pas de paddingTop car la poignée gère son propre padding
   },
+  actionButton: {
+  shadowColor: 'rgba(10, 145, 104, 0.4)',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.6,
+  shadowRadius: 4,
+  elevation: 4,
+},
+actionButtonActive: {
+  shadowColor: 'rgba(34, 197, 94, 0.6)',
+  shadowOpacity: 0.8,
+},
+gradient: {
+  width: 48,
+  height: 48,
+  borderRadius: 24,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
 });
 
 export default BottomBarV2;
