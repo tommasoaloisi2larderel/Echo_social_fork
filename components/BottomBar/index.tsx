@@ -9,6 +9,8 @@ export default function BottomBar({
   chatText,
   setChatText,
   conversationId,
+  onSummaryPress,      // ADD THIS
+  loadingSummary,      // ADD THIS
 }: BottomBarProps) {
   const { websocket } = useChat();
   const isChat = currentRoute?.includes('conversation-direct') || currentRoute?.includes('conversation-group');
@@ -106,6 +108,8 @@ export default function BottomBar({
       isChat={isChat}
       chatText={chatText}
       setChatText={setChatText}
+      onSummaryPress={onSummaryPress}
+      loadingSummary={loadingSummary}
     />
   );
 }

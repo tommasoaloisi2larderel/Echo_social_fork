@@ -5,6 +5,8 @@ export interface BottomBarProps {
   chatRecipient?: string;
   onSendMessage?: () => void;
   conversationId?: string;
+  onSummaryPress?: () => void;
+  loadingSummary?: boolean; 
 }
 
 export interface StagedAttachment {
