@@ -74,7 +74,7 @@ export default function ConversationDirect() {
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
-
+  
   // Utilise le proxy local pour éviter CORS en développement web
   const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? "http://localhost:3001"
@@ -687,19 +687,6 @@ export default function ConversationDirect() {
           ))}
         </ScrollView>
       </KeyboardAvoidingView>
-      {/* Bouton Résumer - au-dessus de la bottom bar */}
-      <TouchableOpacity
-        style={styles.summaryButton}
-        onPress={fetchSummary}
-        disabled={loadingSummary}
-      >
-        {loadingSummary ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Ionicons name="sparkles" size={18} color="#fff" />
-        )}
-        <Text style={styles.summaryButtonText}>Résumer</Text>
-      </TouchableOpacity>
       {/* Bulle de résumé */}
       {showSummary && (
         <View style={styles.summaryBubble}>
@@ -718,9 +705,6 @@ export default function ConversationDirect() {
           </ScrollView>
         </View>
       )}
-
-
-
     </Animated.View>
   );
 }

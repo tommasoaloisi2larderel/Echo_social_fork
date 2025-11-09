@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, useLocalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import BottomBar from '../../components/BottomBar/index';
 import SwipeableContainer, { SwipeableContainerHandle } from '../../components/SwipeableContainer';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,8 +19,16 @@ export default function TabsLayout() {
   const globalParams = useGlobalSearchParams();
   const conversationId = (globalParams.conversationId || localParams.conversationId) as string | undefined;
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
-  const { isLoggedIn, makeAuthenticatedRequest } = useAuth();
+  const { isLoggedIn, makeAuthenticatedRequest, accessToken } = useAuth();
   const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
+  
+  // Summary state
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  
+  // Utilise le proxy local pour éviter CORS en développement web
+  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? "http://localhost:3001"
+    : "https://reseausocial-production.up.railway.app";
   
   // Debug: voir ce qui est récupéré
   console.log('📍 _layout - localParams:', localParams, 'globalParams:', globalParams, 'conversationId:', conversationId);
@@ -28,54 +36,88 @@ export default function TabsLayout() {
   const deriveIndexFromPath = (p: string) => {
     if (p.includes('/conversations')) return 0;
     if (p.includes('/about')) return 2;
-    return 1; // index/home
+    return 1;
   };
 
-  // Determine if we're showing a detail route or other full-screen pages
-  const isInConversationDetail = pathname.includes('conversation-direct') || 
-                                  pathname.includes('conversation-group') || 
-                                  pathname.includes('conversation-detail') || 
-                                  pathname.includes('conversation-management') || 
-                                  pathname.includes('add-group-members') || 
-                                  pathname.includes('conversation-media') ||
-                                  pathname.includes('/friends');
-
-  const handleSendMessage = () => {
-    console.log("Envoi du message:", chatText);
-  };
   const { registerScrollRef } = useNavigation();
 
-  // Enregistrer le ref du swipe container
   React.useEffect(() => {
-    registerScrollRef(swipeControlRef);
-  }, []);
+    if (swipeControlRef.current) {
+      registerScrollRef(swipeControlRef.current.scrollToIndex);
+    }
+  }, [registerScrollRef]);
 
-  // Bootstrap: au premier rendu des tabs (si connecté), précharger overview + tous messages
   useEffect(() => {
-    if (!isLoggedIn) return;
-    prefetchConversationsOverview(makeAuthenticatedRequest).then(() => {
-      prefetchAllMessages(makeAuthenticatedRequest);
-    });
-  }, [isLoggedIn]);
+  if (isLoggedIn && makeAuthenticatedRequest) {
+    prefetchConversationsOverview(makeAuthenticatedRequest);
+    prefetchAllMessages(makeAuthenticatedRequest);
+  }
+}, [isLoggedIn, makeAuthenticatedRequest, prefetchConversationsOverview, prefetchAllMessages]);
 
-  console.log('Layout rendered with path:', pathname, 'isInConversationDetail:', isInConversationDetail);
-  
+
+  const isInConversationDetail = 
+    pathname.includes('conversation-direct') || 
+    pathname.includes('conversation-group') || 
+    pathname.includes('conversation-detail');
+
+  // Summary fetch function
+  const fetchSummary = async () => {
+    if (!conversationId || !accessToken) {
+      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', !!accessToken);
+      Alert.alert('Info', 'Aucune conversation sélectionnée');
+      return;
+    }
+    
+    console.log('🔍 Début du résumé pour conversation:', conversationId);
+    setLoadingSummary(true);
+    
+    try {
+      const url = `${API_BASE_URL}/messaging/conversations/${conversationId}/summarize/`;
+      console.log('📤 URL appelée:', url);
+      
+      const response = await makeAuthenticatedRequest(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📥 Statut de la réponse:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Erreur HTTP:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Données reçues:', JSON.stringify(data, null, 2));
+      
+      // Show the summary in an alert for now
+      Alert.alert(
+        '📝 Résumé de la conversation',
+        data.summary || 'Aucun résumé disponible',
+        [{ text: 'OK' }]
+      );
+      
+    } catch (error) {
+      console.error('❌ Erreur lors du résumé:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Alert.alert('Erreur', `Impossible de générer le résumé: ${errorMessage}`);
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* Stack navigator - pour toutes les routes */}
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-        }}
-      >
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="conversations" />
         <Stack.Screen name="about" />
         <Stack.Screen name="friends" />
         <Stack.Screen name="conversation-direct" />
         <Stack.Screen name="conversation-group" />
-        {/* backward-compat pour anciennes navigations éventuelles */}
         <Stack.Screen name="conversation-detail" />
         <Stack.Screen name="conversation-management" />
         <Stack.Screen name="add-group-members" />
@@ -101,6 +143,8 @@ export default function TabsLayout() {
         chatText={chatText}
         setChatText={setChatText}
         conversationId={conversationId}
+        onSummaryPress={fetchSummary}
+        loadingSummary={loadingSummary}
       />
     </View>
   );
@@ -116,8 +160,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 70, // Laisser de l'espace pour la BottomBar (MIN_HEIGHT = 60px)
+    bottom: 70,
     zIndex: 100,
-    backgroundColor: '#f0f2f5', // Fond opaque pour cacher le Stack en dessous
+    backgroundColor: '#f0f2f5',
   },
 });
