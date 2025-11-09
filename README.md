@@ -1,295 +1,965 @@
-# 📱 Echo - Application Mobile de Messagerie avec IA
+# 📱 Frontend React Native - Réseau Social
+
+> **Application mobile React Native/Expo connectée à un backend Django**  
+> Backend URL: `https://reseausocial-production.up.railway.app`
+
+---
 
 ## 🎯 Vue d'ensemble
 
-Echo est une application mobile de messagerie moderne intégrant une marketplace d'agents IA. L'app permet aux utilisateurs de communiquer entre eux tout en bénéficiant d'agents intelligents pour automatiser et améliorer leurs conversations.
+Application de messagerie sociale avec agents IA, construite avec React Native/Expo et TypeScript. L'application utilise une architecture basée sur des **Contexts** pour la gestion d'état globale et **Expo Router** pour la navigation file-based.
 
-**Backend**: Django REST Framework (déjà développé)  
-**Frontend**: React Native + Expo  
-**URL API**: `https://reseausocial-production.up.railway.app`
+### Technologies principales
 
----
-
-## 📂 Structure du projet
-
-### **Dossiers principaux**
-
-```
-echo-app/
-├── app/                    # Pages et écrans de l'application
-│   ├── (auth)/            # Écrans d'authentification
-│   │   ├── login.tsx      # Page de connexion
-│   │   └── register.tsx   # Page d'inscription
-│   ├── (tabs)/            # Navigation par onglets (bottom tabs)
-│   │   ├── index.tsx      # Page d'accueil avec résumés IA
-│   │   ├── conversations.tsx  # Liste des conversations
-│   │   ├── profile.tsx    # Profil utilisateur
-│   │   └── _layout.tsx    # Configuration de la navigation tabs
-│   ├── (screens)/         # Écrans additionnels
-│   │   └── conversation-detail.tsx  # Détail d'une conversation
-│   ├── _layout.tsx        # Layout principal de l'app
-│   └── index.tsx          # Point d'entrée de l'application
-├── components/            # Composants réutilisables
-│   └── DefaultAvatar.tsx  # Avatar par défaut avec initiales
-├── contexts/              # Contextes React
-│   └── AuthContext.tsx    # Gestion de l'authentification
-├── constants/             # Constantes de l'application
-│   └── colors.ts          # Palette de couleurs
-├── styles/                # Styles globaux
-│   └── appStyles.ts       # Styles réutilisables
-└── README.md              # Ce fichier
-```
+- **React Native** avec **Expo SDK**
+- **TypeScript** pour le typage statique
+- **Expo Router** (navigation file-based)
+- **WebSocket** pour le temps réel
+- **SecureStore** pour le stockage sécurisé des tokens
+- **Django REST + Channels** (backend)
 
 ---
 
-## 🔑 Fichiers clés et leurs rôles
+## 📂 Structure des fichiers
 
-### **1. `app/index.tsx`**
-**Rôle**: Point d'entrée de l'application  
-**Fonctionnalités**:
-- Vérifie si l'utilisateur est connecté
-- Redirige vers `/(tabs)` si authentifié
-- Redirige vers `/(auth)/login` sinon
-- Affiche un spinner pendant le chargement
+### **Architecture globale**
 
-### **2. `contexts/AuthContext.tsx`**
-**Rôle**: Gestion centralisée de l'authentification  
-**Fonctionnalités**:
-- Stockage sécurisé des tokens JWT (access + refresh)
+```
+/app
+  ├── _layout.tsx           # Root layout avec tous les providers
+  ├── index.tsx             # Point d'entrée (redirect vers auth/tabs)
+  ├── (auth)/               # Écrans d'authentification
+  │   ├── _layout.tsx
+  │   ├── login.tsx
+  │   └── register.tsx
+  ├── (tabs)/               # Navigation principale (bottom tabs)
+  │   ├── _layout.tsx       # Configuration tabs + SwipeableContainer + BottomBar
+  │   ├── index.tsx         # 🏠 Home (résumés IA)
+  │   ├── conversations.tsx # 💬 Liste conversations
+  │   ├── about.tsx         # 👤 Profil
+  │   ├── conversation-direct.tsx   # Messages 1-1
+  │   └── conversation-group.tsx    # Messages de groupe
+  └── (screens)/            # Écrans secondaires (modals/screens)
+      ├── agents.tsx        # Marketplace agents IA
+      ├── friends.tsx       # Gestion connexions/invitations
+      ├── user-profile.tsx  # Profil d'un utilisateur
+      ├── groups.tsx        # Gestion des groupes
+      └── [...autres]
+
+/components
+  ├── BottomBar/            # Barre de navigation contextuelle
+  │   ├── index.tsx         # Export principal
+  │   ├── BottomBarV2.tsx   # Nouvelle version avec agents
+  │   ├── AgentPanel.tsx    # Panneau sélection agents
+  │   ├── JarvisChatBar.tsx # Interface Jarvis
+  │   └── [...autres]
+  ├── FIlesLecture/         # Composants de lecture fichiers
+  │   ├── AttachementImage.tsx
+  │   ├── AttachementVideo.tsx
+  │   ├── Audioplayer.tsx
+  │   └── JarvisResponseModal.tsx
+  ├── JarvisInteraction/    # Composants interaction Jarvis
+  ├── DefaultAvatar.tsx     # Avatar avec initiales
+  ├── TypingIndicator.tsx   # Indicateur "en train d'écrire"
+  └── SwipeableContainer.tsx # Container swipe pour navigation tabs
+
+/contexts                   # 🔥 CONTEXTES GLOBAUX (état partagé)
+  ├── AuthContext.tsx       # Authentification + tokens + user
+  ├── ChatContext.tsx       # WebSocket + cache conversations/messages
+  ├── UserProfileContext.tsx # Profil utilisateur courant
+  ├── JarvisContext.tsx     # Historique Jarvis
+  ├── AgentsContext.tsx     # Agents IA actifs
+  ├── NavigationContext.tsx # Navigation programmatique
+  └── TransitionContext.tsx # Animations de transition
+
+/constants
+  ├── colors.ts             # Palette de couleurs (ECHO_COLOR, BACKGROUND_GRAY)
+  └── [...autres]
+
+/styles
+  └── appStyles.ts          # Styles réutilisables (containers, messages, cards)
+
+/utils
+  └── storage.ts            # Wrapper SecureStore (async storage)
+```
+
+---
+
+## 🧩 Contextes (Providers)
+
+> **Tous les contextes sont wrappés dans `app/_layout.tsx`** dans l'ordre suivant :
+
+### 1. **AuthContext** 🔐
+
+**Fichier:** `contexts/AuthContext.tsx`
+
+**Responsabilités:**
+
+- Gestion des tokens JWT (access + refresh)
 - Méthodes `login()`, `register()`, `logout()`
-- Rafraîchissement automatique des tokens expirés
-- Fonction `makeAuthenticatedRequest()` pour simplifier les appels API
-- Persistence de la session avec SecureStore
+- Rafraîchissement automatique des tokens expirés (intercepte 401)
+- Stockage sécurisé avec `SecureStore`
+- Fonction **`makeAuthenticatedRequest()`** → utilisée PARTOUT pour les appels API
 
-**API utilisées**:
-- `POST /api/auth/login/` - Connexion
-- `POST /api/auth/register/` - Inscription
-- `POST /api/auth/logout/` - Déconnexion
-- `POST /api/auth/token/refresh/` - Rafraîchir le token
+**État exposé:**
 
-### **3. `app/(tabs)/index.tsx`**
-**Rôle**: Page d'accueil avec résumés IA  
-**Fonctionnalités**:
-- Affiche un message de bienvenue personnalisé
-- Liste les résumés de messages non lus (mock data pour l'instant)
-- Point d'entrée vers la gestion des agents IA
+```typescript
+{
+  user: User | null,
+  accessToken: string | null,
+  refreshToken: string | null,
+  isLoggedIn: boolean,
+  loading: boolean,
+  login: (username, password) => Promise<void>,
+  register: (data) => Promise<void>,
+  logout: () => Promise<void>,
+  makeAuthenticatedRequest: (url, options?) => Promise<Response>,
+  updateUser: (user) => Promise<void>,
+  reloadUser: () => Promise<void>
+}
+```
 
-**À développer**:
-- Intégration avec l'API de résumés IA
-- Affichage dynamique des notifications
-- Navigation vers les agents IA
+**API endpoints utilisés:**
 
-### **4. `app/(tabs)/conversations.tsx`**
-**Rôle**: Liste des conversations actives  
-**Fonctionnalités**:
-- Récupère toutes les conversations de l'utilisateur
-- Affiche un grid 3 colonnes de "carrés de conversation"
-- Indicateur visuel pour les messages non lus (ombre verte)
-- Pull-to-refresh pour actualiser
-- Barre de recherche pour filtrer les conversations
-- Navigation vers le détail d'une conversation
-
-**API utilisées**:
-- `GET /messaging/conversations/` - Liste des conversations
-
-### **5. `app/(screens)/conversation-detail.tsx`**
-**Rôle**: Affichage et envoi de messages dans une conversation  
-**Fonctionnalités**:
-- Connexion WebSocket pour les messages temps réel
-- Affichage des messages (propres messages à droite, autres à gauche)
-- Envoi de nouveaux messages
-- Indicateurs de lecture (✓ / ✓✓)
-- Header avec avatar et statut en ligne
-- Auto-scroll vers le bas lors de nouveaux messages
-
-**Technologies**:
-- WebSocket pour le temps réel
-- API REST pour récupérer l'historique des messages
-
-**API utilisées**:
-- `GET /messaging/conversations/{uuid}/messages/` - Historique
-- WebSocket: `wss://reseausocial-production.up.railway.app/ws/chat/`
-
-### **6. `components/DefaultAvatar.tsx`**
-**Rôle**: Composant d'avatar réutilisable  
-**Fonctionnalités**:
-- Affiche les initiales du nom sur fond coloré
-- Couleur générée automatiquement selon le nom
-- Taille configurable
-- Utilisé partout où un avatar est nécessaire
-
-### **7. `app/(tabs)/_layout.tsx`**
-**Rôle**: Configuration de la navigation bottom tabs  
-**Fonctionnalités**:
-- Définit les 4 onglets principaux (Home, Conversations, Agenda, Profile)
-- Icônes et labels personnalisés
-- Couleurs cohérentes avec la charte graphique
+- `POST /api/auth/login/`
+- `POST /api/auth/register/`
+- `POST /api/auth/logout/`
+- `POST /api/auth/token/refresh/`
+- `GET /api/auth/profile/`
 
 ---
 
-## 🔌 Communication avec le backend
+### 2. **ChatContext** 💬
+
+**Fichier:** `contexts/ChatContext.tsx`
+
+**Responsabilités:**
+
+- Gestion WebSocket (connexion, envoi messages)
+- **Cache en mémoire** des conversations et messages
+- Prefetch intelligent (avatars, conversations, messages)
+- Gestion **SÉPARÉE** des conversations privées vs groupes
+
+**État exposé:**
+
+```typescript
+{
+  websocket: WebSocket | null,
+  setWebsocket: (ws) => void,
+  sendMessage: ((msg: string) => void) | null,
+  currentConversationId: string | null,
+
+  // Cache
+  getCachedMessages: (conversationId) => Message[],
+  getCachedConversationInfo: (conversationId) => any,
+  primeCache: (conversationId, info, messages) => void,
+
+  // Prefetch
+  prefetchConversation: (id, request) => Promise<void>,
+  prefetchAvatars: (urls[]) => Promise<void>,
+  prefetchAllMessages: (request) => Promise<void>,
+  prefetchConversationsOverview: (request) => Promise<void>,
+
+  // Caches séparés privé/groupe
+  getCachedPrivateConversations: () => Conversation[],
+  setCachedPrivateConversations: (list) => void,
+  getCachedGroupConversations: () => Conversation[],
+  setCachedGroupConversations: (list) => void,
+  getCachedConnections: () => User[],
+  getCachedGroups: () => Group[],
+  getCachedGroupInvitations: () => Invitation[]
+}
+```
+
+**Endpoints API:**
+
+- `GET /messaging/conversations/private/`
+- `GET /messaging/conversations/groups/`
+- `GET /messaging/conversations/{uuid}/messages/`
+- WebSocket: `wss://.../ws/chat/`
+
+---
+
+### 3. **UserProfileContext** 👤
+
+**Fichier:** `contexts/UserProfileContext.tsx`
+
+**Responsabilités:**
+
+- Stockage du profil utilisateur courant (avec questions/réponses)
+- Synchronisation avec `AuthContext`
+
+---
+
+### 4. **JarvisContext** 🤖
+
+**Fichier:** `contexts/JarvisContext.tsx`
+
+**Responsabilités:**
+
+- Historique des conversations avec Jarvis (assistant IA personnel)
+- Envoi de messages à Jarvis
+- Stockage local de l'historique
+
+**API endpoint:**
+
+- `POST /jarvis/chat/`
+
+---
+
+### 5. **AgentsContext** 🎭
+
+**Fichier:** `contexts/AgentsContext.tsx`
+
+**Responsabilités:**
+
+- Liste des agents IA disponibles
+- Agents actifs dans la conversation courante
+- Sélection/désélection d'agents
+
+**API endpoints:**
+
+- `GET /agents/`
+- `POST /agents/`
+- `GET /agents/{uuid}/`
+
+---
+
+### 6. **NavigationContext** 🧭
+
+**Fichier:** `contexts/NavigationContext.tsx`
+
+**Responsabilités:**
+
+- Navigation programmatique entre les tabs
+- Référence au `SwipeableContainer` pour scroll/swipe
+
+---
+
+### 7. **TransitionContext** 🎬
+
+**Fichier:** `contexts/TransitionContext.tsx`
+
+**Responsabilités:**
+
+- Gestion des animations de transition entre écrans
+
+---
+
+## 🔌 API Backend Django
+
+### **Base URL**
+
+```typescript
+const API_BASE_URL =
+  typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:3001" // Dev web (proxy)
+    : "https://reseausocial-production.up.railway.app"; // Production
+```
 
 ### **Authentification**
-Tous les appels API nécessitent un token JWT dans le header:
+
+Tous les endpoints nécessitent le header:
+
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer {accessToken}
 ```
 
-Le `AuthContext` gère automatiquement:
-- L'ajout du header Authorization
-- Le rafraîchissement du token si expiré (401)
-- La déconnexion si le refresh échoue
+**Utiliser TOUJOURS `makeAuthenticatedRequest()` du `AuthContext`** → gère automatiquement :
 
-### **WebSocket pour le messaging**
-Connexion WebSocket avec authentification JWT:
-```javascript
+- Ajout du header Authorization
+- Rafraîchissement du token si 401
+- Déconnexion si refresh échoue
+
+---
+
+## 📡 Endpoints API principaux
+
+### **Authentification**
+
+| Méthode   | Endpoint                   | Description                                     |
+| --------- | -------------------------- | ----------------------------------------------- |
+| POST      | `/api/auth/register/`      | Créer un compte                                 |
+| POST      | `/api/auth/login/`         | Se connecter (retourne access + refresh tokens) |
+| POST      | `/api/auth/logout/`        | Se déconnecter                                  |
+| POST      | `/api/auth/token/refresh/` | Rafraîchir le token                             |
+| GET       | `/api/auth/profile/`       | Profil utilisateur connecté                     |
+| PUT/PATCH | `/api/auth/profile/`       | Modifier le profil                              |
+| GET       | `/api/auth/profile/stats/` | Statistiques utilisateur                        |
+
+### **Messaging**
+
+| Méthode | Endpoint                                       | Description                                    |
+| ------- | ---------------------------------------------- | ---------------------------------------------- |
+| GET     | `/messaging/conversations/`                    | Toutes les conversations                       |
+| GET     | `/messaging/conversations/private/`            | Conversations 1-1 uniquement                   |
+| GET     | `/messaging/conversations/groups/`             | Conversations de groupe uniquement             |
+| GET     | `/messaging/conversations/{uuid}/messages/`    | Messages d'une conversation                    |
+| POST    | `/messaging/conversations/send-first-message/` | Créer conversation + envoyer 1er msg           |
+| POST    | `/messaging/conversations/{uuid}/send/`        | Envoyer un message                             |
+| GET     | `/messaging/conversations/{uuid}/media/`       | Médias d'une conversation (images/videos/docs) |
+| POST    | `/messaging/messages/{uuid}/mark_as_seen/`     | Marquer message comme lu                       |
+
+### **Relations (connexions/amis)**
+
+| Méthode | Endpoint                                 | Description                      |
+| ------- | ---------------------------------------- | -------------------------------- |
+| GET     | `/relations/connections/my-connections/` | Mes connexions                   |
+| POST    | `/relations/invitations/send/`           | Envoyer une demande de connexion |
+| GET     | `/relations/invitations/sent/`           | Demandes envoyées                |
+| GET     | `/relations/invitations/received/`       | Demandes reçues                  |
+| POST    | `/relations/invitations/{uuid}/accept/`  | Accepter une demande             |
+| POST    | `/relations/invitations/{uuid}/decline/` | Refuser une demande              |
+| DELETE  | `/relations/connections/{uuid}/remove/`  | Supprimer une connexion          |
+
+### **Groupes**
+
+| Méthode | Endpoint                              | Description         |
+| ------- | ------------------------------------- | ------------------- |
+| GET     | `/groups/my-groups/`                  | Mes groupes         |
+| POST    | `/groups/`                            | Créer un groupe     |
+| GET     | `/groups/{uuid}/`                     | Détails d'un groupe |
+| POST    | `/groups/join-by-code/`               | Rejoindre via code  |
+| POST    | `/groups/{uuid}/add-member/`          | Ajouter un membre   |
+| DELETE  | `/groups/{uuid}/remove-member/`       | Retirer un membre   |
+| POST    | `/groups/{uuid}/invite/`              | Inviter au groupe   |
+| GET     | `/groups/invitations/received/`       | Invitations reçues  |
+| POST    | `/groups/invitations/{uuid}/accept/`  | Accepter invitation |
+| POST    | `/groups/invitations/{uuid}/decline/` | Refuser invitation  |
+
+### **Agents IA**
+
+| Méthode   | Endpoint                                            | Description                             |
+| --------- | --------------------------------------------------- | --------------------------------------- |
+| GET       | `/agents/`                                          | Liste des agents (publics + mes agents) |
+| POST      | `/agents/`                                          | Créer un agent                          |
+| GET       | `/agents/{uuid}/`                                   | Détails d'un agent                      |
+| PUT/PATCH | `/agents/{uuid}/`                                   | Modifier un agent                       |
+| DELETE    | `/agents/{uuid}/`                                   | Désactiver un agent                     |
+| POST      | `/agents/{uuid}/interactions/`                      | Créer règle d'interaction               |
+| POST      | `/conversations/{uuid}/agents/add/`                 | Ajouter agent à conversation            |
+| DELETE    | `/conversations/{uuid}/agents/{agent_uuid}/remove/` | Retirer agent                           |
+
+### **Jarvis (Assistant personnel)**
+
+| Méthode | Endpoint            | Description                      |
+| ------- | ------------------- | -------------------------------- |
+| GET     | `/jarvis/instance/` | Instance Jarvis de l'utilisateur |
+| POST    | `/jarvis/chat/`     | Envoyer un message à Jarvis      |
+| GET     | `/jarvis/history/`  | Historique des conversations     |
+| DELETE  | `/jarvis/history/`  | Effacer l'historique             |
+| GET     | `/jarvis/stats/`    | Statistiques d'utilisation       |
+
+### **Profils utilisateurs**
+
+| Méthode | Endpoint                             | Description                          |
+| ------- | ------------------------------------ | ------------------------------------ |
+| GET     | `/profiles/{uuid}/`                  | Profil public d'un utilisateur       |
+| GET     | `/questions/`                        | Questions disponibles pour le profil |
+| POST    | `/profiles/questions/{uuid}/answer/` | Répondre à une question              |
+
+### **Calendrier**
+
+| Méthode   | Endpoint                     | Description         |
+| --------- | ---------------------------- | ------------------- |
+| GET       | `/calendrier/events/`        | Mes événements      |
+| POST      | `/calendrier/events/`        | Créer un événement  |
+| GET       | `/calendrier/events/{uuid}/` | Détails événement   |
+| PUT/PATCH | `/calendrier/events/{uuid}/` | Modifier événement  |
+| DELETE    | `/calendrier/events/{uuid}/` | Supprimer événement |
+
+---
+
+## 🔌 WebSocket - Messaging temps réel
+
+### **Connexion**
+
+```typescript
 const ws = new WebSocket(
-  'wss://reseausocial-production.up.railway.app/ws/chat/',
-  ['access_token', accessToken]
+  "wss://reseausocial-production.up.railway.app/ws/chat/",
+  ["access_token", accessToken] // Auth via subprotocols
 );
 ```
 
-**Messages envoyés**:
-- `chat_message` - Envoyer un message
-- `typing_start` / `typing_stop` - Statut "en train d'écrire"
-- `mark_as_seen` - Marquer comme lu
+### **Messages envoyés au serveur**
 
-**Messages reçus**:
-- `chat_message` - Nouveau message
-- `typing_status` - Un utilisateur tape
-- `conversation_seen` - Message marqué comme lu
-- `error` - Erreur
+```typescript
+// Envoyer un message
+ws.send(
+  JSON.stringify({
+    type: "chat_message",
+    content: "Hello!",
+    conversation_uuid: "xxx-xxx-xxx",
+  })
+);
+
+// Indicateur "en train d'écrire"
+ws.send(
+  JSON.stringify({
+    type: "typing_start",
+    conversation_uuid: "xxx-xxx-xxx",
+  })
+);
+
+ws.send(
+  JSON.stringify({
+    type: "typing_stop",
+    conversation_uuid: "xxx-xxx-xxx",
+  })
+);
+
+// Marquer comme lu
+ws.send(
+  JSON.stringify({
+    type: "mark_as_seen",
+    conversation_uuid: "xxx-xxx-xxx",
+  })
+);
+```
+
+### **Messages reçus du serveur**
+
+```typescript
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    case "chat_message":
+      // Nouveau message reçu
+      // data.message contient: { id, uuid, sender_username, content, created_at, ... }
+      break;
+
+    case "typing_status":
+      // Un utilisateur tape
+      // data.username, data.is_typing
+      break;
+
+    case "conversation_seen":
+      // Message marqué comme lu
+      // data.conversation_uuid
+      break;
+
+    case "error":
+      // Erreur
+      // data.message
+      break;
+  }
+};
+```
+
+### **Gestion des erreurs**
+
+```typescript
+ws.onerror = (error) => {
+  console.error("WebSocket error:", error);
+};
+
+ws.onclose = (event) => {
+  if (event.code === 4001) {
+    // Authentification échouée
+    // Rediriger vers login
+  }
+  console.log("WebSocket closed");
+};
+```
 
 ---
 
-## 🎨 Design et UI
+## 🎨 Composants principaux
 
-### **Palette de couleurs**
-Définie dans `constants/colors.ts`:
-- `ECHO_COLOR`: `#da913eff` (Orange principal)
-- `BACKGROUND_GRAY`: `#f5f5f5` (Fond clair)
+### **DefaultAvatar**
+
+**Fichier:** `components/DefaultAvatar.tsx`
+
+Affiche les initiales d'un nom sur fond coloré.
+
+```tsx
+<DefaultAvatar name="John Doe" size={40} imageUrl={user.photo_profil_url} />
+```
+
+### **BottomBarV2**
+
+**Fichier:** `components/BottomBar/BottomBarV2.tsx`
+
+Barre contextuelle intelligente qui s'adapte selon l'écran :
+
+- Mode **Chat** : envoi messages, pièces jointes, vocal, résumé
+- Mode **Jarvis** : interface de discussion avec l'assistant
+- **AgentPanel** : sélection d'agents IA pour la conversation
+
+### **TypingIndicator**
+
+**Fichier:** `components/TypingIndicator.tsx`
+
+Animation "..." pour indiquer qu'un utilisateur tape.
+
+### **SwipeableContainer**
+
+**Fichier:** `components/SwipeableContainer.tsx`
+
+Container avec swipe horizontal pour naviguer entre les 3 onglets principaux (Conversations / Home / Profil).
+
+---
+
+## 🎯 Écrans principaux
+
+### **(tabs)/index.tsx** - 🏠 Home
+
+- Page d'accueil avec résumés IA
+- Navigation vers Jarvis et agents
+- À développer : intégration résumés API
+
+### **(tabs)/conversations.tsx** - 💬 Conversations
+
+- Liste des conversations (privées + groupes)
+- Grid 3 colonnes
+- Indicateur visuel messages non lus (ombre verte)
+- Pull-to-refresh
+- Barre de recherche
+
+### **(tabs)/conversation-direct.tsx** - Messages 1-1
+
+- Affichage messages en temps réel (WebSocket)
+- Messages propres à droite (bulles bleues)
+- Messages reçus à gauche (bulles grises)
+- Indicateurs de lecture (✓ / ✓✓)
+- Support pièces jointes (images, vidéos, audio, documents)
+- Header avec avatar + statut en ligne
+
+### **(tabs)/conversation-group.tsx** - Messages de groupe
+
+- Similaire à conversation-direct
+- Affichage nom expéditeur pour chaque message
+- Support résumé IA de la conversation
+
+### **(tabs)/about.tsx** - 👤 Profil
+
+- Profil utilisateur connecté
+- Navigation vers stats, amis, groupes, settings
+
+### **(screens)/agents.tsx** - 🎭 Marketplace Agents IA
+
+- Liste agents publics + mes agents
+- Création/édition d'agents
+- Configuration instructions (system_prompt, language, formality_level)
+- Ajout agents à conversations
+
+### **(screens)/friends.tsx** - 👥 Connexions
+
+- Onglets : Amis / Invitations
+- Liste connexions actuelles
+- Demandes reçues (accepter/refuser)
+- Suppression connexions
+
+### **(screens)/groups.tsx** - 👨‍👩‍👧‍👦 Groupes
+
+- Liste mes groupes
+- Création de groupes
+- Génération code invitation
+- Gestion membres
+- Invitations reçues
+
+### **(screens)/user-profile.tsx** - 🔍 Profil utilisateur
+
+- Affichage profil public d'un autre utilisateur
+- Questions/réponses
+- Bouton "Envoyer message"
+- Actions contextuelles selon statut relation
+
+### **(screens)/conversation-media.tsx** - 🖼️ Médias
+
+- Grid photos/vidéos d'une conversation
+- Onglets : Photos / Documents
+- Preview + download
+
+---
+
+## 🎨 Design System
+
+### **Couleurs**
+
+**Fichier:** `constants/colors.ts`
+
+```typescript
+export const ECHO_COLOR = "#da913eff"; // Orange principal
+export const BACKGROUND_GRAY = "#f5f5f5"; // Fond clair
+```
 
 ### **Styles globaux**
-Les styles réutilisables sont dans `styles/appStyles.ts`:
-- Containers
+
+**Fichier:** `styles/appStyles.ts`
+
+Styles réutilisables :
+
+- Containers (`container`, `safeContainer`)
 - Cartes de conversation
-- Messages (bulles)
+- Bulles de messages (`messageContainer`, `myMessage`, `otherMessage`)
 - Inputs et boutons
 
 ---
 
-## 🚀 Fonctionnalités actuelles
+## 🔐 Authentification - Flow
+
+1. **Login/Register** → Récupère `access_token` + `refresh_token`
+2. **Stockage sécurisé** → `SecureStore` (async)
+3. **Tous les appels API** → `makeAuthenticatedRequest()`
+   - Ajoute header `Authorization: Bearer {token}`
+   - Si 401 → tente refresh token
+   - Si refresh échoue → déconnexion + redirect login
+4. **Persistence session** → Tokens rechargés au démarrage app
+
+---
+
+## 📦 Cache Strategy
+
+Le `ChatContext` implémente un système de cache intelligent :
+
+### **Cache en mémoire**
+
+- **Messages** : `Map<conversationId, Message[]>`
+- **Info conversations** : `Map<conversationId, ConversationInfo>`
+- **Conversations privées** : `Conversation[]`
+- **Conversations groupes** : `Conversation[]`
+- **Connexions** : `User[]`
+- **Groupes** : `Group[]`
+
+### **Prefetch**
+
+Lors du login, appel automatique à `prefetchConversationsOverview()` qui :
+
+1. Charge toutes les conversations (privées + groupes)
+2. Charge connexions, groupes, invitations
+3. Précharge avatars en background
+4. Stocke dans cache mémoire + `SecureStore`
+
+Avantages :
+
+- **Navigation instantanée** (pas de loading)
+- **Mode offline partiel**
+- **Réduction appels API**
+
+---
+
+## 🛠️ Patterns & Conventions
+
+### **1. Appels API**
+
+**❌ NE JAMAIS faire :**
+
+```typescript
+fetch(`${API_BASE_URL}/endpoint`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
+**✅ TOUJOURS faire :**
+
+```typescript
+const { makeAuthenticatedRequest } = useAuth();
+const response = await makeAuthenticatedRequest(`${API_BASE_URL}/endpoint`);
+```
+
+### **2. WebSocket**
+
+- **Une connexion par conversation**
+- **Toujours** fermer dans cleanup (`useEffect` return)
+- Stocker la connexion dans `ChatContext` avec `setWebsocket()`
+
+### **3. Navigation**
+
+```typescript
+import { router } from "expo-router";
+
+// Naviguer vers un écran
+router.push("/screens/user-profile?userId=123");
+
+// Remplacer l'écran actuel
+router.replace("/tabs/conversations");
+
+// Retour arrière
+router.back();
+```
+
+### **4. Gestion d'état local**
+
+- **État local** → `useState` pour UI simple
+- **État global** → Context pour données partagées
+- **Cache** → `ChatContext` pour conversations/messages
+
+### **5. TypeScript**
+
+- **Toujours typer** les props, states, API responses
+- Interfaces dans le fichier ou dans un dossier `/types`
+- Éviter `any`, préférer `unknown` si type inconnu
+
+### **6. Styles**
+
+```typescript
+// Réutiliser styles globaux
+import { styles } from '@/styles/appStyles';
+
+// Styles locaux avec StyleSheet.create()
+const localStyles = StyleSheet.create({
+  custom: { ... }
+});
+
+// Combiner
+<View style={[styles.container, localStyles.custom]} />
+```
+
+---
+
+## 🚀 Features Status
 
 ### ✅ Implémenté
-- Inscription et connexion utilisateur
-- Persistence de session (tokens stockés)
-- Liste des conversations avec refresh
-- Détail d'une conversation avec historique
-- Envoi et réception de messages en temps réel (WebSocket)
-- Page d'accueil avec résumés IA (mock)
-- Navigation bottom tabs
-- Gestion automatique des tokens expirés
+
+- ✅ Authentification (login/register/logout)
+- ✅ Persistence session (SecureStore)
+- ✅ Liste conversations (privées + groupes séparées)
+- ✅ Messages temps réel (WebSocket)
+- ✅ Envoi/réception messages
+- ✅ Pièces jointes (images/vidéos/audio/docs)
+- ✅ Indicateurs lecture (✓ / ✓✓)
+- ✅ Typing indicator
+- ✅ Cache intelligent (prefetch)
+- ✅ Gestion connexions/amis
+- ✅ Groupes (création/gestion/invitations)
+- ✅ Profils utilisateurs (view/edit)
+- ✅ Questions/réponses profil
+- ✅ Jarvis (assistant IA personnel)
+- ✅ Agents IA (marketplace/création)
+- ✅ Résumés IA conversations
+- ✅ Bottom tabs navigation
+- ✅ Swipe navigation entre tabs
+- ✅ BottomBar contextuelle (chat/jarvis/agents)
 
 ### 🔨 À développer
-- Marketplace d'agents IA
-- Intégration des résumés IA (API)
-- Envoi de fichiers/images
-- Groupes de discussion
-- Profil utilisateur complet
-- Calendrier et événements
-- Questions/réponses de profil
-- Demandes de connexion
-- Notifications push
+
+- 🔨 Calendrier & événements (API prête, UI à faire)
+- 🔨 Notifications push
+- 🔨 Mode sombre
+- 🔨 Paramètres app
+- 🔨 Recherche globale messages
+- 🔨 Réactions sur messages (emojis)
+- 🔨 Édition/suppression messages
+- 🔨 Statuts en ligne utilisateurs
+- 🔨 Appels audio/vidéo
+- 🔨 Stories/publications
 
 ---
 
-## 📡 Endpoints API principaux utilisés
+## 🐛 Debugging Tips
 
-### Authentification
-- `POST /api/auth/register/` - Créer un compte
-- `POST /api/auth/login/` - Se connecter
-- `POST /api/auth/logout/` - Se déconnecter
-- `POST /api/auth/token/refresh/` - Rafraîchir le token
-- `GET /api/auth/profile/` - Profil de l'utilisateur connecté
+### **Vérifier l'authentification**
 
-### Messaging
-- `GET /messaging/conversations/` - Liste des conversations
-- `GET /messaging/conversations/{uuid}/messages/` - Messages d'une conversation
-- WebSocket `wss://.../ws/chat/` - Messages temps réel
+```typescript
+const { user, accessToken, isLoggedIn } = useAuth();
+console.log("User:", user);
+console.log("Token:", accessToken ? "Present" : "Missing");
+console.log("Logged in:", isLoggedIn);
+```
 
-### Groupes (à implémenter)
-- `GET /groups/my-groups/` - Mes groupes
-- `POST /groups/create/` - Créer un groupe
-- `POST /groups/join-by-code/` - Rejoindre via code
+### **WebSocket issues**
 
-### Calendrier (à implémenter)
-- `GET /calendrier/events/` - Mes événements
-- `POST /calendrier/events/` - Créer un événement
+```typescript
+ws.onopen = () => console.log("✅ WS Connected");
+ws.onerror = (e) => console.error("❌ WS Error:", e);
+ws.onclose = (e) => console.log("🔴 WS Closed:", e.code, e.reason);
+```
 
----
+### **Cache inspection**
 
-## 🛠️ Technologies utilisées
+```typescript
+const { getCachedPrivateConversations, getCachedMessages } = useChat();
+console.log("Private convos:", getCachedPrivateConversations());
+console.log("Messages:", getCachedMessages("conversation-uuid"));
+```
 
-- **React Native** - Framework mobile multiplateforme
-- **Expo** - Toolchain pour React Native
-- **TypeScript** - Typage statique
-- **Expo Router** - Navigation file-based
-- **SecureStore** - Stockage sécurisé des tokens
-- **WebSocket** - Communication temps réel
-- **Fetch API** - Appels HTTP
+### **API calls**
 
----
-
-## 📝 Prochaines étapes prioritaires
-
-1. **Marketplace d'agents IA**
-   - Écran de liste des agents disponibles
-   - Ajout d'agents à un groupe
-   - Configuration des agents
-
-2. **Résumés IA**
-   - Intégration avec l'endpoint de résumés
-   - Affichage dynamique sur la page d'accueil
-
-3. **Groupes**
-   - Création de groupes
-   - Ajout de membres
-   - Conversations de groupe
-
-4. **Fichiers et médias**
-   - Upload d'images
-   - Envoi de fichiers
-   - Preview des médias
-
-5. **Profil utilisateur**
-   - Édition du profil
-   - Photo de profil
-   - Questions/réponses
+```typescript
+const response = await makeAuthenticatedRequest(url);
+console.log("Status:", response.status);
+console.log("Data:", await response.json());
+```
 
 ---
 
-## 🐛 Points d'attention
+## 📖 Ressources
 
-### Gestion des tokens
-- Les tokens sont automatiquement rafraîchis
-- Si le refresh échoue, l'utilisateur est déconnecté
-- Toujours utiliser `makeAuthenticatedRequest()` du AuthContext
+### **Documentation externe**
 
-### WebSocket
-- Une connexion par conversation active
-- Penser à fermer la connexion dans le cleanup (useEffect)
-- Gérer les reconnexions en cas de perte de connexion
+- [Expo Docs](https://docs.expo.dev/)
+- [Expo Router](https://docs.expo.dev/router/introduction/)
+- [React Native](https://reactnative.dev/)
+- [Django Channels](https://channels.readthedocs.io/)
 
-### Performance
-- Éviter de recharger les conversations à chaque render
-- Utiliser `useMemo` / `useCallback` pour les calculs coûteux
-- Pagination à implémenter pour les longues listes
+### **Documentation interne**
+
+- **WebSocket Protocol** : Documentation complète du protocole WebSocket (voir project knowledge)
+- **API Agents** : Documentation API agents IA (voir project knowledge)
+- **API Jarvis** : Documentation API Jarvis (voir project knowledge)
 
 ---
 
-## 📞 Contact & Support
+## 🧭 Quick Reference - Où trouver quoi ?
 
-Pour toute question sur l'architecture ou le fonctionnement:
-- Documentation API complète dans les fichiers du projet
-- Documentation WebSocket pour le messaging temps réel
-- Vision produit dans "Objectif projet"
+| Besoin              | Fichier(s)                                                      |
+| ------------------- | --------------------------------------------------------------- |
+| Authentification    | `contexts/AuthContext.tsx`                                      |
+| Appels API          | Utiliser `makeAuthenticatedRequest()` de `AuthContext`          |
+| WebSocket setup     | `contexts/ChatContext.tsx` + `conversation-direct.tsx`          |
+| Cache conversations | `contexts/ChatContext.tsx`                                      |
+| Liste conversations | `(tabs)/conversations.tsx`                                      |
+| Messages 1-1        | `(tabs)/conversation-direct.tsx`                                |
+| Messages groupe     | `(tabs)/conversation-group.tsx`                                 |
+| Profil utilisateur  | `(screens)/user-profile.tsx`, `contexts/UserProfileContext.tsx` |
+| Agents IA           | `(screens)/agents.tsx`, `contexts/AgentsContext.tsx`            |
+| Jarvis              | `contexts/JarvisContext.tsx`, composants `JarvisInteraction/`   |
+| Connexions/amis     | `(screens)/friends.tsx`                                         |
+| Groupes             | `(screens)/groups.tsx`                                          |
+| Navigation tabs     | `(tabs)/_layout.tsx`                                            |
+| BottomBar           | `components/BottomBar/BottomBarV2.tsx`                          |
+| Styles globaux      | `styles/appStyles.ts`                                           |
+| Couleurs            | `constants/colors.ts`                                           |
+| Types               | Interfaces définies dans chaque fichier                         |
+
+---
+
+## 💡 Workflow de développement
+
+### **Ajout d'une nouvelle feature**
+
+1. **Identifier les contextes nécessaires**
+
+   - Authentification ? → `AuthContext`
+   - Messaging ? → `ChatContext`
+   - Profil ? → `UserProfileContext`
+
+2. **Créer l'écran**
+
+   - Dans `(screens)/` pour écran secondaire
+   - Dans `(tabs)/` si nouvel onglet principal
+
+3. **Intégrer les hooks**
+
+   ```typescript
+   const { makeAuthenticatedRequest } = useAuth();
+   const { getCachedMessages, prefetchConversation } = useChat();
+   ```
+
+4. **Typer les données**
+
+   - Créer interfaces TypeScript
+   - Typer les states et props
+
+5. **Gérer les erreurs**
+
+   - Try/catch sur appels API
+   - Feedback utilisateur (Alert, Toast, etc.)
+
+6. **Optimiser**
+   - Utiliser cache si disponible
+   - Prefetch en background
+   - Loading states
+
+### **Debugging d'un bug**
+
+1. **Identifier la couche**
+
+   - UI ? → Composant
+   - État ? → Context
+   - API ? → Network tab + logs backend
+
+2. **Vérifier l'authentification**
+
+   - Token présent ?
+   - Token expiré ?
+   - Permissions ?
+
+3. **Logs ciblés**
+
+   ```typescript
+   console.log("🔍 Debug:", { variable1, variable2 });
+   ```
+
+4. **Tester en isolation**
+   - Désactiver cache
+   - Tester appel API direct
+   - Vérifier réponse backend
+
+---
+
+## 🎓 Best Practices
+
+### **Performance**
+
+- ✅ Utiliser `useMemo` / `useCallback` pour calculs coûteux
+- ✅ FlatList avec `keyExtractor` et `getItemLayout` pour grandes listes
+- ✅ Prefetch en background
+- ✅ Optimistic updates (UI react avant confirmation serveur)
+- ❌ Éviter renders inutiles
+
+### **Sécurité**
+
+- ✅ Tokens dans SecureStore uniquement
+- ✅ Valider inputs côté client
+- ✅ HTTPS obligatoire en production
+- ❌ Jamais logger tokens/passwords
+
+### **Code Quality**
+
+- ✅ TypeScript strict
+- ✅ Composants réutilisables
+- ✅ Noms explicites
+- ✅ Commentaires pour logique complexe
+- ❌ Éviter duplication de code
+
+### **UX**
+
+- ✅ Loading states clairs
+- ✅ Messages d'erreur explicites
+- ✅ Feedback immédiat (animations, états)
+- ✅ Pull-to-refresh
+- ❌ Jamais laisser l'utilisateur dans le vide
+
+---
+
+## 🆘 Common Issues
+
+### **"Token expired" / 401 errors**
+
+→ `makeAuthenticatedRequest()` gère automatiquement. Si problème persiste : vérifier refresh token validity.
+
+### **WebSocket disconnects**
+
+→ Implémenter reconnexion automatique avec backoff exponentiel.
+
+### **Cache stale**
+
+→ Utiliser pull-to-refresh ou invalider cache manuellement après mutations.
+
+### **Images not loading**
+
+→ Vérifier URLs complètes (base URL + path). Utiliser `expo-image` pour performance.
+
+### **Navigation issues**
+
+→ Vérifier structure dossiers `(tabs)` et `(screens)`. Utiliser `router.push()` avec chemins corrects.
+
+---
+
+## 📝 Notes importantes
+
+- **Tous les appels API** doivent passer par `makeAuthenticatedRequest()`
+- **Une seule WebSocket** par conversation active (gérer cleanup)
+- **Cache** est prioritaire pour perf, mais peut être stale → refresh périodique
+- **Prefetch** est lancé au login, pas besoin de le rappeler
+- **TypeScript** strict → typer TOUT
+- **Conventions de nommage** : camelCase variables, PascalCase composants
+- **Fichiers** : kebab-case pour screens/components
+
+---
+
+**README généré le 9 novembre 2025**  
+**Version 2.0 - Structure complète**
