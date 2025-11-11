@@ -109,7 +109,7 @@ export default function ConversationManagement() {
   
   // Pour les conversations privées
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [userStats, setUserStats] = useState<any>(null);
+
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   // Pour afficher le profil d'un membre du groupe
@@ -186,8 +186,6 @@ export default function ConversationManagement() {
   const loadUserProfile = async (uuid: string) => {
     setLoadingProfile(true);
     try {
-      
-      
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
       
       if (!profile) {
@@ -197,11 +195,7 @@ export default function ConversationManagement() {
       }
       
       setUserProfile(profile);
-      
-      const stats = await getUserStats(uuid, makeAuthenticatedRequest);
-      if (stats) {
-        setUserStats(stats);
-      }
+      // ⚠️ Ne pas charger les stats (endpoint /api/users/{uuid}/stats/ n'existe pas)
       
     } catch (error) {
       console.error('❌ Erreur chargement profil:', error);
@@ -211,38 +205,25 @@ export default function ConversationManagement() {
   };
 
   const loadMemberProfile = async (uuid: string) => {
-    
     setLoadingProfile(true);
     
     try {
-      
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
- 
-      
+
       if (!profile) {
         console.log('❌ Pas de profil reçu');
         setLoadingProfile(false);
         return;
       }
-      
 
       setSelectedMemberProfile(profile);
-      
-
-      const stats = await getUserStats(uuid, makeAuthenticatedRequest);
-
-      
-      if (stats) {
-        setSelectedMemberStats(stats);
-      }
-      
+      // ⚠️ Ne pas charger les stats (endpoint n'existe pas)
 
       setShowMemberProfile(true);
       
     } catch (error) {
       console.error('❌ Erreur chargement profil membre:', error);
     } finally {
-
       setLoadingProfile(false);
     }
   };
@@ -591,25 +572,7 @@ const handleBlockUser = async () => {
                     <Text style={styles.bioText}>{userProfile.bio}</Text>
                   )}
                   
-                  {userStats && (
-                    <View style={styles.statsContainer}>
-                      <View style={styles.statItem}>
-                        <Ionicons name="people-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_connexions || 0}</Text>
-                        <Text style={styles.statLabel}>Amis</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Ionicons name="calendar-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_evenements || 0}</Text>
-                        <Text style={styles.statLabel}>Événements</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Ionicons name="chatbubbles-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_reponses || 0}</Text>
-                        <Text style={styles.statLabel}>Réponses</Text>
-                      </View>
-                    </View>
-                  )}
+
                 </>
               )}
 
