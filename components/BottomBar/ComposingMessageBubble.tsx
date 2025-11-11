@@ -1,9 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
     TextInput,
+    TouchableOpacity,
     View,
 } from 'react-native';
 
@@ -34,6 +36,13 @@ const ComposingMessageBubble: React.FC<ComposingMessageBubbleProps> = ({
     >
       <View style={styles.bubbleWrapper}>
         <View style={styles.bubble}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={onCancel}
+            activeOpacity={0.7}
+            >
+            <Ionicons name="close-circle" size={20} color="#999" />
+          </TouchableOpacity>
           <TextInput
             ref={inputRef}
             style={styles.textInput}
@@ -62,6 +71,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
+  cancelButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+    },
   bubble: {
     backgroundColor: 'rgba(255, 237, 213, 1)', // Light orange/peach color for differentiation
     borderRadius: 18,
