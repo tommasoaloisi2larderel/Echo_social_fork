@@ -52,7 +52,9 @@ export default function TabsLayout() {
   const isInConversationDetail = 
     pathname.includes('conversation-direct') || 
     pathname.includes('conversation-group') || 
-    pathname.includes('conversation-detail');
+    pathname.includes('conversation-detail')||
+    pathname.includes('conversation-management')||
+    pathname.includes('conversation-media');
 
   // Summary fetch function
   const fetchSummary = async () => {
