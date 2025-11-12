@@ -1,30 +1,27 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/contexts/UserProfileContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { API_BASE_URL } from "../config/api";
 import { storage } from '../utils/storage';
-import { useUserProfile } from '@/contexts/UserProfileContext'; 
-
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 export default function EditProfileScreen() {
   const { user, makeAuthenticatedRequest,updateUser, reloadUser   } = useAuth();

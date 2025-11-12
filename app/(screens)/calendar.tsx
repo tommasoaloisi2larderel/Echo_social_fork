@@ -1,28 +1,24 @@
+import { API_BASE_URL } from "@/config/api";
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Easing,
-    Modal,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Utilise le proxy local pour éviter CORS en développement web
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 interface CalendarEvent {
   id: number;

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
@@ -278,11 +279,6 @@ export default function ConversationsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
-  
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
 
   // Forcer la route base sur /conversations pour éviter le “rebascule” vers Home
   useEffect(() => {
