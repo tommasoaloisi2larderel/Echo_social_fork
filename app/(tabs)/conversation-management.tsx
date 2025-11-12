@@ -88,10 +88,18 @@ interface ConversationDetails {
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
   const { makeAuthenticatedRequest, user } = useAuth();
-  const { prefetchAvatars, getCachedConversations, getCachedGroups } = useChat();
+  
   const { getUserProfile, getUserStats } = useUserProfile();
   const insets = useSafeAreaInsets();
-  
+  const { 
+    prefetchAvatars, 
+    getCachedPrivateConversations,  // 🆕
+    getCachedGroupConversations,    // 🆕
+    getCachedGroups, 
+    removeFromPrivateConversationsCache,   // 🆕
+    removeFromGroupConversationsCache      // 🆕
+  } = useChat();
+
   const [loading, setLoading] = useState(true);
   const [conversation, setConversation] = useState<ConversationDetails | null>(null);
   const [groupDetails, setGroupDetails] = useState<GroupDetails | null>(null);
@@ -101,7 +109,7 @@ export default function ConversationManagement() {
   
   // Pour les conversations privées
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [userStats, setUserStats] = useState<any>(null);
+
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   // Pour afficher le profil d'un membre du groupe
@@ -116,10 +124,11 @@ export default function ConversationManagement() {
   const loadConversationDetails = async () => {
     try {
       
-      
-      const cachedConversations = getCachedConversations();
-      const cachedConv = cachedConversations?.find((c: any) => c.uuid === conversationId);
-      
+      // Chercher dans les deux types de conversations
+      const privateConvs = getCachedPrivateConversations() || [];
+      const groupConvs = getCachedGroupConversations() || [];
+      const allConversations = [...privateConvs, ...groupConvs];
+      const cachedConv = allConversations.find((c: any) => c.uuid === conversationId);
       if (cachedConv) {
         
         setConversation(cachedConv);
@@ -177,8 +186,6 @@ export default function ConversationManagement() {
   const loadUserProfile = async (uuid: string) => {
     setLoadingProfile(true);
     try {
-      
-      
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
       
       if (!profile) {
@@ -188,11 +195,7 @@ export default function ConversationManagement() {
       }
       
       setUserProfile(profile);
-      
-      const stats = await getUserStats(uuid, makeAuthenticatedRequest);
-      if (stats) {
-        setUserStats(stats);
-      }
+      // ⚠️ Ne pas charger les stats (endpoint /api/users/{uuid}/stats/ n'existe pas)
       
     } catch (error) {
       console.error('❌ Erreur chargement profil:', error);
@@ -202,38 +205,25 @@ export default function ConversationManagement() {
   };
 
   const loadMemberProfile = async (uuid: string) => {
-    
     setLoadingProfile(true);
     
     try {
-      
       const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
- 
-      
+
       if (!profile) {
         console.log('❌ Pas de profil reçu');
         setLoadingProfile(false);
         return;
       }
-      
 
       setSelectedMemberProfile(profile);
-      
-
-      const stats = await getUserStats(uuid, makeAuthenticatedRequest);
-
-      
-      if (stats) {
-        setSelectedMemberStats(stats);
-      }
-      
+      // ⚠️ Ne pas charger les stats (endpoint n'existe pas)
 
       setShowMemberProfile(true);
       
     } catch (error) {
       console.error('❌ Erreur chargement profil membre:', error);
     } finally {
-
       setLoadingProfile(false);
     }
   };
@@ -272,54 +262,65 @@ export default function ConversationManagement() {
     }
   };
 
-  const handleBlockUser = () => {
-    Alert.alert(
-      'Bloquer cet utilisateur',
-      'Voulez-vous vraiment bloquer cet utilisateur ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Bloquer', style: 'destructive', onPress: () => console.log('Bloquer utilisateur') }
-      ]
-    );
-  };
-
-  const handleReportUser = () => {
-    Alert.alert(
-      'Signaler cet utilisateur',
-      'Voulez-vous signaler cet utilisateur pour comportement inapproprié ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Signaler', style: 'destructive', onPress: () => console.log('Signaler utilisateur') }
-      ]
-    );
-  };
-
-  const handleDeleteConversation = () => {
-    Alert.alert(
-      'Supprimer la conversation',
-      'Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/messaging/conversations/${conversationId}/`,
-                { method: 'DELETE' }
-              );
-              if (response.ok) {
-                router.back();
+const handleBlockUser = async () => {
+  if (!otherParticipant?.uuid) {
+    Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
+    return;
+  }
+  
+  if (otherParticipant.uuid === user?.uuid) {
+    Alert.alert('Erreur', 'Vous ne pouvez pas vous bloquer vous-même');
+    return;
+  }
+  
+  Alert.alert(
+    'Bloquer cet utilisateur',
+    'Voulez-vous vraiment bloquer cet utilisateur ? Il ne pourra plus vous envoyer de messages.',
+    [
+      { text: 'Annuler', style: 'cancel' },
+      { 
+        text: 'Bloquer', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            const response = await makeAuthenticatedRequest(
+              `${API_BASE_URL}/messaging/block-user/`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  user_uuid: otherParticipant.uuid,
+                  action: 'block'
+                })
               }
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de supprimer');
+            );
+            
+            // Ne pas essayer de parser si ce n'est pas du JSON
+            if (response.ok) {
+              // L'action a réussi, pas besoin de parser
+              Alert.alert('Succès', 'Utilisateur bloqué avec succès');
+              router.back();
+            } else {
+              // Essayer de lire l'erreur
+              const contentType = response.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json();
+                Alert.alert('Erreur', errorData.message || errorData.error || 'Impossible de bloquer');
+              } else {
+                Alert.alert('Erreur', 'Une erreur est survenue');
+              }
             }
+          } catch (error) {
+            console.error('❌ Erreur blocage:', error);
+            // Si on arrive ici mais que l'action a marché, c'est juste un problème de parsing
+            Alert.alert('Erreur', 'Une erreur est survenue lors du blocage');
           }
         }
-      ]
-    );
-  };
+      }
+    ]
+  );
+};
+
 
   const handleLeaveGroup = () => {
     if (!groupDetails) return;
@@ -350,24 +351,48 @@ export default function ConversationManagement() {
     );
   };
 
-  const handleArchiveConversation = async () => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
+  const handleArchive = async () => {
+    Alert.alert(
+      'Archiver',
+      'Voulez-vous archiver cette conversation ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'archive' })
-        }
-      );
-      
-      if (response.ok) {
-        Alert.alert('Succès', 'Conversation archivée');
-        router.back();
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible d\'archiver');
-    }
+          text: 'Archiver',
+          onPress: async () => {
+            try {
+              const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'archive' }),
+                }
+                
+              );
+
+              if (response.ok) {
+                // Essayer de retirer des deux caches
+                removeFromPrivateConversationsCache(conversationId as string);
+                removeFromGroupConversationsCache(conversationId as string);
+
+                Alert.alert('Succès', 'Conversation archivée', [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/(tabs)/conversations'),
+                  },
+                ]);
+              } else {
+                Alert.alert('Erreur', 'Impossible d\'archiver cette conversation');
+              }
+            } catch (error) {
+              console.error('Erreur:', error);
+              Alert.alert('Erreur', 'Une erreur est survenue');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -547,25 +572,7 @@ export default function ConversationManagement() {
                     <Text style={styles.bioText}>{userProfile.bio}</Text>
                   )}
                   
-                  {userStats && (
-                    <View style={styles.statsContainer}>
-                      <View style={styles.statItem}>
-                        <Ionicons name="people-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_connexions || 0}</Text>
-                        <Text style={styles.statLabel}>Amis</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Ionicons name="calendar-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_evenements || 0}</Text>
-                        <Text style={styles.statLabel}>Événements</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Ionicons name="chatbubbles-outline" size={18} color="rgba(10, 145, 104, 1)" />
-                        <Text style={styles.statNumber}>{userStats.total_reponses || 0}</Text>
-                        <Text style={styles.statLabel}>Réponses</Text>
-                      </View>
-                    </View>
-                  )}
+
                 </>
               )}
 
@@ -761,7 +768,7 @@ export default function ConversationManagement() {
             <View style={styles.actionsSection}>
               <Text style={styles.sectionTitle}>Actions</Text>
               
-              <TouchableOpacity style={styles.actionButton} onPress={handleArchiveConversation}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleArchive}>
                 <Ionicons name="archive-outline" size={22} color="rgba(10, 145, 104, 1)" />
                 <Text style={styles.actionButtonText}>Archiver la conversation</Text>
               </TouchableOpacity>
@@ -771,21 +778,10 @@ export default function ConversationManagement() {
                 <Text style={[styles.actionButtonText, styles.dangerText]}>Bloquer l'utilisateur</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleReportUser}>
-                <Ionicons name="flag-outline" size={22} color="#dc2626" />
-                <Text style={[styles.actionButtonText, styles.dangerText]}>Signaler l'utilisateur</Text>
-              </TouchableOpacity>
             </View>
           )}
 
-          <View style={styles.actionsSection}>
-            <TouchableOpacity style={[styles.actionButton, styles.dangerButton]} onPress={handleDeleteConversation}>
-              <Ionicons name="trash-outline" size={22} color="#dc2626" />
-              <Text style={[styles.actionButtonText, styles.dangerText]}>
-                {isGroup ? 'Supprimer le groupe' : 'Supprimer la conversation'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+
 
           <View style={styles.infoSection}>
             <Ionicons name="lock-closed" size={16} color="#888" />

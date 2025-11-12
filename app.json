@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.echo.social",
+      "buildNumber": "2",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.echo.social",
@@ -51,8 +55,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8f022843-e7b5-4a0b-abc2-7bbb67dd828b"
+        "projectId": "bc7456ff-8f2f-4af7-85bc-02172a12b44d"
       }
-    }
+    },
+    "owner": "tommaki101"
   }
 }

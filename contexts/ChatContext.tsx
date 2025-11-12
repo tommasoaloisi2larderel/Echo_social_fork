@@ -32,9 +32,11 @@ interface ChatContextType {
   prefetchAllMessages: (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
-  // Caches liste (pour retour instantané à Conversations)
-  getCachedConversations: () => any[] | undefined;
-  setCachedConversations: (list: any[]) => void;
+  // 🆕 Caches SÉPARÉS : privé vs groupe
+  getCachedPrivateConversations: () => any[] | undefined;
+  setCachedPrivateConversations: (list: any[]) => void;
+  getCachedGroupConversations: () => any[] | undefined;
+  setCachedGroupConversations: (list: any[]) => void;
   getCachedConnections: () => any[] | undefined;
   setCachedConnections: (list: any[]) => void;
   getCachedGroups: () => any[] | undefined;
@@ -44,6 +46,8 @@ interface ChatContextType {
   prefetchConversationsOverview: (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
+  removeFromPrivateConversationsCache: (conversationUuid: string) => void;
+  removeFromGroupConversationsCache: (conversationUuid: string) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -52,13 +56,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  
   // Caches en mémoire pour accélérer l'ouverture des écrans
   const messagesCacheRef = useRef<Map<string, CachedMessage[]>>(new Map());
   const infoCacheRef = useRef<Map<string, any>>(new Map());
   const inFlightPrefetchRef = useRef<Set<string>>(new Set());
   const messagesIndexRef = useRef<Set<string>>(new Set());
-  // Caches d'overview
-  const conversationsListRef = useRef<any[] | undefined>(undefined);
+  
+  // 🆕 Caches d'overview SÉPARÉS
+  const privateConversationsListRef = useRef<any[] | undefined>(undefined);
+  const groupConversationsListRef = useRef<any[] | undefined>(undefined);
   const connectionsListRef = useRef<any[] | undefined>(undefined);
   const groupsListRef = useRef<any[] | undefined>(undefined);
   const invitationsListRef = useRef<any[] | undefined>(undefined);
@@ -90,8 +97,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     if (!conversationId) return;
-    if (messagesCacheRef.current.has(conversationId)) return; // déjà en cache
-    if (inFlightPrefetchRef.current.has(conversationId)) return; // déjà en cours
+    if (messagesCacheRef.current.has(conversationId)) return;
+    if (inFlightPrefetchRef.current.has(conversationId)) return;
     inFlightPrefetchRef.current.add(conversationId);
     try {
       const [infoResp, msgsResp] = await Promise.all([
@@ -127,7 +134,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         storage.setItemAsync(`cache_messages_${conversationId}`, JSON.stringify(messages));
       } catch {}
     } catch (e) {
-      // silencieux pour ne pas bloquer l'UI
+      // silencieux
     } finally {
       inFlightPrefetchRef.current.delete(conversationId);
     }
@@ -141,32 +148,79 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const getCachedConversations = () => conversationsListRef.current;
-  const setCachedConversations = (list: any[]) => {
-    conversationsListRef.current = Array.isArray(list) ? list : [];
-    try { storage.setItemAsync('cache_conversations', JSON.stringify(conversationsListRef.current)); } catch {}
+  // 🆕 Getters/Setters pour conversations PRIVÉES
+  const getCachedPrivateConversations = () => privateConversationsListRef.current;
+  const setCachedPrivateConversations = (list: any[]) => {
+    privateConversationsListRef.current = Array.isArray(list) ? list : [];
+    try { 
+      storage.setItemAsync('cache_private_conversations', JSON.stringify(privateConversationsListRef.current)); 
+    } catch {}
   };
+
+  const removeFromPrivateConversationsCache = (conversationUuid: string) => {
+    if (!privateConversationsListRef.current) return;
+    privateConversationsListRef.current = privateConversationsListRef.current.filter(
+      (conv: any) => conv.uuid !== conversationUuid
+    );
+    try {
+      storage.setItemAsync('cache_private_conversations', JSON.stringify(privateConversationsListRef.current));
+    } catch (error) {
+      console.error('Erreur mise à jour cache privé:', error);
+    }
+    console.log(`🗑️ Conversation privée ${conversationUuid} retirée du cache`);
+  };
+
+  // 🆕 Getters/Setters pour conversations de GROUPE
+  const getCachedGroupConversations = () => groupConversationsListRef.current;
+  const setCachedGroupConversations = (list: any[]) => {
+    groupConversationsListRef.current = Array.isArray(list) ? list : [];
+    try { 
+      storage.setItemAsync('cache_group_conversations', JSON.stringify(groupConversationsListRef.current)); 
+    } catch {}
+  };
+
+  const removeFromGroupConversationsCache = (conversationUuid: string) => {
+    if (!groupConversationsListRef.current) return;
+    groupConversationsListRef.current = groupConversationsListRef.current.filter(
+      (conv: any) => conv.uuid !== conversationUuid
+    );
+    try {
+      storage.setItemAsync('cache_group_conversations', JSON.stringify(groupConversationsListRef.current));
+    } catch (error) {
+      console.error('Erreur mise à jour cache groupe:', error);
+    }
+    console.log(`🗑️ Conversation groupe ${conversationUuid} retirée du cache`);
+  };
+
+  // Connections
   const getCachedConnections = () => connectionsListRef.current;
   const setCachedConnections = (list: any[]) => {
     connectionsListRef.current = Array.isArray(list) ? list : [];
     try { storage.setItemAsync('cache_connections', JSON.stringify(connectionsListRef.current)); } catch {}
   };
+
+  // Groups
   const getCachedGroups = () => groupsListRef.current;
   const setCachedGroups = (list: any[]) => {
     groupsListRef.current = Array.isArray(list) ? list : [];
     try { storage.setItemAsync('cache_groups', JSON.stringify(groupsListRef.current)); } catch {}
   };
+
+  // Invitations
   const getCachedGroupInvitations = () => invitationsListRef.current;
   const setCachedGroupInvitations = (list: any[]) => {
     invitationsListRef.current = Array.isArray(list) ? list : [];
     try { storage.setItemAsync('cache_group_invitations', JSON.stringify(invitationsListRef.current)); } catch {}
   };
 
+  // 🆕 Fonction de prefetch modifiée pour SÉPARER privé et groupe
   const prefetchConversationsOverview = async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     try {
-      // Conversations privées + conversations de groupe + connexions + groupes (+ détails) + invitations
+      console.log('🔄 Début prefetch conversations overview...');
+      
+      // Appels aux endpoints SÉPARÉS
       const [privateConvResp, groupConvResp, connResp, groupsResp, invResp] = await Promise.all([
         request(`${API_BASE_URL}/messaging/conversations/private/`),
         request(`${API_BASE_URL}/messaging/conversations/groups/`),
@@ -175,37 +229,43 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         request(`${API_BASE_URL}/groups/invitations/received/`),
       ]);
 
-      // Combiner conversations privées et de groupe
-      const allConversations: any[] = [];
-      
+      // 🆕 Traiter les conversations PRIVÉES
       if (privateConvResp.ok) {
         const privateData = await privateConvResp.json();
         const privateList = Array.isArray(privateData) ? privateData : (privateData.results || []);
-        allConversations.push(...privateList);
+        console.log('✅ Conversations privées chargées:', privateList.length);
+        setCachedPrivateConversations(privateList);
+        
+        // Prefetch avatars des conversations privées
+        const privateAvatars = privateList
+          .map((c: any) => c.other_participant?.photo_profil_url)
+          .filter(Boolean);
+        await prefetchAvatars(privateAvatars);
       }
       
+      // 🆕 Traiter les conversations de GROUPE
       if (groupConvResp.ok) {
         const groupData = await groupConvResp.json();
         const groupList = Array.isArray(groupData) ? groupData : (groupData.results || []);
-        allConversations.push(...groupList);
-      }
-      
-      if (allConversations.length > 0) {
-        setCachedConversations(allConversations);
-        // Préfetch avatars visibles
-        const avatarUrls: string[] = [];
-        allConversations.forEach((c: any) => {
-          const url = c.other_participant?.photo_profil_url || c.group_info?.avatar;
-          if (url) avatarUrls.push(url);
-        });
-        await prefetchAvatars(avatarUrls);
+        console.log('✅ Conversations de groupe chargées:', groupList.length);
+        setCachedGroupConversations(groupList);
+        
+        // Prefetch avatars des groupes
+        const groupAvatars = groupList
+          .map((c: any) => c.group_info?.avatar)
+          .filter(Boolean);
+        await prefetchAvatars(groupAvatars);
       }
 
+      // Connexions
       if (connResp.ok) {
         const connData = await connResp.json();
-        setCachedConnections(connData?.connexions || []);
+        const connections = connData?.connexions || [];
+        console.log('✅ Connexions chargées:', connections.length);
+        setCachedConnections(connections);
       }
 
+      // Groupes avec détails
       if (groupsResp.ok) {
         const groups = await groupsResp.json();
         const groupsWithDetails: any[] = [];
@@ -222,42 +282,51 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             groupsWithDetails.push(g);
           }
         }
+        console.log('✅ Groupes chargés:', groupsWithDetails.length);
         setCachedGroups(groupsWithDetails);
+        
         try {
           const groupAvatarUrls = groupsWithDetails.map((gg: any) => gg.avatar).filter(Boolean);
           await prefetchAvatars(groupAvatarUrls);
         } catch {}
       }
 
+      // Invitations
       if (invResp.ok) {
-        setCachedGroupInvitations(await invResp.json());
+        const invitations = await invResp.json();
+        console.log('✅ Invitations chargées');
+        setCachedGroupInvitations(invitations);
       }
-    } catch {}
+      
+      console.log('✅ Prefetch conversations overview terminé');
+    } catch (error) {
+      console.error('❌ Erreur prefetch conversations overview:', error);
+    }
   };
 
   const prefetchAllMessages = async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     try {
-      // S'assurer que la liste des conversations existe
-      if (!conversationsListRef.current || conversationsListRef.current.length === 0) {
+      // S'assurer que les listes existent
+      if (!privateConversationsListRef.current && !groupConversationsListRef.current) {
         await prefetchConversationsOverview(request);
       }
-      const convs = conversationsListRef.current || [];
       
-      // Précharger les 50 derniers messages pour chaque conversation
+      const privateConvs = privateConversationsListRef.current || [];
+      const groupConvs = groupConversationsListRef.current || [];
+      const allConvs = [...privateConvs, ...groupConvs];
+      
       const concurrency = 4;
       let i = 0;
       const worker = async () => {
-        while (i < convs.length) {
+        while (i < allConvs.length) {
           const idx = i++;
-          const c = convs[idx];
+          const c = allConvs[idx];
           const convId = c?.uuid;
           if (!convId) continue;
-          // Éviter de refetch si déjà en cache
           if (messagesCacheRef.current.has(convId)) continue;
           
-          // Précharger avec limite de 50 messages
           try {
             const [infoResp, msgsResp] = await Promise.all([
               request(`${API_BASE_URL}/messaging/conversations/${convId}/`),
@@ -290,29 +359,39 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               } catch {}
             }
           } catch (e) {
-            // Silencieux pour ne pas bloquer l'UI
+            // Silencieux
           }
         }
       };
-      await Promise.all(Array.from({ length: Math.min(concurrency, convs.length) }).map(() => worker()));
+      await Promise.all(Array.from({ length: Math.min(concurrency, allConvs.length) }).map(() => worker()));
     } catch {}
   };
 
-  // Hydrate les caches depuis le stockage au démarrage du provider
+  // 🆕 Hydrate les caches depuis le stockage au démarrage du provider
   useEffect(() => {
     (async () => {
       try {
-        const [c, co, g, inv] = await Promise.all([
-          storage.getItemAsync('cache_conversations'),
+        const [priv, grp, co, g, inv] = await Promise.all([
+          storage.getItemAsync('cache_private_conversations'),
+          storage.getItemAsync('cache_group_conversations'),
           storage.getItemAsync('cache_connections'),
           storage.getItemAsync('cache_groups'),
           storage.getItemAsync('cache_group_invitations'),
         ]);
-        if (c) conversationsListRef.current = JSON.parse(c);
+        if (priv) privateConversationsListRef.current = JSON.parse(priv);
+        if (grp) groupConversationsListRef.current = JSON.parse(grp);
         if (co) connectionsListRef.current = JSON.parse(co);
         if (g) groupsListRef.current = JSON.parse(g);
         if (inv) invitationsListRef.current = JSON.parse(inv);
-      } catch {}
+        
+        console.log('📦 Cache chargé depuis storage:', {
+          private: privateConversationsListRef.current?.length || 0,
+          group: groupConversationsListRef.current?.length || 0,
+          connections: connectionsListRef.current?.length || 0,
+        });
+      } catch (error) {
+        console.error('❌ Erreur chargement cache:', error);
+      }
     })();
   }, []);
 
@@ -331,8 +410,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         prefetchConversation,
         prefetchAvatars,
         prefetchAllMessages,
-        getCachedConversations,
-        setCachedConversations,
+        getCachedPrivateConversations,
+        setCachedPrivateConversations,
+        removeFromPrivateConversationsCache,
+        getCachedGroupConversations,
+        setCachedGroupConversations,
+        removeFromGroupConversationsCache,
         getCachedConnections,
         setCachedConnections,
         getCachedGroups,
@@ -354,4 +437,3 @@ export function useChat() {
   }
   return context;
 }
-

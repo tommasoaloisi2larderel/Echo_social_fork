@@ -3,6 +3,7 @@ import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
 import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
 import { TypingIndicator } from '@/components/TypingIndicator';
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -22,7 +23,6 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
-
 
 interface Message {
   id: number;
@@ -74,11 +74,6 @@ export default function ConversationDirect() {
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
-
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
 
   const connectWebSocket = () => {
     if (!conversationId || !accessToken) return;
@@ -687,19 +682,6 @@ export default function ConversationDirect() {
           ))}
         </ScrollView>
       </KeyboardAvoidingView>
-      {/* Bouton Résumer - au-dessus de la bottom bar */}
-      <TouchableOpacity
-        style={styles.summaryButton}
-        onPress={fetchSummary}
-        disabled={loadingSummary}
-      >
-        {loadingSummary ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Ionicons name="sparkles" size={18} color="#fff" />
-        )}
-        <Text style={styles.summaryButtonText}>Résumer</Text>
-      </TouchableOpacity>
       {/* Bulle de résumé */}
       {showSummary && (
         <View style={styles.summaryBubble}>
@@ -718,9 +700,6 @@ export default function ConversationDirect() {
           </ScrollView>
         </View>
       )}
-
-
-
     </Animated.View>
   );
 }

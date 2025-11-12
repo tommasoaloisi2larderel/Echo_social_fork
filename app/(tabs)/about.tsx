@@ -1,4 +1,5 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,10 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 interface ProfileStats {
   total_connexions: number;
@@ -50,7 +47,6 @@ export default function ProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingPosts, setLoadingPosts] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -163,7 +159,6 @@ export default function ProfileScreen() {
     );
   }
 
-  // Fixed profile picture logic - using photo_profil_url directly
   const profilePictureUrl = (user as any)?.photo_profil_url;
 
   return (
@@ -178,9 +173,14 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
             <Ionicons name="log-out-outline" size={22} color="rgba(10, 145, 104, 1)" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/edit-profile' as any)} style={styles.iconButton}>
-            <Ionicons name="create-outline" size={22} color="rgba(10, 145, 104, 1)" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={() => router.push('/edit-profile' as any)} style={styles.iconButton}>
+              <Ionicons name="create-outline" size={22} color="rgba(10, 145, 104, 1)" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSettingsMenu(true)} style={styles.iconButton}>
+              <Ionicons name="settings-outline" size={22} color="rgba(10, 145, 104, 1)" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.avatarWrap}>
@@ -201,7 +201,7 @@ export default function ProfileScreen() {
 
         {(
           <View style={styles.quickStatsRow}>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/friends' as any)}>
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/friends' as any)}>
               <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{user?.nb_connexions ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Amis</Text>
@@ -209,10 +209,10 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
               <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Calendrier</Text>
+              <Text style={styles.quickStatLabel}>Événements</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/stats' as any)}>
-              <Ionicons name="bar-chart-outline" size={18} color={ECHO_COLOR} />
+            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/stats' as any)}>
+              <Ionicons name="stats-chart-outline" size={18} color={ECHO_COLOR} />
               <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
               <Text style={styles.quickStatLabel}>Statistiques</Text>
             </TouchableOpacity>
@@ -225,56 +225,15 @@ export default function ProfileScreen() {
           <View style={styles.cardHeader}>
             <Ionicons name="document-text-outline" size={18} color={ECHO_COLOR} />
             <Text style={styles.cardTitle}>Posts</Text>
-            <TouchableOpacity 
-              style={styles.newPostBtn} 
-              onPress={() => router.push('/posts/new' as any)}
-            >
+            <TouchableOpacity style={styles.newPostBtn} onPress={() => router.push('/posts/new' as any)}>
               <Ionicons name="add" size={18} color="#fff" />
               <Text style={styles.newPostText}>Nouveau</Text>
             </TouchableOpacity>
           </View>
-          
-          {loadingPosts ? (
-            <View style={styles.postsLoading}>
-              <ActivityIndicator size="small" color={ECHO_COLOR} />
-            </View>
-          ) : posts.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
-              <Text style={styles.emptyText}>Vous n'avez pas encore publié. Partagez votre premier post !</Text>
-            </View>
-          ) : (
-            <View style={styles.postsList}>
-              {posts.map((post) => (
-                <View key={post.id || post.uuid} style={styles.postCard}>
-                  <View style={styles.postHeader}>
-                    <View style={styles.postAuthor}>
-                      {post.auteur?.photo_profil_url ? (
-                        <Image 
-                          source={{ uri: post.auteur.photo_profil_url }} 
-                          style={styles.postAvatar}
-                        />
-                      ) : (
-                        <DefaultAvatar 
-                          name={post.auteur?.username || user?.username || 'User'} 
-                          size={32}
-                        />
-                      )}
-                      <View style={styles.postAuthorInfo}>
-                        <Text style={styles.postAuthorName}>
-                          {post.auteur?.username || user?.username}
-                        </Text>
-                        <Text style={styles.postDate}>
-                          {formatPostDate(post.created_at)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.postContent}>{post.contenu}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <View style={styles.emptyState}>
+            <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
+            <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
+          </View>
         </View>
       </View>
 
@@ -284,192 +243,181 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BACKGROUND_GRAY,
-  },
-  content: {
-    paddingBottom: 40,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: BACKGROUND_GRAY,
   },
+  container: {
+    flex: 1,
+    backgroundColor: BACKGROUND_GRAY,
+  },
+  content: {
+    paddingBottom: 100,
+  },
   hero: {
     paddingTop: 60,
-    paddingBottom: 30,
+    paddingBottom: 24,
     paddingHorizontal: 20,
-    alignItems: 'center',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignSelf: 'stretch',
     marginBottom: 20,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   avatarWrap: {
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   avatarImage: {
     width: 110,
     height: 110,
     borderRadius: 55,
-    borderWidth: 4,
-    borderColor: 'white',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   nameText: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#1b5e20',
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   tagline: {
-    fontSize: 15,
-    color: '#5a7a5f',
-    marginTop: 4,
+    fontSize: 16,
     fontStyle: 'italic',
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   bioText: {
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    color: '#375a3b',
-    marginTop: 8,
-    paddingHorizontal: 24,
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   quickStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
+    justifyContent: 'space-around',
+    gap: 12,
   },
   quickStatCard: {
     flex: 1,
-    backgroundColor: 'white',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    marginHorizontal: 4,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   quickStatNum: {
-    marginTop: 6,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1b5e20',
+    color: '#333',
+    marginTop: 4,
   },
   quickStatLabel: {
     fontSize: 11,
-    color: '#6c8a6e',
+    color: '#888',
     marginTop: 2,
   },
-  cardsGrid: {
-    paddingHorizontal: 16,
+  infoCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
     marginTop: 16,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  cardTitle: {
-    fontSize: 16,
+  infoCardTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#333',
-    marginLeft: 8,
+    marginBottom: 12,
   },
-  newPostBtn: {
-    marginLeft: 'auto',
+  infoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(10, 145, 104, 1)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
   },
-  newPostText: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    marginLeft: 6 
+  infoLabel: {
+    fontSize: 14,
+    color: '#888',
   },
-  emptyState: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 8 
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
   },
-  emptyText: { 
-    marginLeft: 8, 
-    color: '#6e7f71' 
-  },
-  postsLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  postsList: {
-    marginTop: 8,
-  },
-  postCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  postHeader: {
+  questionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 8,
   },
-  postAuthor: {
+  answerText: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 8,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 110,
+    paddingRight: 20,
+  },
+  settingsMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  postAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
-  },
-  postAuthorInfo: {
-    flex: 1,
-  },
-  postAuthorName: {
-    fontSize: 14,
-    fontWeight: '700',
+  menuItemText: {
+    fontSize: 16,
     color: '#333',
-    marginBottom: 2,
-  },
-  postDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  postContent: {
-    fontSize: 15,
-    color: '#333',
-    lineHeight: 22,
+    fontWeight: '500',
   },
   footerSpace: {
     height: 60,

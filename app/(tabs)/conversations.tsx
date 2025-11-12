@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
@@ -258,10 +259,9 @@ export default function ConversationsScreen() {
   const {
     prefetchConversation,
     prefetchAvatars,
-    getCachedConversations,
-    setCachedConversations,
+    getCachedPrivateConversations,
+    getCachedGroupConversations,
     getCachedConnections,
-    setCachedConnections,
     getCachedGroups,
     setCachedGroups,
     getCachedGroupInvitations,
@@ -273,17 +273,12 @@ export default function ConversationsScreen() {
   // États pour la recherche d'utilisateurs
   const [searchResults, setSearchResults] = useState<{ friends: User[], strangers: User[] }>({ friends: [], strangers: [] });
   const [isSearching, setIsSearching] = useState(false);
-  const [myConnections, setMyConnections] = useState<Connection[]>([]);
+
   
   // États pour les groupes
   const [groups, setGroups] = useState<Group[]>([]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
-  
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
 
   // Forcer la route base sur /conversations pour éviter le “rebascule” vers Home
   useEffect(() => {
@@ -296,50 +291,29 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fonction pour récupérer les conversations
-  const fetchConversations = async (isRefresh = false) => {
+
+  const fetchData = async () => {
     try {
-      if (!isRefresh) setLoading(true);
+      setLoading(true);
       
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Conversations récupérées:', data);
-      const list = data.results || data;
-      setConversations(list);
-      setCachedConversations(list);
-      // Précharger avatars de la liste de conversations
-      try {
-        const avatarUrls: string[] = [];
-        (Array.isArray(data.results ? data.results : data) ? (data.results || data) : []).forEach((c: any) => {
-          const url = c.other_participant?.photo_profil_url || c.group?.avatar;
-          if (url) avatarUrls.push(url);
-        });
-        await prefetchAvatars(avatarUrls);
-      } catch {}
+      // 🎯 Un seul appel charge TOUT (conversations privées + groupes + connections)
+      await prefetchConversationsOverview(makeAuthenticatedRequest);
       
+      // Récupérer les groupes et invitations du cache
+      const cachedGroups = getCachedGroups();
+      setGroups(cachedGroups || []);
+      
+      const cachedInvitations = getCachedGroupInvitations();
+      setGroupInvitations(cachedInvitations || []);
+      
+      console.log('✅ Données chargées depuis les caches');
     } catch (error) {
-      console.error('Erreur lors du chargement des conversations:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      if (errorMessage.includes('Token expiré')) {
-        // L'utilisateur sera automatiquement déconnecté
-        return;
-      }
-      Alert.alert(
-        'Erreur', 
-        'Impossible de charger les conversations. Vérifiez votre connexion.'
-      );
+      console.error('❌ Erreur chargement:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
+
 
   // Fonction pour rechercher tous les utilisateurs
   const searchAllUsers = async (searchQuery: string) => {
@@ -372,16 +346,23 @@ export default function ConversationsScreen() {
         return surnom.includes(query) || username.includes(query);
       });
       
-      // Créer un Set avec les UUIDs des connexions (user_uuid en priorité, sinon uuid)
-      const connectionUuids = new Set(myConnections.map(c => c.user_uuid || c.uuid));
-      
-      console.log('🔍 Utilisateurs trouvés:', users.length);
-      console.log('📋 Connexions actives:', myConnections.length);
-      console.log('👥 UUIDs des connexions:', Array.from(connectionUuids));
-      
-      // Séparer les résultats en amis (connexions acceptées) et inconnus (tous les autres)
-      const friends = users.filter(u => connectionUuids.has(u.uuid));
-      const strangers = users.filter(u => !connectionUuids.has(u.uuid));
+    // 🎯 Utiliser les conversations comme source de vérité
+    const privateConversations = getCachedPrivateConversations() || [];
+    
+    // Créer un Set des UUIDs d'utilisateurs ayant une conversation
+    const friendUuids = new Set(
+      privateConversations
+        .map(c => c.other_participant?.uuid)
+        .filter(Boolean)
+    );
+    
+    console.log('🔍 Utilisateurs trouvés:', users.length);
+    console.log('📋 Conversations privées:', privateConversations.length);
+    console.log('👥 UUIDs des amis:', Array.from(friendUuids));
+    
+    // Séparer les résultats en amis (avec conversation) et inconnus
+    const friends = users.filter(u => friendUuids.has(u.uuid));
+    const strangers = users.filter(u => !friendUuids.has(u.uuid)); 
       
       console.log('✅ Amis trouvés:', friends.length, friends.map(f => f.surnom || f.username));
       console.log('🆕 Inconnus trouvés:', strangers.length, strangers.map(s => s.surnom || s.username));
@@ -392,142 +373,6 @@ export default function ConversationsScreen() {
       setSearchResults({ friends: [], strangers: [] });
     } finally {
       setIsSearching(false);
-    }
-  };
-
-  // Fonction pour récupérer les connexions
-  const fetchConnections = async () => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/relations/connections/my-connections/`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        const connections: Connection[] = data.connexions || [];
-        setMyConnections(connections);
-        setCachedConnections(connections);
-        console.log('📱 Connexions chargées:', connections.length, connections.map(c => c.surnom || c.username));
-        console.log('📋 Structure première connexion:', JSON.stringify(connections[0], null, 2));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des connexions:', error);
-    }
-  };
-
-  // Fonction pour récupérer les groupes
-  const fetchGroups = async () => {
-    try {
-      console.log('📡 Chargement des groupes...');
-      
-      // D'abord récupérer toutes les conversations pour filtrer
-      const conversationsResponse = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/`
-      );
-      
-      const privateConversationUuids = new Set<string>();
-      if (conversationsResponse.ok) {
-        const convList = await conversationsResponse.json();
-        // Marquer toutes les conversations avec other_participant comme privées
-        convList.forEach((c: any) => {
-          if (c.other_participant) {
-            privateConversationUuids.add(c.uuid);
-            console.log('🔒 Conv privée détectée:', c.uuid, '- participant:', c.other_participant.username);
-          }
-        });
-        console.log('🔒 Conversations privées trouvées:', privateConversationUuids.size);
-      }
-      
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/groups/my-groups/`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📋 Groupes de base récupérés:', data.length);
-        
-        // /groups/my-groups/ ne retourne pas conversation_uuid
-        // Il faut charger les détails de chaque groupe
-        const groupsWithDetails = [];
-        
-        for (const group of data) {
-          try {
-            console.log('🔍 Chargement détails pour:', group.name);
-            const detailsResponse = await makeAuthenticatedRequest(
-              `${API_BASE_URL}/groups/${group.uuid}/`
-            );
-            
-            if (detailsResponse.ok) {
-              const groupDetails = await detailsResponse.json();
-              const convUuid = groupDetails.conversation_uuid;
-              
-              console.log('🔍 Détails complets pour', group.name, ':', JSON.stringify({
-                conversation_uuid: convUuid,
-                my_role: groupDetails.my_role,
-                my_membership: groupDetails.my_membership,
-                member_count: groupDetails.member_count
-              }, null, 2));
-              
-              // Vérifier si c'est vraiment un conflit (groupe avec my_role devrait être affiché)
-              const hasGroupRole = groupDetails.my_membership || groupDetails.my_role;
-              if (convUuid && privateConversationUuids.has(convUuid) && !hasGroupRole) {
-                console.warn('⚠️ Groupe', group.name, 'a un conversation_uuid qui est une conv privée, ignoré');
-                console.warn('   → conversation_uuid:', convUuid);
-                console.warn('   → group_uuid:', group.uuid);
-                console.warn('   → my_role:', groupDetails.my_role, 'my_membership:', groupDetails.my_membership);
-                continue;
-              }
-              
-              if (convUuid && privateConversationUuids.has(convUuid)) {
-                console.log('⚠️ CONFLIT détecté pour', group.name, '- mais le groupe a un rôle, donc affiché quand même');
-              }
-              
-              console.log('✅ Détails récupérés pour', group.name, '- conversation_uuid:', convUuid);
-              groupsWithDetails.push({
-                ...group,
-                conversation_uuid: convUuid,
-                members: groupDetails.members,
-                my_membership: groupDetails.my_membership,
-                invite_code: groupDetails.invite_code,
-              });
-            } else {
-              console.error('❌ Erreur HTTP pour', group.name, ':', detailsResponse.status);
-              groupsWithDetails.push(group);
-            }
-          } catch (error) {
-            console.error('❌ Erreur chargement détails groupe:', group.name, error);
-            // Garder le groupe même si on ne peut pas charger les détails
-            groupsWithDetails.push(group);
-          }
-        }
-        
-        setGroups(groupsWithDetails);
-        setCachedGroups(groupsWithDetails);
-        console.log('👥 Groupes chargés:', groupsWithDetails.length, groupsWithDetails.map((g: any) => g.name));
-        console.log('📋 Groupes avec conversation_uuid:', JSON.stringify(groupsWithDetails.map((g: any) => ({
-          name: g.name,
-          uuid: g.uuid,
-          conversation_uuid: g.conversation_uuid
-        })), null, 2));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des groupes:', error);
-    }
-  };
-
-  // Fonction pour récupérer les invitations de groupe
-  const fetchGroupInvitations = async () => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/groups/invitations/received/`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setGroupInvitations(data);
-        setCachedGroupInvitations(data);
-        console.log('📨 Invitations de groupe:', data.length);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des invitations:', error);
     }
   };
 
@@ -583,67 +428,22 @@ export default function ConversationsScreen() {
     }
   };
 
-  // Charger depuis le cache au montage pour affichage instantané, puis rafraîchir en arrière-plan léger
   useEffect(() => {
-    const cachedConvs = getCachedConversations();
-    const cachedConns = getCachedConnections();
-    const cachedGroups = getCachedGroups();
-    const cachedInvites = getCachedGroupInvitations();
+    // Charger les données au démarrage
+    fetchData();
+  }, []);
 
-    if (cachedConvs) {
-      setConversations(cachedConvs as any);
-      // Précharger avatars pour un rendu encore plus fluide
-      try {
-        const avatarUrls: string[] = [];
-        (cachedConvs as any[]).forEach((c: any) => {
-          const url = c.other_participant?.photo_profil_url || c.group?.avatar;
-          if (url) avatarUrls.push(url);
-        });
-        prefetchAvatars(avatarUrls);
-      } catch {}
-    }
-  if (cachedConns) setMyConnections(cachedConns as any);
-  // Hydrater immédiatement les groupes/invitations pour que l'onglet Groupe s'affiche instantanément
-  if (cachedGroups) setGroups(cachedGroups as any);
-  if (cachedInvites) setGroupInvitations(cachedInvites as any);
-
-    // Si on a déjà des conversations en cache, pas de spinner
-    setLoading(!(cachedConvs && (cachedConvs as any[]).length > 0));
-
-    // Rafraîchissement léger en arrière-plan (sans changer loading)
-    fetchConversations(true);
-    fetchConnections();
-    // Les groupes sont chargés uniquement lors du passage en mode 'group'
-  }, []); // Supprimer accessToken des dépendances
-
-  // Charger les groupes quand on passe en mode Groupe
   useEffect(() => {
-    if (viewMode === 'group') {
-      fetchGroups();
-      fetchGroupInvitations();
-    }
-  }, [viewMode]);
-
-  // Déclencher la recherche quand la query change (seulement en mode Privé)
-  useEffect(() => {
-    if (viewMode === 'direct') {
-      const timeoutId = setTimeout(() => {
-        searchAllUsers(query);
-      }, 300); // Debounce de 300ms
-      
-      return () => clearTimeout(timeoutId);
-    } else {
-      // En mode Groupe, réinitialiser les résultats de recherche
-      setSearchResults({ friends: [], strangers: [] });
-    }
-  }, [query, myConnections, viewMode]);
-
-  // Fonction de rafraîchissement (pull-to-refresh)
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchConversations(true);
-    fetchConnections();
-  };
+      if (viewMode === 'direct') {
+        const timeoutId = setTimeout(() => {
+          searchAllUsers(query);
+        }, 300);
+        
+        return () => clearTimeout(timeoutId);
+      } else {
+        setSearchResults({ friends: [], strangers: [] });
+      }
+    }, [query, viewMode]);  // 🎯 Enlever myConnections
 
   // Déclencher le préchargement pour les éléments visibles
   const handleItemVisibility = async (items: typeof displayItems) => {
@@ -657,100 +457,24 @@ export default function ConversationsScreen() {
   };
 
   // Fonction pour créer ou ouvrir une conversation avec un utilisateur
-  const handleUserPress = async (userUuid: string, userName: string) => {
-    try {
-      // Vérifier s'il existe déjà une conversation avec cet utilisateur (ami)
-      const existingConversation = conversations.find(
-        c => c.other_participant?.uuid === userUuid
-      );
-
-      if (existingConversation) {
-        // C'est un ami, ouvrir la conversation existante
-        router.push({
-          pathname: '/(tabs)/conversation-direct',
-          params: { conversationId: existingConversation.uuid }
-        });
-      } else {
-        // Ce n'est pas encore un ami, envoyer une demande de connexion
-        Alert.alert(
-          'Envoyer une demande',
-          `Voulez-vous envoyer une demande de connexion à ${userName} ?`,
-          [
-            {
-              text: 'Annuler',
-              style: 'cancel'
-            },
-            {
-              text: 'Envoyer',
-              onPress: async () => {
-                try {
-                  console.log('📤 Envoi demande de connexion pour UUID:', userUuid);
-                  
-                  const response = await makeAuthenticatedRequest(
-                    `${API_BASE_URL}/relations/connections/`,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        destinataire_uuid: userUuid,
-                        message: `Bonjour ${userName}, je souhaite te connecter !`,
-                      }),
-                    }
-                  );
-
-                  console.log('📥 Réponse statut:', response.status);
-
-                  if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('❌ Erreur détails:', errorData);
-                    
-                    // Gérer les cas d'erreur spécifiques
-                    let errorMessage = 'Impossible d\'envoyer la demande de connexion.';
-                    
-                    if (errorData.detail) {
-                      errorMessage = errorData.detail;
-                    } else if (errorData.error) {
-                      errorMessage = errorData.error;
-                    } else if (errorData.non_field_errors) {
-                      errorMessage = errorData.non_field_errors[0];
-                    } else if (errorData.destinataire_uuid) {
-                      errorMessage = `UUID invalide: ${errorData.destinataire_uuid[0]}`;
-                    }
-                    
-                    throw new Error(errorMessage);
-                  }
-
-                  await response.json();
-                  console.log('✅ Demande envoyée avec succès');
-                  
-                  Alert.alert(
-                    'Demande envoyée',
-                    `Votre demande de connexion a été envoyée à ${userName}. Vous pourrez discuter une fois qu'elle sera acceptée.`
-                  );
-                } catch (error) {
-                  console.error('Erreur lors de l\'envoi de la demande de connexion:', error);
-                  const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-                  
-                  Alert.alert(
-                    'Erreur',
-                    errorMessage.includes('existe déjà') || errorMessage.includes('déjà')
-                      ? 'Une demande de connexion existe déjà avec cet utilisateur.'
-                      : errorMessage
-                  );
-                }
-              }
-            }
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('Erreur lors de la gestion de l\'utilisateur:', error);
-      Alert.alert(
-        'Erreur',
-        'Une erreur est survenue.'
-      );
+  const handleUserPress = (userUuid: string, userName: string) => {
+    // 🎯 Trouver la conversation correspondante
+    const privateConversations = getCachedPrivateConversations() || [];
+    const conv = privateConversations.find(
+      c => c.other_participant?.uuid === userUuid
+    );
+    
+    if (conv) {
+      // La conversation existe, l'ouvrir
+      router.push({
+        pathname: '/(tabs)/conversation-direct',
+        params: { conversationId: conv.uuid }
+      });
+    } else {
+      // Normalement impossible (chaque ami a une conversation)
+      // Mais au cas où, rediriger vers le profil
+      console.warn('⚠️ Conversation non trouvée pour:', userName);
+      router.push(`/(screens)/user-profile?uuid=${userUuid}` as any);
     }
   };
 
@@ -787,53 +511,45 @@ export default function ConversationsScreen() {
   }[] = [];
 
   if (viewMode === 'direct') {
-    // Mode Privé : afficher tous les amis (avec ou sans conversation)
-    // IMPORTANT: Créer un Set des conversation_uuid des groupes pour les filtrer
-    const groupConversationUuids = new Set(
-      groups.map(g => g.conversation_uuid).filter(Boolean)
-    );
+    // 🎯 MODE PRIVÉ : Afficher les conversations privées du cache
+    const privateConversations = getCachedPrivateConversations() || [];
     
-    displayItems = myConnections.map(friend => {
-      // Utiliser user_uuid si disponible, sinon uuid
-      const friendUuid = friend.user_uuid || friend.uuid;
-      
-      // Trouver la conversation correspondante s'il y en a une
-      // IMPORTANT: Exclure les conversations qui sont en fait des groupes
-      const conversation = conversations.find(c => {
-        const matchesParticipant = 
-          c.other_participant?.uuid === friendUuid || 
-          c.other_participant?.uuid === friend.uuid;
-        
-        // Ne pas utiliser cette conversation si c'est un groupe
-        const isNotGroup = !groupConversationUuids.has(c.uuid);
-        
-        return matchesParticipant && isNotGroup;
-      });
+    console.log('📊 Conversations privées:', privateConversations.length);
+    
+    displayItems = privateConversations.map(conv => {
+      const otherParticipant = conv.other_participant;
       
       return {
-        uuid: friendUuid,
-        name: friend.surnom || friend.username,
-        photoUrl: friend.photo_profil_url,
-        unread: conversation ? (conversation.unread_count || 0) > 0 : false,
-        conversationId: conversation?.uuid,
-        hasConversation: !!conversation,
+        uuid: conv.uuid,  // 🎯 UUID de la CONVERSATION (pas de l'utilisateur)
+        name: otherParticipant?.surnom || otherParticipant?.username || 'Inconnu',
+        photoUrl: otherParticipant?.photo_profil_url,
+        unread: (conv.unread_count || 0) > 0,
+        conversationId: conv.uuid,
+        hasConversation: true,  // 🎯 Toujours vrai maintenant
+        lastMessage: conv.last_message?.content,
+        lastMessageTime: conv.last_message?.created_at,
       };
     });
   }
-  else {
-    // Mode Groupe : afficher les groupes depuis l'API /groups/my-groups/
-    displayItems = groups.map(group => ({
-      uuid: group.uuid,
-      name: group.name,
-      photoUrl: group.avatar || undefined,
-      unread: (group.unread_messages || 0) > 0, // L'unread sera géré via group.unread_messages
-      conversationId: group.conversation_uuid,
-      hasConversation: !!group.conversation_uuid,
-      isGroup: true,
-      memberCount: group.member_count,
-      unreadMessages: group.unread_messages || 0,
-    }));
-  }
+else {
+  // 🎯 MODE GROUPE : Afficher les conversations de groupe du cache
+  const groupConversations = getCachedGroupConversations() || [];
+  
+  console.log('📊 Conversations de groupe:', groupConversations.length);
+  
+  displayItems = groupConversations.map(conv => ({
+    uuid: conv.uuid,  // 🎯 UUID de la CONVERSATION
+    name: conv.group_info?.name || 'Groupe',
+    photoUrl: conv.group_info?.avatar,
+    unread: (conv.unread_count || 0) > 0,
+    conversationId: conv.uuid,
+    hasConversation: true,  // 🎯 Toujours vrai
+    isGroup: true,
+    memberCount: conv.group_info?.member_count || 0,
+    lastMessage: conv.last_message?.content,
+    lastMessageTime: conv.last_message?.created_at,
+  }));
+}
 
   // Filtrer selon la recherche
   const filteredFriends = query.trim()
@@ -842,7 +558,10 @@ export default function ConversationsScreen() {
 
   // Afficher les "autres utilisateurs" seulement si on a une recherche active en mode Privé
   const showStrangers = viewMode === 'direct' && query.trim().length > 0 && searchResults.strangers.length > 0;
-  
+  const onRefresh = () => {
+      setRefreshing(true);
+      fetchData().finally(() => setRefreshing(false));
+    };
   return (
     <View style={[styles.container, { paddingTop: (insets.top || 0) + 0 }]}> 
       <SearchBar query={query} setQuery={setQuery} />
@@ -1004,81 +723,24 @@ export default function ConversationsScreen() {
                   unread={item.unread}
                   photoUrl={item.photoUrl}
               squareRef={squareRef}
-                  onPress={async () => {
-                    if (item.hasConversation) {
-                      // Si conversation existe, ouvrir la conversation directement
-                      squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-                        setTransitionPosition({ x: pageX, y: pageY, width, height });
+                  onPress={() => {
+                    // 🎯 La conversation existe TOUJOURS maintenant
+                    squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                      setTransitionPosition({ x: pageX, y: pageY, width, height });
+                      
+                      if (item.isGroup) {
+                        router.push({
+                          pathname: '/(tabs)/conversation-group',
+                          params: { conversationId: item.conversationId }
+                        });
+                      } else {
                         router.push({
                           pathname: '/(tabs)/conversation-direct',
                           params: { conversationId: item.conversationId }
                         });
-                      });
-                    } else {
-                      // Si ami sans conversation, vérifier d'abord si une conversation existe
-                      try {
-                        console.log('🔍 Recherche conversation avec UUID:', item.uuid);
-                        
-                        // Vérifier dans toutes les conversations (même celles filtrées)
-                        const existingConv = conversations.find(c => c.other_participant?.uuid === item.uuid);
-                        
-                        if (existingConv) {
-                          console.log('✅ Conversation trouvée:', existingConv.uuid);
-                          squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-                            setTransitionPosition({ x: pageX, y: pageY, width, height });
-                        router.push({
-                          pathname: '/(tabs)/conversation-direct',
-                          params: { conversationId: existingConv.uuid }
-                        });
-                          });
-                          return;
-                        }
-                        
-                        console.log('🆕 Création nouvelle conversation pour UUID:', item.uuid);
-                        console.log('📋 Nom de l\'ami:', item.name);
-                        
-                        const response = await makeAuthenticatedRequest(
-                          `${API_BASE_URL}/messaging/conversations/`,
-                          {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              recipient_uuid: item.uuid,
-                            }),
-                          }
-                        );
-
-                        if (!response.ok) {
-                          const errorData = await response.json().catch(() => ({}));
-                          console.error('❌ Erreur création conversation pour UUID:', item.uuid);
-                          console.error('❌ Détails erreur:', errorData);
-                          throw new Error(errorData.detail || errorData.error || `Erreur ${response.status}`);
-                        }
-
-                        const newConversation = await response.json();
-                        console.log('✅ Conversation créée:', newConversation.uuid);
-                        
-                        // Ajouter la nouvelle conversation et l'ouvrir
-                        setConversations(prev => [newConversation, ...prev]);
-                        
-                        squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-                  setTransitionPosition({ x: pageX, y: pageY, width, height });
-                  router.push({
-                    pathname: '/(tabs)/conversation-direct',
-                    params: { conversationId: newConversation.uuid }
-                  });
-                });
-                      } catch (error) {
-                        console.error('❌ Erreur lors de la création de la conversation:', error);
-                        Alert.alert(
-                          'Erreur',
-                          'Impossible de créer la conversation.'
-                        );
                       }
-                    }
-              }}
+                    });
+                  }}
             />
           );
         }}

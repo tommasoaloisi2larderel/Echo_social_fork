@@ -1,11 +1,7 @@
+import { API_BASE_URL } from "@/config/api";
 import { router } from "expo-router";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { storage } from "../utils/storage";
-
-// Utilise le proxy local pour éviter CORS en développement web
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app"
 
 interface User {
   id: number;

@@ -1,4 +1,5 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +18,6 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 // Types
 interface UserInfo {

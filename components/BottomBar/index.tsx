@@ -9,6 +9,8 @@ export default function BottomBar({
   chatText,
   setChatText,
   conversationId,
+  onSummaryPress,
+  loadingSummary,
 }: BottomBarProps) {
   const { websocket } = useChat();
   const isChat = currentRoute?.includes('conversation-direct') || currentRoute?.includes('conversation-group');
@@ -85,11 +87,11 @@ export default function BottomBar({
 
       // Envoyer le message
       const payload = {
-      type: 'chat_message',
+        type: 'chat_message',
         conversation_uuid: conversationId,
         message: message.trim()
-    };
-        websocket.send(JSON.stringify(payload));
+      };
+      websocket.send(JSON.stringify(payload));
       console.log('✅ Message envoyé via WebSocket:', payload);
     } else if (!isChat) {
       console.log('Message envoyé à Jarvis:', message);
@@ -104,8 +106,10 @@ export default function BottomBar({
       }}
       conversationId={conversationId}
       isChat={isChat}
-            chatText={chatText}
-            setChatText={setChatText}
+      chatText={chatText}
+      setChatText={setChatText}
+      onSummaryPress={onSummaryPress}
+      loadingSummary={loadingSummary}
     />
   );
 }
