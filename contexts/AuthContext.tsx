@@ -1,7 +1,8 @@
 import { API_BASE_URL } from "@/config/api";
 import { router } from "expo-router";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { storage } from "../utils/storage";
+import { AppState, AppStateStatus } from "react-native";
 
 interface User {
   id: number;
@@ -41,11 +42,73 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Utility function to decode JWT and get expiration time
+const decodeJWT = (token: string): { exp: number } | null => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Error decoding JWT:", error);
+    return null;
+  }
+};
+
+// Check if token is expired or will expire soon (within 5 minutes)
+const isTokenExpiringSoon = (token: string, bufferMinutes: number = 5): boolean => {
+  const decoded = decodeJWT(token);
+  if (!decoded || !decoded.exp) return true;
+
+  const expirationTime = decoded.exp * 1000; // Convert to milliseconds
+  const bufferTime = bufferMinutes * 60 * 1000;
+  const currentTime = Date.now();
+
+  return (expirationTime - currentTime) < bufferTime;
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Refs for auto-refresh mechanism
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Auto-refresh tokens periodically
+  const startAutoRefresh = (refresh: string) => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    // Check and refresh tokens every 4 minutes
+    refreshIntervalRef.current = setInterval(async () => {
+      try {
+        const currentAccessToken = await storage.getItemAsync("accessToken");
+        if (currentAccessToken && isTokenExpiringSoon(currentAccessToken, 5)) {
+          console.log("🔄 Auto-refreshing access token...");
+          await refreshAccessTokenInternal(refresh);
+        }
+      } catch (error) {
+        console.error("Error in auto-refresh:", error);
+      }
+    }, 4 * 60 * 1000); // Every 4 minutes
+  };
+
+  const stopAutoRefresh = () => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const loadAuthData = async () => {
@@ -55,9 +118,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const storedUser = await storage.getItemAsync("user");
 
         if (storedAccessToken && storedRefreshToken && storedUser) {
-          setAccessToken(storedAccessToken);
-          setRefreshToken(storedRefreshToken);
-          setUser(JSON.parse(storedUser));
+          // Check if access token is expired or expiring soon
+          if (isTokenExpiringSoon(storedAccessToken, 5)) {
+            console.log("🔄 Access token expired, refreshing on startup...");
+
+            // Try to refresh the access token
+            const newAccessToken = await refreshAccessTokenInternal(storedRefreshToken);
+
+            if (newAccessToken) {
+              setAccessToken(newAccessToken);
+              setRefreshToken(storedRefreshToken);
+              setUser(JSON.parse(storedUser));
+              startAutoRefresh(storedRefreshToken);
+            } else {
+              // Refresh failed, clear stored data and require login
+              console.log("❌ Token refresh failed on startup, clearing auth data");
+              await storage.deleteItemAsync("accessToken");
+              await storage.deleteItemAsync("refreshToken");
+              await storage.deleteItemAsync("user");
+            }
+          } else {
+            // Tokens are still valid
+            setAccessToken(storedAccessToken);
+            setRefreshToken(storedRefreshToken);
+            setUser(JSON.parse(storedUser));
+            startAutoRefresh(storedRefreshToken);
+          }
         }
       } catch (error) {
         console.error("Error loading auth data:", error);
@@ -66,7 +152,65 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     loadAuthData();
+
+    // Listen for app state changes (background/foreground)
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Cleanup on unmount
+    return () => {
+      stopAutoRefresh();
+      subscription.remove();
+    };
   }, []);
+
+  // Handle app state changes (foreground/background)
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if (
+      appStateRef.current.match(/inactive|background/) &&
+      nextAppState === 'active'
+    ) {
+      // App has come to the foreground, check if tokens need refresh
+      console.log("📱 App resumed, checking tokens...");
+
+      const storedAccessToken = await storage.getItemAsync("accessToken");
+      const storedRefreshToken = await storage.getItemAsync("refreshToken");
+
+      if (storedAccessToken && storedRefreshToken) {
+        if (isTokenExpiringSoon(storedAccessToken, 5)) {
+          console.log("🔄 Refreshing tokens on app resume...");
+          await refreshAccessTokenInternal(storedRefreshToken);
+        }
+      }
+    }
+    appStateRef.current = nextAppState;
+  };
+
+  // Internal refresh function used by auto-refresh mechanism
+  const refreshAccessTokenInternal = async (refresh: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+
+      if (!response.ok) {
+        console.error("Token refresh failed:", response.status);
+        return null;
+      }
+
+      const data = await response.json();
+
+      setAccessToken(data.access);
+      await storage.setItemAsync("accessToken", data.access);
+
+      console.log("✅ Access token refreshed successfully");
+      return data.access;
+    } catch (error) {
+      console.error("Error refreshing token:", error);
+      return null;
+    }
+  };
 
   const login = async (username: string, password: string) => {
     const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
@@ -90,6 +234,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.setItemAsync("accessToken", data.access);
     await storage.setItemAsync("refreshToken", data.refresh);
     await storage.setItemAsync("user", JSON.stringify(data.user));
+
+    // Start auto-refresh mechanism
+    startAutoRefresh(data.refresh);
   };
 
   const register = async (formData: Record<string, any>) => {
@@ -134,10 +281,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.setItemAsync("accessToken", data.tokens.access);
     await storage.setItemAsync("refreshToken", data.tokens.refresh);
     await storage.setItemAsync("user", JSON.stringify(data.user));
+
+    // Start auto-refresh mechanism
+    startAutoRefresh(data.tokens.refresh);
   };
 
   const logout = async () => {
     try {
+      // Stop auto-refresh
+      stopAutoRefresh();
+
       if (refreshToken) {
         await fetch(`${API_BASE_URL}/api/auth/logout/`, {
           method: "POST",
@@ -162,26 +315,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refreshAccessToken = async (): Promise<string | null> => {
     if (!refreshToken) return null;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
-
-      if (!response.ok) return null;
-
-      const data = await response.json();
-
-      setAccessToken(data.access);
-      await storage.setItemAsync("accessToken", data.access);
-
-      return data.access;
-    } catch (error) {
-      console.error("Erreur refresh token:", error);
-      return null;
-    }
+    return await refreshAccessTokenInternal(refreshToken);
   };
 
   const makeAuthenticatedRequest = async (
