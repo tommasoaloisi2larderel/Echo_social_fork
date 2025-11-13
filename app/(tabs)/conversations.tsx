@@ -536,22 +536,16 @@ export default function ConversationsScreen() {
     });
   }
 else {
-  // 🎯 MODE GROUPE : Afficher les conversations de groupe du cache
-  const groupConversations = getCachedGroupConversations() || [];
-  
-  console.log('📊 Conversations de groupe:', groupConversations.length);
-  
-  displayItems = groupConversations.map(conv => ({
-    uuid: conv.uuid,  // 🎯 UUID de la CONVERSATION
-    name: conv.group_info?.name || 'Groupe',
-    photoUrl: conv.group_info?.avatar,
-    unread: (conv.unread_count || 0) > 0,
-    conversationId: conv.uuid,
-    hasConversation: true,  // 🎯 Toujours vrai
+    displayItems = groups.map(group => ({
+    uuid: group.uuid,  // UUID du GROUPE
+    name: group.name,
+    photoUrl: group.avatar || undefined,
+    unread: (group.unread_messages || 0) > 0,
+    conversationId: group.conversation_uuid,
+    hasConversation: !!group.conversation_uuid,
     isGroup: true,
-    memberCount: conv.group_info?.member_count || 0,
-    lastMessage: conv.last_message?.content,
-    lastMessageTime: conv.last_message?.created_at,
+    memberCount: group.member_count || 0,
+    unreadMessages: group.unread_messages || 0,
   }));
 }
 
@@ -589,6 +583,17 @@ else {
           <Text style={[localStyles.toggleLabel, viewMode === 'group' && localStyles.toggleLabelActive]}>Groupe</Text>
         </TouchableOpacity>
       </View>
+      {/* 🆕 Bouton créer un groupe (visible uniquement en mode Groupe) */}
+        {viewMode === 'group' && (
+          <TouchableOpacity
+            style={localStyles.createGroupButton}
+            onPress={() => setShowCreateGroupModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle" size={24} color="#fff" />
+            <Text style={localStyles.createGroupButtonText}>Créer un groupe</Text>
+          </TouchableOpacity>
+        )}
 
       {/* Header Créer un groupe (en mode Groupe avec recherche) */}
       {viewMode === 'group' && query.trim().length > 0 && (
@@ -963,5 +968,28 @@ unreadSquare: {
   borderColor: "rgba(10,145,104,1)",
   borderRadius: 18,
   backgroundColor: "white",
-}
+},
+createGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    marginHorizontal: 16,
+    marginTop: 140,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: 'rgba(10, 145, 104, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  createGroupButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
 });

@@ -569,10 +569,13 @@ export default function AgentPanel({
         </TouchableOpacity>
 
         {showAgentsDropdown && (
-          <Animated.View style={{
-            opacity: showAgentsDropdown ? 1 : 0,
-            transform: [{ translateY: showAgentsDropdown ? 0 : -10 }],
-          }}>
+          
+          <ScrollView
+              style={{ maxHeight: 500 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+            >
             {/* Create Agent Button - Top */}
             <TouchableOpacity
               onPress={handleCreateAgent}
@@ -1471,151 +1474,159 @@ export default function AgentPanel({
                 <KeyboardAvoidingView
                   behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
-                  <View style={{ padding: 16 }}>
-                    {/* Name */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Nom de l&apos;agent *
-                      </Text>
-                      <TextInput
-                        value={name}
-                        onChangeText={setName}
-                        placeholder="Ex: Assistant Marketing"
-                        placeholderTextColor="#999"
-                        maxLength={100}
-                        style={{
-                          backgroundColor: '#f5f5f5',
-                          borderRadius: 12,
-                          padding: 14,
-                          fontSize: 16,
-                          color: '#333',
-                          borderWidth: 1,
-                          borderColor: 'rgba(10, 145, 104, 0.2)',
-                        }}
-                      />
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                  >
+                    <View style={{ padding: 16 }}>
+                      {/* Name */}
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
+                          Nom de l&apos;agent *
+                        </Text>
+                        <TextInput
+                          value={name}
+                          onChangeText={setName}
+                          placeholder="Ex: Assistant Marketing"
+                          placeholderTextColor="#999"
+                          maxLength={100}
+                          style={{
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: 12,
+                            padding: 14,
+                            fontSize: 16,
+                            color: '#333',
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 145, 104, 0.2)',
+                          }}
+                        />
+                      </View>
+
+                      {/* Description */}
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
+                          Description
+                        </Text>
+                        <TextInput
+                          value={description}
+                          onChangeText={setDescription}
+                          placeholder="Ex: Spécialisé dans le marketing digital"
+                          placeholderTextColor="#999"
+                          maxLength={500}
+                          multiline
+                          numberOfLines={2}
+                          style={{
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: 12,
+                            padding: 14,
+                            fontSize: 16,
+                            color: '#333',
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 145, 104, 0.2)',
+                            minHeight: 60,
+                          }}
+                        />
+                      </View>
+
+                      {/* System Prompt */}
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
+                          Prompt système *
+                        </Text>
+                        <TextInput
+                          value={systemPrompt}
+                          onChangeText={setSystemPrompt}
+                          placeholder="Ex: Tu es un expert en marketing qui répond de manière créative..."
+                          placeholderTextColor="#999"
+                          multiline
+                          numberOfLines={3}
+                          style={{
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: 12,
+                            padding: 14,
+                            fontSize: 16,
+                            color: '#333',
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 145, 104, 0.2)',
+                            minHeight: 80,
+                            textAlignVertical: 'top',
+                          }}
+                        />
+                      </View>
+
+                      {/* Max Response Length */}
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
+                          Longueur max des réponses
+                        </Text>
+                        <TextInput
+                          value={maxResponseLength}
+                          onChangeText={setMaxResponseLength}
+                          placeholder="500"
+                          placeholderTextColor="#999"
+                          keyboardType="numeric"
+                          style={{
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: 12,
+                            padding: 14,
+                            fontSize: 16,
+                            color: '#333',
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 145, 104, 0.2)',
+                          }}
+                        />
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                          Nombre de caractères maximum par réponse
+                        </Text>
+                      </View>
                     </View>
 
-                    {/* Description */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Description
-                      </Text>
-                      <TextInput
-                        value={description}
-                        onChangeText={setDescription}
-                        placeholder="Ex: Spécialisé dans le marketing digital"
-                        placeholderTextColor="#999"
-                        maxLength={500}
-                        multiline
-                        numberOfLines={2}
-                        style={{
-                          backgroundColor: '#f5f5f5',
-                          borderRadius: 12,
-                          padding: 14,
-                          fontSize: 16,
-                          color: '#333',
-                          borderWidth: 1,
-                          borderColor: 'rgba(10, 145, 104, 0.2)',
-                          minHeight: 60,
-                        }}
-                      />
-                    </View>
-
-                    {/* System Prompt */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Prompt système *
-                      </Text>
-                      <TextInput
-                        value={systemPrompt}
-                        onChangeText={setSystemPrompt}
-                        placeholder="Ex: Tu es un expert en marketing qui répond de manière créative..."
-                        placeholderTextColor="#999"
-                        multiline
-                        numberOfLines={3}
-                        style={{
-                          backgroundColor: '#f5f5f5',
-                          borderRadius: 12,
-                          padding: 14,
-                          fontSize: 16,
-                          color: '#333',
-                          borderWidth: 1,
-                          borderColor: 'rgba(10, 145, 104, 0.2)',
-                          minHeight: 80,
-                          textAlignVertical: 'top',
-                        }}
-                      />
-                    </View>
-
-                    {/* Max Response Length */}
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 }}>
-                        Longueur max des réponses
-                      </Text>
-                      <TextInput
-                        value={maxResponseLength}
-                        onChangeText={setMaxResponseLength}
-                        placeholder="500"
-                        placeholderTextColor="#999"
-                        keyboardType="numeric"
-                        style={{
-                          backgroundColor: '#f5f5f5',
-                          borderRadius: 12,
-                          padding: 14,
-                          fontSize: 16,
-                          color: '#333',
-                          borderWidth: 1,
-                          borderColor: 'rgba(10, 145, 104, 0.2)',
-                        }}
-                      />
-                      <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                        Nombre de caractères maximum par réponse
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Footer */}
-                  <View style={{ 
-                    padding: 16, 
-                    borderTopWidth: 1, 
-                    borderTopColor: 'rgba(10, 145, 104, 0.1)',
-                    backgroundColor: 'white',
-                  }}>
-                    <TouchableOpacity
-                      onPress={handleSubmit}
-                      disabled={submitting}
-                      activeOpacity={0.8}
-                    >
-                      <LinearGradient
-                        colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.85)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={{
-                          paddingVertical: 16,
-                          borderRadius: 12,
-                          alignItems: 'center',
-                          shadowColor: 'rgba(10, 145, 104, 0.4)',
-                          shadowOffset: { width: 0, height: 4 },
-                          shadowOpacity: 0.5,
-                          shadowRadius: 8,
-                          elevation: 5,
-                        }}
+                    {/* Footer */}
+                    <View style={{ 
+                      padding: 16, 
+                      borderTopWidth: 1, 
+                      borderTopColor: 'rgba(10, 145, 104, 0.1)',
+                      backgroundColor: 'white',
+                    }}>
+                      <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={submitting}
+                        activeOpacity={0.8}
                       >
-                        {submitting ? (
-                          <ActivityIndicator color="white" />
-                        ) : (
-                          <Text style={{ color: 'white', fontSize: 17, fontWeight: 'bold' }}>
-                            Créer l&apos;agent
-                          </Text>
-                        )}
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
+                        <LinearGradient
+                          colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.85)']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={{
+                            paddingVertical: 16,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            shadowColor: 'rgba(10, 145, 104, 0.4)',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 8,
+                            elevation: 5,
+                          }}
+                        >
+                          {submitting ? (
+                            <ActivityIndicator color="white" />
+                          ) : (
+                            <Text style={{ color: 'white', fontSize: 17, fontWeight: 'bold' }}>
+                              Créer l&apos;agent
+                            </Text>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
                 </KeyboardAvoidingView>
+                     
+
               </View>
             )}
 
-          </Animated.View>
+          </ScrollView>
         )}
       </View>
 
