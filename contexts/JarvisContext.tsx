@@ -1,9 +1,7 @@
+import { API_BASE_URL } from "@/config/api";
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 interface JarvisInstance {
   uuid: string;

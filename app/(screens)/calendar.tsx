@@ -1,28 +1,24 @@
+import { API_BASE_URL } from "@/config/api";
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Easing,
-    Modal,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Utilise le proxy local pour éviter CORS en développement web
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 interface CalendarEvent {
   id: number;
@@ -380,36 +376,25 @@ export default function CalendarScreen() {
     return weeks;
   };
 
-  const getWeekRange = (date: Date) => {
-    const d = new Date(date);
-    const day = (d.getDay() + 6) % 7; // Mon=0
-    const start = new Date(d);
-    start.setDate(d.getDate() - day);
-    start.setHours(0,0,0,0);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    end.setHours(23,59,59,999);
-    return { start, end };
-  };
-
   // Memoized calendar computations
   const currentMonthKey = `${currentMonth.getFullYear()}-${currentMonth.getMonth()}`;
   const calendarDays = useMemo(() => generateCalendarDays(), [currentMonthKey]);
   const weeks = useMemo(() => getWeeks(calendarDays), [calendarDays]);
-  const { start: selWeekStart, end: selWeekEnd } = useMemo(() => getWeekRange(selectedDate), [selectedDate]);
-  const selWeekStartTime = selWeekStart.getTime();
-  const selWeekEndTime = selWeekEnd.getTime();
 
-  // Events in the selected week (use month data for speed)
-  const eventsThisWeek = useMemo(() => {
+  // Events for the selected day only
+  const eventsThisDay = useMemo(() => {
     if (!monthData?.events) return [] as CalendarEvent[];
+    const selectedDateKey = fmtLocalDate(selectedDate);
     const list = monthData.events.filter(ev => {
-      const start = new Date(ev.date_debut);
-      return start >= selWeekStart && start <= selWeekEnd;
+      const evKey = fmtLocalDate(new Date(ev.date_debut));
+      return evKey === selectedDateKey;
+    }).sort((a, b) => {
+      // Trier par heure de début
+      return new Date(a.date_debut).getTime() - new Date(b.date_debut).getTime();
     });
-    log('eventsThisWeek', { selWeekStart: selWeekStart.toString(), selWeekEnd: selWeekEnd.toString(), count: list.length });
+    log('eventsThisDay', { selectedDate: selectedDateKey, count: list.length });
     return list;
-  }, [monthData?.events, selWeekStartTime, selWeekEndTime]);
+  }, [monthData?.events, selectedDate]);
 
   if (loading) {
     return (
@@ -424,7 +409,29 @@ export default function CalendarScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header professionnel ultra-clean */}
+      <View style={styles.pageHeader}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Calendrier</Text>
+            <View style={styles.headerDateContainer}>
+              <Ionicons name="calendar-outline" size={16} color={THEME.sub} style={styles.headerDateIcon} />
+              <Text style={styles.headerSubtitle}>
+                {selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            onPress={() => setShowCreate(true)} 
+            style={styles.headerAddButton}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
@@ -460,66 +467,135 @@ export default function CalendarScreen() {
           }}
         >
           {weeks.map((week, wIdx) => {
-            const isSelectedWeek = week.some((d) => typeof d === 'number' && isSelectedDay(d as number));
             return (
-              <View key={wIdx}>
-                <View style={styles.calendarRow}>
-                  {week.map((day, index) => {
-                    const isToday = day &&
-                      day === new Date().getDate() &&
-                      currentMonth.getMonth() === new Date().getMonth() &&
-                      currentMonth.getFullYear() === new Date().getFullYear();
-                    const count = day ? countEventsForDay(day) : 0;
-                    const isSelected = !!day && isSelectedDay(day);
-                    return (
-                      <TouchableOpacity
-                        key={index}
-                        style={[styles.dayCell, !day ? styles.emptyClay : undefined]}
-                        onPress={() => day && selectDay(day)}
-                        disabled={!day}
-                        onLongPress={() => day && console.log('Créer événement le', day)}
-                      >
-                        {day && (
-                          <>
-                            <View style={[
-                              styles.dayNumberWrap,
-                              isSelected ? styles.dayNumberSelected : undefined,
-                              isToday ? styles.dayNumberToday : undefined,
-                            ]}>
-                              {isSelected ? (
-                                <TouchableOpacity onPress={() => setShowCreate(true)}>
-                                  <Ionicons name="add-circle" size={34} color="white" />
-                                </TouchableOpacity>
-                              ) : (
-                                <Text style={[styles.dayText, isSelected && styles.selectedDayText]}>{day}</Text>
-                              )}
+              <View key={wIdx} style={styles.calendarRow}>
+                {week.map((day, index) => {
+                  const isToday = day &&
+                    day === new Date().getDate() &&
+                    currentMonth.getMonth() === new Date().getMonth() &&
+                    currentMonth.getFullYear() === new Date().getFullYear();
+                  const count = day ? countEventsForDay(day) : 0;
+                  const isSelected = !!day && isSelectedDay(day);
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.dayCell, !day ? styles.emptyClay : undefined]}
+                      onPress={() => day && selectDay(day)}
+                      disabled={!day}
+                    >
+                      {day && (
+                        <>
+                          <View style={[
+                            styles.dayNumberWrap,
+                            isSelected ? styles.dayNumberSelected : undefined,
+                            isToday ? styles.dayNumberToday : undefined,
+                          ]}>
+                            <Text style={[styles.dayText, isSelected && styles.selectedDayText]}>{day}</Text>
+                          </View>
+                          {count > 0 && (
+                            <View style={styles.dotsRow}>
+                              {Array.from({ length: Math.min(count, 3) }).map((_, iDot) => (
+                                <View key={iDot} style={styles.eventDot} />
+                              ))}
+                              {count > 3 && <Text style={styles.moreCount}>+{count - 3}</Text>}
                             </View>
-                            {count > 0 && (
-                              <View style={styles.dotsRow}>
-                                {Array.from({ length: Math.min(count, 3) }).map((_, iDot) => (
-                                  <View key={iDot} style={styles.eventDot} />
-                                ))}
-                                {count > 3 && <Text style={styles.moreCount}>+{count - 3}</Text>}
-                              </View>
-                            )}
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {isSelectedWeek && (
-                  <WeekAgenda
-                    key={`agenda-${wIdx}`}
-                    startDate={selWeekStart}
-                    events={eventsThisWeek}
-                    newIds={createdEventIds}
-                  />
-                )}
+                          )}
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             );
           })}
         </Animated.View>
+
+        {/* Section des événements du jour */}
+        <View style={styles.dayEventsSection}>
+          <View style={styles.dayEventsSectionHeader}>
+            <Text style={styles.dayEventsSectionTitle}>
+              {eventsThisDay.length > 0 
+                ? `${eventsThisDay.length} événement${eventsThisDay.length > 1 ? 's' : ''}`
+                : 'Aucun événement'}
+            </Text>
+            {eventsThisDay.length > 0 && (
+              <Text style={styles.dayEventsSectionSubtitle}>
+                {selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </Text>
+            )}
+          </View>
+
+          {eventsThisDay.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={64} color="#c0d8c0" />
+              <Text style={styles.emptyText}>Aucun événement pour ce jour</Text>
+              <TouchableOpacity 
+                style={styles.emptyAddButton}
+                onPress={() => setShowCreate(true)}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.emptyAddButtonText}>Ajouter un événement</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            eventsThisDay.map((event, idx) => {
+              const start = new Date(event.date_debut);
+              const end = new Date(event.date_fin);
+              const isNew = !!createdEventIds && typeof event.id === 'number' && createdEventIds.has(event.id);
+              
+              return (
+                <View key={event.id || idx} style={[styles.eventCard, isNew && styles.eventCardNew]}>
+                  <View style={[styles.eventTypeIndicator, { backgroundColor: EVENT_TYPES_COLORS[event.type] || '#6a6a6a' }]} />
+                  <View style={styles.eventContent}>
+                    <View style={styles.eventHeader}>
+                      <Text style={styles.eventTitle}>{event.titre}</Text>
+                      {isNew && (
+                        <View style={styles.newBadge}>
+                          <Text style={styles.newBadgeText}>NOUVEAU</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {event.description && (
+                      <Text style={styles.eventDescription} numberOfLines={2}>{event.description}</Text>
+                    )}
+                    
+                    <View style={styles.eventMeta}>
+                      {!event.is_all_day && (
+                        <View style={styles.eventMetaItem}>
+                          <Ionicons name="time-outline" size={14} color={THEME.sub} />
+                          <Text style={styles.eventMetaText}>
+                            {start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                      )}
+                      {event.is_all_day && (
+                        <View style={styles.eventMetaItem}>
+                          <Ionicons name="sunny-outline" size={14} color={THEME.sub} />
+                          <Text style={styles.eventMetaText}>Toute la journée</Text>
+                        </View>
+                      )}
+                      {event.lieu && (
+                        <View style={styles.eventMetaItem}>
+                          <Ionicons name="location-outline" size={14} color={THEME.sub} />
+                          <Text style={styles.eventMetaText}>{event.lieu}</Text>
+                        </View>
+                      )}
+                      <View style={styles.eventMetaItem}>
+                        <View style={[styles.eventTypeBadge, { backgroundColor: EVENT_TYPES_COLORS[event.type] || '#6a6a6a' }]}>
+                          <Text style={styles.eventTypeBadgeText}>
+                            {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {/* Modal création d'événement */}
         <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
           <View style={styles.modalBackdrop}>
@@ -566,123 +642,6 @@ export default function CalendarScreen() {
   );
 }
 
-function WeekAgenda({ startDate, events, newIds }: { startDate: Date; events: CalendarEvent[]; newIds?: Set<number> }) {
-  const HOURS = Array.from({ length: 24 }, (_, i) => i);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
-    return d;
-  });
-
-  const slotH = 26; // px per hour (bigger for readability)
-
-  // Build events per day
-  const eventsByDay = days.map((d) => {
-    const key = fmtLocalDate(d);
-    const items = events.filter((ev) => fmtLocalDate(new Date(ev.date_debut)) === key);
-    log('WeekAgenda day', { key, items: items.length });
-    return items;
-  });
-
-  // Scrolling to current time if this week is the current one
-  const scrollerRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    const now = new Date();
-    const weekStart = new Date(startDate);
-    const weekEnd = new Date(startDate);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    if (now >= weekStart && now <= weekEnd) {
-      const targetY = Math.max(0, (now.getHours() + now.getMinutes() / 60) * slotH - 160);
-      scrollerRef.current?.scrollTo({ y: targetY, animated: true });
-    }
-  }, [startDate]);
-
-  // Helper for day label (Lun 09)
-  const dayLabel = (d: Date) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }).replace('.', '');
-
-  log('WeekAgenda header days', days.map(dd => fmtLocalDate(dd)));
-
-  // Current time indicator within each column (only for today)
-  const now = new Date();
-  const todayIndex = days.findIndex((d) => d.toDateString() === now.toDateString());
-  const nowTop = (now.getHours() + now.getMinutes() / 60) * slotH;
-
-  return (
-    <View>
-      {/* Header for week days */}
-      <View style={styles.agendaWeekHeader}>
-        <View style={styles.agendaHoursCol} />
-        <View style={styles.agendaDaysHeaderRow}>
-          {days.map((d, i) => (
-            <View key={i} style={styles.agendaDayHeaderCell}>
-              <Text style={styles.agendaDayHeaderText}>{dayLabel(d)}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <ScrollView ref={scrollerRef} style={{ maxHeight: 7 * slotH + 260 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.agendaContainer}>
-          <View style={styles.agendaHoursCol}>
-            {HOURS.map(h => (
-              <View key={h} style={[styles.agendaHour, { height: slotH }] }>
-                <Text style={styles.agendaHourText}>{h.toString().padStart(2,'0')}h</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.agendaDaysWrap}>
-            {days.map((d, colIdx) => (
-              <View key={colIdx} style={styles.agendaDayCol}>
-                {/* grid lines */}
-                {HOURS.map((h) => (
-                  <View key={h} style={[styles.agendaLine, { height: slotH }]} />
-                ))}
-
-                {/* red current-time line for today */}
-                {todayIndex === colIdx && (
-                  <View style={[styles.nowLine, { top: nowTop }]} />
-                )}
-
-                {/* events absolute */}
-                <View style={StyleSheet.absoluteFillObject}>
-                  {eventsByDay[colIdx].map((ev, i) => {
-                    const start = new Date(ev.date_debut);
-                    const end = new Date(ev.date_fin);
-                    const startHour = start.getHours() + start.getMinutes()/60;
-                    const endHour = end.getHours() + end.getMinutes()/60;
-                    const top = startHour * slotH;
-                    const height = Math.max(slotH * (endHour - startHour), 22);
-                    const isNew = !!newIds && typeof ev.id === 'number' && newIds.has(ev.id);
-                    log('Render event', { id: ev.id, titre: ev.titre, start: start.toISOString(), end: end.toISOString(), isNew });
-                    return (
-                      <View key={i} style={[
-                        styles.agendaEvent,
-                        { top, height, backgroundColor: EVENT_TYPES_COLORS[ev.type] || '#6a6a6a' },
-                        isNew ? { borderWidth: 2, borderColor: '#FFD54F' } : null,
-                      ]}>
-                        <Text style={styles.agendaEventTitle} numberOfLines={1}>{ev.titre}</Text>
-                        {!ev.is_all_day && (
-                          <Text style={styles.agendaEventTime} numberOfLines={1}>
-                            {start.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
-                          </Text>
-                        )}
-                        {isNew && (
-                          <View style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#FFD54F', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#5d4100' }}>NOUVEAU</Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -702,6 +661,56 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
   },
+  // Header professionnel ultra-clean
+  pageHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  headerDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerDateIcon: {
+    marginRight: 6,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: '#6b7280',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  headerAddButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: ECHO_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: ECHO_COLOR,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 5,
+  },
   addButton: {
     marginRight: 12,
   },
@@ -709,79 +718,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: THEME.card,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    backgroundColor: '#FFFFFF',
+    marginTop: 2,
   },
   navButton: {
-    padding: 8,
-  },
-  monthTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME.text,
-  },
-  weekDaysHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    backgroundColor: THEME.card,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e6eee6',
-  },
-  weekDayText: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.sub,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: THEME.card,
-    paddingBottom: 16,
-    paddingTop: 8,
-  },
-  calendarRow: {
-    flexDirection: 'row',
-    backgroundColor: THEME.card,
-  },
-  dayCell: {
-    width: '14.28%',
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 4,
-  },
-  dayNumberWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e6eee6',
+    backgroundColor: 'rgba(10, 145, 104, 0.08)',
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: -0.3,
+  },
+  weekDaysHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  weekDayText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9ca3af',
+    letterSpacing: 0.5,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 8,
+  },
+  calendarRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+  },
+  dayCell: {
+    width: '14.28%',
+    height: 62,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 6,
+  },
+  dayNumberWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   dayNumberSelected: {
     backgroundColor: ECHO_COLOR,
+    shadowColor: ECHO_COLOR,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 3,
   },
   dayNumberToday: {
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: ECHO_COLOR,
-    borderRadius: 17,
+    backgroundColor: 'rgba(10, 145, 104, 0.08)',
   },
   dayText: {
-    fontSize: 14,
-    color: THEME.text,
-    fontWeight: '700',
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '600',
   },
   selectedDayText: {
     color: 'white',
@@ -790,20 +804,20 @@ const styles = StyleSheet.create({
   dotsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-    gap: 2,
+    marginTop: 3,
+    gap: 3,
   },
   eventDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: ECHO_COLOR,
   },
   moreCount: {
-    fontSize: 10,
-    color: THEME.sub,
+    fontSize: 9,
+    color: '#9ca3af',
     marginLeft: 2,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   // (old filter styles kept harmless if referenced later; safe to remove if unused)
   filterRow: {
@@ -857,7 +871,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   dayEventsSection: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 100,
+    backgroundColor: THEME.greenSoft,
+  },
+  dayEventsSectionHeader: {
+    marginBottom: 20,
+  },
+  dayEventsSectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  dayEventsSectionSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   sectionTitle: {
     fontSize: 18,
@@ -868,111 +901,234 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 70,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 1,
   },
   emptyText: {
-    marginTop: 12,
+    marginTop: 20,
+    marginBottom: 28,
     fontSize: 16,
-    color: THEME.sub,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  emptyAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ECHO_COLOR,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 28,
+    gap: 8,
+    shadowColor: ECHO_COLOR,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  emptyAddButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
   },
   eventCard: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  eventCardNew: {
+    borderWidth: 2,
+    borderColor: '#FFD54F',
+    shadowOpacity: 0.12,
   },
   eventTypeIndicator: {
     width: 4,
     borderRadius: 2,
-    marginRight: 12,
+    marginRight: 16,
   },
   eventContent: {
     flex: 1,
   },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
   eventTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: THEME.text,
-    marginBottom: 4,
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginRight: 8,
+    letterSpacing: -0.2,
+  },
+  newBadge: {
+    backgroundColor: '#FFD54F',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#5d4100',
+    letterSpacing: 0.5,
   },
   eventDescription: {
     fontSize: 14,
-    color: THEME.sub,
-    marginBottom: 8,
+    color: '#6b7280',
+    marginBottom: 12,
+    lineHeight: 21,
   },
   eventMeta: {
-    gap: 8,
+    gap: 10,
   },
   eventMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 7,
   },
   eventMetaText: {
-    fontSize: 12,
-    color: THEME.sub,
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '500',
   },
-  // Week agenda styles
-  agendaContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e6eee6',
+  eventTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
-  agendaHoursCol: {
-    width: 48,
-    backgroundColor: '#f9fcf9',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#e6eee6',
+  eventTypeBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  agendaHour: { justifyContent: 'flex-start', paddingTop: 2, paddingHorizontal: 6 },
-  agendaHourText: { fontSize: 10, color: '#7a7a7a' },
-  agendaDaysWrap: { flex: 1, flexDirection: 'row' },
-  agendaDayCol: { flex: 1, position: 'relative' },
-  agendaLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef5ef' },
-  agendaEvent: {
-    position: 'absolute',
-    left: 4,
-    right: 4,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  agendaEventTitle: { color: 'white', fontSize: 12, fontWeight: '700' },
-  agendaEventTime: { color: 'white', fontSize: 10, opacity: 0.9 },
   // Modal création
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  modalLabel: { marginTop: 8, marginBottom: 6, color: '#555', fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fafafa' },
-  timeRow: { flexDirection: 'row', alignItems: 'center' },
-  timeInput: { flex: 1, textAlign: 'center' },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 10 },
-  cancelBtn: { paddingVertical: 10, paddingHorizontal: 12 },
-  cancelText: { color: '#666', fontWeight: '700' },
-  saveBtn: { backgroundColor: ECHO_COLOR, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10 },
-  saveText: { color: '#fff', fontWeight: '800' },
-  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeChip: { backgroundColor: THEME.greenSoft, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10 },
-  typeChipActive: { backgroundColor: THEME.green },
-  typeChipText: { color: THEME.green, fontWeight: '700' },
-  typeChipTextActive: { color: '#fff' },
-  agendaWeekHeader: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#e6eee6' },
-  agendaDaysHeaderRow: { flex: 1, flexDirection: 'row' },
-  agendaDayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8e8e8' },
-  agendaDayHeaderText: { fontSize: 12, fontWeight: '700', color: '#2e2e2e' },
-  nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: ECHO_COLOR },
+  modalBackdrop: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'flex-end' 
+  },
+  modalCard: { 
+    backgroundColor: '#fff', 
+    padding: 24, 
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: -4 },
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalTitle: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    marginBottom: 20,
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
+  },
+  modalLabel: { 
+    marginTop: 12, 
+    marginBottom: 8, 
+    color: '#374151', 
+    fontWeight: '600',
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  input: { 
+    borderWidth: 1.5, 
+    borderColor: '#e5e7eb', 
+    borderRadius: 14, 
+    paddingHorizontal: 16, 
+    paddingVertical: 14, 
+    backgroundColor: '#f9fafb',
+    fontSize: 16,
+    color: '#1a1a1a',
+  },
+  timeRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    gap: 12,
+  },
+  timeInput: { 
+    flex: 1, 
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  modalActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'flex-end', 
+    marginTop: 24, 
+    gap: 12 
+  },
+  cancelBtn: { 
+    paddingVertical: 14, 
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    backgroundColor: '#f3f4f6',
+  },
+  cancelText: { 
+    color: '#374151', 
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  saveBtn: { 
+    backgroundColor: ECHO_COLOR, 
+    paddingVertical: 14, 
+    paddingHorizontal: 28, 
+    borderRadius: 14,
+    shadowColor: ECHO_COLOR,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  saveText: { 
+    color: '#fff', 
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  typeRow: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10 
+  },
+  typeChip: { 
+    backgroundColor: '#f3f4f6', 
+    borderRadius: 14, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  typeChipActive: { 
+    backgroundColor: 'rgba(10, 145, 104, 0.1)',
+    borderColor: ECHO_COLOR,
+  },
+  typeChipText: { 
+    color: '#6b7280', 
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  typeChipTextActive: { 
+    color: ECHO_COLOR,
+    fontWeight: '700',
+  },
 });

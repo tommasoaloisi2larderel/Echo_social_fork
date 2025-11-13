@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/api";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -17,11 +18,6 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-
-// Utilise le proxy local pour éviter CORS en développement web
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
 
 type AuthMode = 'login' | 'register';
 type ErrorType = 'none' | 'wrong_password' | 'user_not_found' | 'other';

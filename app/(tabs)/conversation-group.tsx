@@ -1,5 +1,6 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { TypingIndicator } from '@/components/TypingIndicator';
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -55,10 +56,6 @@ export default function ConversationGroup() {
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
-
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
 
   const connectWebSocket = () => {
     if (!conversationId || !accessToken) return;

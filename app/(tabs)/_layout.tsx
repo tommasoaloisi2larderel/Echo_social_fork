@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/api";
 import { Stack, useGlobalSearchParams, useLocalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
@@ -6,8 +7,6 @@ import SwipeableContainer, { SwipeableContainerHandle } from '../../components/S
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useNavigation } from '../../contexts/NavigationContext';
-
-// Import the actual screen components
 import AboutScreen from './about';
 import ConversationsScreen from './conversations';
 import IndexScreen from './index';
@@ -24,11 +23,6 @@ export default function TabsLayout() {
   
   // Summary state
   const [loadingSummary, setLoadingSummary] = useState(false);
-  
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
   
   // Debug: voir ce qui est récupéré
   console.log('📍 _layout - localParams:', localParams, 'globalParams:', globalParams, 'conversationId:', conversationId);

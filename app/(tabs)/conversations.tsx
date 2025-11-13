@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
@@ -51,6 +52,13 @@ interface User {
   surnom: string;
   photo_profil_url?: string;
   is_friend?: boolean;
+}
+
+// Type pour les résultats de recherche par sections
+interface SearchResultsSections {
+  conversations: typeof displayItems;
+  friends: User[];
+  others: User[];
 }
 
 // Type pour les connexions (amis)
@@ -245,6 +253,44 @@ const GroupSquare = React.memo(({
 
 GroupSquare.displayName = 'GroupSquare';
 
+// Composant pour section expandable/collapsible
+const ExpandableSection = ({
+  title,
+  count,
+  icon,
+  isExpanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  count: number;
+  icon: keyof typeof Ionicons.glyphMap;
+  isExpanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) => (
+  <View>
+    <TouchableOpacity
+      style={localStyles.categoryHeaderSearch}
+      onPress={onToggle}
+      activeOpacity={0.7}
+    >
+      <Ionicons name={icon} size={18} color="rgba(10, 145, 104, 1)" />
+      <Text style={localStyles.categoryTitleSearch}>{title}</Text>
+      <View style={localStyles.categoryBadge}>
+        <Text style={localStyles.categoryBadgeText}>{count}</Text>
+      </View>
+      <Ionicons
+        name={isExpanded ? "chevron-up" : "chevron-down"}
+        size={18}
+        color="rgba(10, 145, 104, 1)"
+        style={{ marginLeft: 8 }}
+      />
+    </TouchableOpacity>
+    {isExpanded && children}
+  </View>
+);
+
 export default function ConversationsScreen() {
   const pathname = usePathname();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -270,19 +316,25 @@ export default function ConversationsScreen() {
   const squareRefs = useRef<Map<string, React.RefObject<ComponentRef<typeof TouchableOpacity>>>>(new Map());
   
   // États pour la recherche d'utilisateurs
-  const [searchResults, setSearchResults] = useState<{ friends: User[], strangers: User[] }>({ friends: [], strangers: [] });
+  const [searchResults, setSearchResults] = useState<SearchResultsSections>({
+    conversations: [],
+    friends: [],
+    others: []
+  });
   const [isSearching, setIsSearching] = useState(false);
+
+  // États pour les sections expandables
+  const [expandedSections, setExpandedSections] = useState({
+    conversations: true,
+    friends: true,
+    others: true,
+  });
 
   
   // États pour les groupes
   const [groups, setGroups] = useState<Group[]>([]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
-  
-  // Utilise le proxy local pour éviter CORS en développement web
-  const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? "http://localhost:3001"
-    : "https://reseausocial-production.up.railway.app";
 
   // Forcer la route base sur /conversations pour éviter le “rebascule” vers Home
   useEffect(() => {
@@ -319,62 +371,110 @@ export default function ConversationsScreen() {
   };
 
 
-  // Fonction pour rechercher tous les utilisateurs
+  // Fonction pour rechercher tous les utilisateurs avec trois sections
   const searchAllUsers = async (searchQuery: string) => {
     if (!searchQuery.trim()) {
-      setSearchResults({ friends: [], strangers: [] });
+      setSearchResults({ conversations: [], friends: [], others: [] });
       setIsSearching(false);
       return;
     }
 
     setIsSearching(true);
     try {
-      // Récupérer tous les utilisateurs
-      const response = await makeAuthenticatedRequest(
+      const query = searchQuery.toLowerCase();
+
+      // 1. Récupérer les conversations privées et filtrer par nom
+      const privateConversations = getCachedPrivateConversations() || [];
+
+      const matchingConversations = privateConversations
+        .filter(conv => {
+          const participant = conv.other_participant;
+          if (!participant) return false;
+          const name = (participant.surnom || participant.username || '').toLowerCase();
+          return name.includes(query);
+        })
+        .map(conv => {
+          const otherParticipant = conv.other_participant;
+          return {
+            uuid: conv.uuid,
+            name: otherParticipant?.surnom || otherParticipant?.username || 'Inconnu',
+            photoUrl: otherParticipant?.photo_profil_url,
+            unread: (conv.unread_count || 0) > 0,
+            conversationId: conv.uuid,
+            hasConversation: true,
+            lastMessage: conv.last_message?.content,
+            lastMessageTime: conv.last_message?.created_at,
+          };
+        });
+
+      // 2. Récupérer les connexions/amis acceptées
+      const connectionsResponse = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/?statut=acceptee`
+      );
+
+      let friendUuids = new Set<string>();
+      if (connectionsResponse.ok) {
+        const connectionsData = await connectionsResponse.json();
+        const connections = Array.isArray(connectionsData) ? connectionsData : (connectionsData.results || []);
+
+        // Extraire les UUIDs des amis (demandeur ou destinataire selon qui est l'utilisateur actuel)
+        connections.forEach((conn: any) => {
+          if (conn.demandeur_info?.uuid !== user?.uuid) {
+            friendUuids.add(conn.demandeur_info?.uuid);
+          }
+          if (conn.destinataire_info?.uuid !== user?.uuid) {
+            friendUuids.add(conn.destinataire_info?.uuid);
+          }
+        });
+      }
+
+      // Créer un Set des UUIDs d'utilisateurs avec conversations qui matchent
+      const conversationUserUuids = new Set(
+        matchingConversations
+          .map(c => privateConversations.find(pc => pc.uuid === c.uuid)?.other_participant?.uuid)
+          .filter(Boolean)
+      );
+
+      // 3. Récupérer tous les utilisateurs et filtrer
+      const usersResponse = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/users/`
       );
 
-      if (!response.ok) {
-        console.log(`Erreur lors de la récupération des utilisateurs (${response.status})`);
-        throw new Error(`Erreur ${response.status}: Impossible de récupérer la liste des utilisateurs`);
+      if (!usersResponse.ok) {
+        throw new Error(`Erreur ${usersResponse.status}: Impossible de récupérer la liste des utilisateurs`);
       }
 
-      const data = await response.json();
-      let allUsers: User[] = Array.isArray(data) ? data : (data.results || []);
-      
-      // Filtrer localement par surnom ou username
-      const users = allUsers.filter(u => {
+      const usersData = await usersResponse.json();
+      let allUsers: User[] = Array.isArray(usersData) ? usersData : (usersData.results || []);
+
+      // Filtrer par nom
+      const matchingUsers = allUsers.filter(u => {
         const surnom = (u.surnom || '').toLowerCase();
         const username = (u.username || '').toLowerCase();
-        const query = searchQuery.toLowerCase();
         return surnom.includes(query) || username.includes(query);
       });
-      
-    // 🎯 Utiliser les conversations comme source de vérité
-    const privateConversations = getCachedPrivateConversations() || [];
-    
-    // Créer un Set des UUIDs d'utilisateurs ayant une conversation
-    const friendUuids = new Set(
-      privateConversations
-        .map(c => c.other_participant?.uuid)
-        .filter(Boolean)
-    );
-    
-    console.log('🔍 Utilisateurs trouvés:', users.length);
-    console.log('📋 Conversations privées:', privateConversations.length);
-    console.log('👥 UUIDs des amis:', Array.from(friendUuids));
-    
-    // Séparer les résultats en amis (avec conversation) et inconnus
-    const friends = users.filter(u => friendUuids.has(u.uuid));
-    const strangers = users.filter(u => !friendUuids.has(u.uuid)); 
-      
-      console.log('✅ Amis trouvés:', friends.length, friends.map(f => f.surnom || f.username));
-      console.log('🆕 Inconnus trouvés:', strangers.length, strangers.map(s => s.surnom || s.username));
-      
-      setSearchResults({ friends, strangers });
+
+      // Séparer en amis et autres utilisateurs
+      const friends = matchingUsers.filter(u =>
+        friendUuids.has(u.uuid) && !conversationUserUuids.has(u.uuid)
+      );
+      const others = matchingUsers.filter(u =>
+        !friendUuids.has(u.uuid) && !conversationUserUuids.has(u.uuid)
+      );
+
+      console.log('🔍 Recherche:', query);
+      console.log('💬 Conversations matchées:', matchingConversations.length);
+      console.log('👥 Amis sans conversation matchée:', friends.length);
+      console.log('🆕 Autres utilisateurs:', others.length);
+
+      setSearchResults({
+        conversations: matchingConversations,
+        friends,
+        others
+      });
     } catch (error) {
-      console.error('Erreur lors de la recherche d\'utilisateurs:', error);
-      setSearchResults({ friends: [], strangers: [] });
+      console.error('Erreur lors de la recherche:', error);
+      setSearchResults({ conversations: [], friends: [], others: [] });
     } finally {
       setIsSearching(false);
     }
@@ -442,12 +542,12 @@ export default function ConversationsScreen() {
         const timeoutId = setTimeout(() => {
           searchAllUsers(query);
         }, 300);
-        
+
         return () => clearTimeout(timeoutId);
       } else {
-        setSearchResults({ friends: [], strangers: [] });
+        setSearchResults({ conversations: [], friends: [], others: [] });
       }
-    }, [query, viewMode]);  // 🎯 Enlever myConnections
+    }, [query, viewMode]);
 
   // Déclencher le préchargement pour les éléments visibles
   const handleItemVisibility = async (items: typeof displayItems) => {
@@ -554,8 +654,9 @@ else {
     ? displayItems.filter(f => f.name.toLowerCase().includes(query.toLowerCase()))
     : displayItems;
 
-  // Afficher les "autres utilisateurs" seulement si on a une recherche active en mode Privé
-  const showStrangers = viewMode === 'direct' && query.trim().length > 0 && searchResults.strangers.length > 0;
+  // Afficher les sections de recherche seulement si on a une recherche active en mode Privé
+  const showSearchSections = viewMode === 'direct' && query.trim().length > 0;
+  const hasSearchResults = searchResults.conversations.length > 0 || searchResults.friends.length > 0 || searchResults.others.length > 0;
   const onRefresh = () => {
       setRefreshing(true);
       fetchData().finally(() => setRefreshing(false));
@@ -611,8 +712,8 @@ else {
         </TouchableOpacity>
       )}
 
-      {/* Grille de conversations avec section "Autres utilisateurs" si recherche */}
-      {filteredFriends.length === 0 && !showStrangers && !(viewMode === 'group' && query.trim().length > 0) ? (
+      {/* Grille de conversations avec sections de recherche */}
+      {!showSearchSections && filteredFriends.length === 0 && !(viewMode === 'group' && query.trim().length > 0) ? (
         <View style={localStyles.emptyConversationsContainer}>
           <Ionicons 
             name={viewMode === 'direct' ? "person-outline" : "people-outline"} 
@@ -641,8 +742,109 @@ else {
           onLayout={() => handleItemVisibility(filteredFriends)}
           onScrollEndDrag={() => handleItemVisibility(filteredFriends)}
         >
-          {/* Grille des amis (toujours affichée) */}
-      <FlatList
+          {/* Afficher soit les conversations régulières, soit les sections de recherche */}
+          {showSearchSections ? (
+            // Mode recherche: afficher les trois sections
+            <View style={{ paddingTop: 160 }}>
+              {/* Section 1: Conversations qui matchent */}
+              {searchResults.conversations.length > 0 && (
+                <ExpandableSection
+                  title="Conversations"
+                  count={searchResults.conversations.length}
+                  icon="chatbubbles"
+                  isExpanded={expandedSections.conversations}
+                  onToggle={() => setExpandedSections(prev => ({ ...prev, conversations: !prev.conversations }))}
+                >
+                  <FlatList
+                    data={searchResults.conversations}
+                    keyExtractor={(item) => item.uuid}
+                    renderItem={({ item }) => {
+                      if (!squareRefs.current.has(item.uuid)) {
+                        squareRefs.current.set(item.uuid, React.createRef() as React.RefObject<ComponentRef<typeof TouchableOpacity>>);
+                      }
+                      const squareRef = squareRefs.current.get(item.uuid)!;
+
+                      return (
+                        <ConversationSquare
+                          name={item.name}
+                          unread={item.unread}
+                          photoUrl={item.photoUrl}
+                          squareRef={squareRef}
+                          onPress={() => {
+                            squareRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                              setTransitionPosition({ x: pageX, y: pageY, width, height });
+                              router.push({
+                                pathname: '/(tabs)/conversation-direct',
+                                params: { conversationId: item.conversationId }
+                              });
+                            });
+                          }}
+                        />
+                      );
+                    }}
+                    numColumns={3}
+                    columnWrapperStyle={styles.row}
+                    contentContainerStyle={{ paddingHorizontal: 10 }}
+                    scrollEnabled={false}
+                  />
+                </ExpandableSection>
+              )}
+
+              {/* Section 2: Amis sans conversations matchées */}
+              {searchResults.friends.length > 0 && (
+                <ExpandableSection
+                  title="Amis"
+                  count={searchResults.friends.length}
+                  icon="people"
+                  isExpanded={expandedSections.friends}
+                  onToggle={() => setExpandedSections(prev => ({ ...prev, friends: !prev.friends }))}
+                >
+                  <FlatList
+                    data={searchResults.friends}
+                    keyExtractor={(item) => item.uuid}
+                    renderItem={({ item }) => (
+                      <UserSquare
+                        user={item}
+                        onPress={() => handleUserPress(item.uuid, item.surnom || item.username)}
+                      />
+                    )}
+                    numColumns={3}
+                    columnWrapperStyle={styles.row}
+                    contentContainerStyle={{ paddingHorizontal: 10 }}
+                    scrollEnabled={false}
+                  />
+                </ExpandableSection>
+              )}
+
+              {/* Section 3: Autres utilisateurs */}
+              {searchResults.others.length > 0 && (
+                <ExpandableSection
+                  title="Autres utilisateurs"
+                  count={searchResults.others.length}
+                  icon="person-add"
+                  isExpanded={expandedSections.others}
+                  onToggle={() => setExpandedSections(prev => ({ ...prev, others: !prev.others }))}
+                >
+                  <FlatList
+                    data={searchResults.others}
+                    keyExtractor={(item) => item.uuid}
+                    renderItem={({ item }) => (
+                      <UserSquare
+                        user={item}
+                        onPress={() => router.push(`/(screens)/user-profile?uuid=${item.uuid}` as any)}
+                      />
+                    )}
+                    numColumns={3}
+                    columnWrapperStyle={styles.row}
+                    contentContainerStyle={{ paddingHorizontal: 10 }}
+                    scrollEnabled={false}
+                  />
+                </ExpandableSection>
+              )}
+            </View>
+          ) : (
+            // Mode normal: afficher la grille des conversations
+            <FlatList
             data={filteredFriends}
         keyExtractor={(item) => item.uuid}
         renderItem={({ item }) => {
@@ -757,39 +959,11 @@ else {
         columnWrapperStyle={styles.row}
         contentContainerStyle={[styles.conversationGrid, localStyles.gridCompact]}
             scrollEnabled={false}
-            ListFooterComponent={
-              showStrangers ? (
-                <View>
-                  <View style={localStyles.categoryHeaderSearch}>
-                    <Ionicons name="person-add" size={18} color="rgba(10, 145, 104, 1)" />
-                    <Text style={localStyles.categoryTitleSearch}>Autres utilisateurs</Text>
-                    <View style={localStyles.categoryBadge}>
-                      <Text style={localStyles.categoryBadgeText}>{searchResults.strangers.length}</Text>
-                    </View>
-                  </View>
-                  
-                  {/* Grille des autres utilisateurs */}
-                  <FlatList
-                    data={searchResults.strangers}
-                    keyExtractor={(item) => item.uuid}
-                    renderItem={({ item }) => (
-                      <UserSquare
-                        user={item}
-                        onPress={() => router.push(`/(screens)/user-profile?uuid=${item.uuid}` as any)}
-                      />
-                    )}
-                    numColumns={3}
-                    columnWrapperStyle={styles.row}
-                    contentContainerStyle={{ paddingHorizontal: 10 }}
-                    scrollEnabled={false}
-                  />
-                </View>
-              ) : null
-            }
           />
+          )}
 
           {/* Message si aucun résultat avec recherche */}
-          {query.trim() && filteredFriends.length === 0 && searchResults.strangers.length === 0 && !isSearching && viewMode === 'direct' && (
+          {query.trim() && !hasSearchResults && !isSearching && viewMode === 'direct' && (
             <View style={localStyles.noResultsContainer}>
               <Ionicons name="search-outline" size={64} color="#ccc" />
               <Text style={localStyles.noResultsTitle}>Aucun résultat</Text>

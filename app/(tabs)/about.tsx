@@ -1,15 +1,13 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
+import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? "http://localhost:3001"
-  : "https://reseausocial-production.up.railway.app";
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface ProfileStats {
   total_connexions: number;
@@ -30,12 +28,25 @@ const isDerniereReponse = (val: any): val is DerniereReponse => {
   return val && typeof val === 'object' && 'question' in val && 'reponse' in val && 'date' in val;
 };
 
+interface Post {
+  id: number;
+  uuid: string;
+  contenu: string;
+  auteur: {
+    uuid: string;
+    username: string;
+    photo_profil_url?: string | null;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
 export default function ProfileScreen() {
   const { user, accessToken, logout, makeAuthenticatedRequest } = useAuth();
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -60,13 +71,45 @@ export default function ProfileScreen() {
     }
   }, [makeAuthenticatedRequest, accessToken]);
 
+  const fetchPosts = useCallback(async () => {
+    if (!user?.uuid) return;
+    
+    setLoadingPosts(true);
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/posts/?auteur_uuid=${user.uuid}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // Gérer différents formats de réponse
+        const postsList = Array.isArray(data) ? data : (data.results || data.posts || []);
+        setPosts(postsList);
+      } else {
+        console.warn('Posts request failed with status', response.status);
+      }
+    } catch (error) {
+      console.warn('Error fetching posts:', error);
+    } finally {
+      setLoadingPosts(false);
+    }
+  }, [makeAuthenticatedRequest, user?.uuid]);
+
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+    fetchPosts();
+  }, [fetchStats, fetchPosts]);
+
+  // Recharger les posts quand on revient sur la page (après création d'un post)
+  useFocusEffect(
+    useCallback(() => {
+      fetchPosts();
+    }, [fetchPosts])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchStats();
+    fetchPosts();
   };
 
   const handleLogout = () => {
@@ -89,6 +132,21 @@ export default function ProfileScreen() {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  const formatPostDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 60) return `Il y a ${diffMins} min`;
+    if (diffHours < 24) return `Il y a ${diffHours}h`;
+    if (diffDays < 7) return `Il y a ${diffDays}j`;
+    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
   const lastAnswer: unknown = user?.derniere_reponse as unknown;
@@ -162,54 +220,24 @@ export default function ProfileScreen() {
         )}
       </LinearGradient>
 
-      {lastAnswer && isDerniereReponse(lastAnswer) ? (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>Dernière réponse</Text>
-          <Text style={styles.questionText}>{lastAnswer.question}</Text>
-          <Text style={styles.answerText}>{lastAnswer.reponse}</Text>
-          <Text style={styles.dateText}>{formatDate(lastAnswer.date)}</Text>
-        </View>
-      ) : null}
-
-      {/* Modal de paramètres */}
-      <Modal
-        visible={showSettingsMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSettingsMenu(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1}
-          onPress={() => setShowSettingsMenu(false)}
-        >
-          <View style={styles.settingsMenu}>
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                router.push('/(screens)/blocked-users' as any);
-              }}
-            >
-              <Ionicons name="ban-outline" size={22} color="#333" />
-              <Text style={styles.menuItemText}>Utilisateurs bloqués</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.menuDivider} />
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowSettingsMenu(false);
-                router.push('/(screens)/archived-conversations' as any);
-              }}
-            >
-              <Ionicons name="archive-outline" size={22} color="#333" />
-              <Text style={styles.menuItemText}>Conversations archivées</Text>
+      <View style={styles.cardsGrid}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="document-text-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.cardTitle}>Posts</Text>
+            <TouchableOpacity style={styles.newPostBtn} onPress={() => router.push('/posts/new' as any)}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.newPostText}>Nouveau</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+          <View style={styles.emptyState}>
+            <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
+            <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.footerSpace} />
     </ScrollView>
   );
 }
@@ -391,9 +419,7 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 16,
+  footerSpace: {
+    height: 60,
   },
 });
