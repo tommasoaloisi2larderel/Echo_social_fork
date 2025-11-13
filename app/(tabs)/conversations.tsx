@@ -124,13 +124,24 @@ interface GroupInvitation {
 
 const SearchBar = ({ query, setQuery }: { query: string; setQuery: (q: string) => void }) => (
   <View style={styles.searchContainer}>
+    <Ionicons
+      name="search-outline"
+      size={20}
+      color="rgba(10, 145, 104, 0.6)"
+      style={{ marginRight: 10 }}
+    />
     <TextInput
-      style={styles.searchInput}
+      style={[styles.searchInput, { flex: 1 }]}
       placeholder="Search for a conversation"
-      placeholderTextColor="#777"
+      placeholderTextColor="#999"
       value={query}
       onChangeText={setQuery}
     />
+    {query.length > 0 && (
+      <TouchableOpacity onPress={() => setQuery('')} style={{ padding: 4 }}>
+        <Ionicons name="close-circle" size={20} color="rgba(10, 145, 104, 0.6)" />
+      </TouchableOpacity>
+    )}
   </View>
 );
 
@@ -699,7 +710,7 @@ else {
       {/* Header Créer un groupe (en mode Groupe avec recherche) */}
       {viewMode === 'group' && query.trim().length > 0 && (
         <TouchableOpacity
-          style={[localStyles.categoryHeaderSearch, { marginTop: 160 }]}
+          style={[localStyles.categoryHeaderSearch, { marginTop: 145 }]}
           onPress={() => {
             console.log('🆕 Création groupe depuis header');
             setShowCreateGroupModal(true);
@@ -745,7 +756,7 @@ else {
           {/* Afficher soit les conversations régulières, soit les sections de recherche */}
           {showSearchSections ? (
             // Mode recherche: afficher les trois sections
-            <View style={{ paddingTop: 160 }}>
+            <View style={{ paddingTop: 145 }}>
               {/* Section 1: Conversations qui matchent */}
               {searchResults.conversations.length > 0 && (
                 <ExpandableSection
@@ -1052,23 +1063,26 @@ const localStyles = StyleSheet.create({
   categoryHeaderSearch: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 15,
+    height: 48,
+    marginTop: 12,
+    marginBottom: 8,
     marginHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: 25,
-    shadowColor: '#fff',
-    shadowOpacity: 0.9,
-    elevation: 5,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 16,
+    shadowColor: 'rgba(10, 145, 104, 0.15)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+    paddingHorizontal: 16,
+    paddingVertical: 0,
     zIndex: 5,
   },
   categoryTitleSearch: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: 'rgba(10, 145, 104, 1)',
-    marginLeft: 10,
+    marginLeft: 8,
     flex: 1,
   },
   categoryTitle: {
@@ -1080,15 +1094,17 @@ const localStyles = StyleSheet.create({
   },
   categoryBadge: {
     backgroundColor: 'rgba(10, 145, 104, 1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    height: 24,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryBadgeText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   noResultsContainer: {
