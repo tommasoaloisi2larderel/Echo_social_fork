@@ -85,10 +85,14 @@ export default function UserProfileScreen() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [isFriend, setIsFriend] = useState(false);
+  const [checkingFriendStatus, setCheckingFriendStatus] = useState(true);
+  const [startingConversation, setStartingConversation] = useState(false);
 
   useEffect(() => {
     loadProfile();
     loadPosts();
+    checkFriendStatus();
   }, [uuid]);
 
   const loadProfile = async () => {
@@ -132,6 +136,83 @@ export default function UserProfileScreen() {
       console.warn('Error fetching posts:', error);
     } finally {
       setLoadingPosts(false);
+    }
+  };
+
+  const checkFriendStatus = async () => {
+    if (!uuid) return;
+
+    setCheckingFriendStatus(true);
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/relations/connections/?statut=acceptee`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const connections = Array.isArray(data) ? data : (data.results || []);
+
+        // Check if the viewed user is in the list of accepted connections
+        const isFriendConnection = connections.some((conn: any) => {
+          const demandeurUuid = conn.demandeur_info?.uuid;
+          const destinataireUuid = conn.destinataire_info?.uuid;
+          return demandeurUuid === uuid || destinataireUuid === uuid;
+        });
+
+        setIsFriend(isFriendConnection);
+      }
+    } catch (error) {
+      console.error('Erreur vérification statut ami:', error);
+    } finally {
+      setCheckingFriendStatus(false);
+    }
+  };
+
+  const handleStartConversation = async () => {
+    if (!profile) return;
+
+    setStartingConversation(true);
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/messaging/conversations/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            other_user_uuid: profile.uuid,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        let errorMessage = 'Impossible de créer la conversation.';
+
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const conversationData = await response.json();
+
+      // Navigate to the conversation
+      router.push({
+        pathname: '/(tabs)/conversation-direct',
+        params: { conversationId: conversationData.uuid }
+      } as any);
+
+    } catch (error) {
+      console.error('Erreur création conversation:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      Alert.alert('Erreur', errorMessage);
+    } finally {
+      setStartingConversation(false);
     }
   };
 
@@ -415,15 +496,36 @@ export default function UserProfileScreen() {
           )}
         </View>
 
-        {/* Bouton demande d'ami */}
+        {/* Bouton action (demande d'ami ou commencer conversation) */}
         <View style={styles.actionSection}>
-          <TouchableOpacity
-            style={styles.addFriendButton}
-            onPress={() => setShowMessageModal(true)}
-          >
-            <Ionicons name="person-add" size={20} color="#fff" />
-            <Text style={styles.addFriendText}>Envoyer une demande d'ami</Text>
-          </TouchableOpacity>
+          {checkingFriendStatus ? (
+            <View style={styles.checkingStatusContainer}>
+              <ActivityIndicator size="small" color="rgba(10, 145, 104, 1)" />
+            </View>
+          ) : isFriend ? (
+            <TouchableOpacity
+              style={styles.startChatButton}
+              onPress={handleStartConversation}
+              disabled={startingConversation}
+            >
+              {startingConversation ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+                  <Text style={styles.startChatText}>Commencer une conversation</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.addFriendButton}
+              onPress={() => setShowMessageModal(true)}
+            >
+              <Ionicons name="person-add" size={20} color="#fff" />
+              <Text style={styles.addFriendText}>Envoyer une demande d'ami</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={{ height: 40 }} />
@@ -680,6 +782,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  startChatButton: {
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: 'rgba(10, 145, 104, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  startChatText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  checkingStatusContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
