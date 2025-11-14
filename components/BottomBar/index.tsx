@@ -74,6 +74,14 @@ export default function BottomBar({
   }, [chatText, isChat, websocket, conversationId]);
 
   const handleSendMessage = (message: string) => {
+    console.log('🔍 handleSendMessage called:', {
+      isChat,
+      hasWebsocket: !!websocket,
+      websocketState: websocket?.readyState,
+      conversationId,
+      currentRoute
+    });
+
     if (isChat && websocket && conversationId) {
       // ✅ Arrêter typing avant d'envoyer le message
       if (isTypingRef.current) {
@@ -95,6 +103,14 @@ export default function BottomBar({
       console.log('✅ Message envoyé via WebSocket:', payload);
     } else if (!isChat) {
       console.log('Message envoyé à Jarvis:', message);
+    } else {
+      // ❌ Conditions not met for sending
+      console.error('❌ Cannot send message - missing requirements:', {
+        isChat,
+        hasWebsocket: !!websocket,
+        websocketState: websocket?.readyState,
+        hasConversationId: !!conversationId
+      });
     }
   };
 
