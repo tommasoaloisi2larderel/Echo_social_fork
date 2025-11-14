@@ -3,6 +3,9 @@ import { router } from "expo-router";
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { storage } from "../utils/storage";
 import { AppState, AppStateStatus } from "react-native";
+import { cacheManager } from "../utils/CacheManager";
+import { requestDeduplicator } from "../utils/RequestDeduplicator";
+import { CacheTTL } from "../utils/cache-config";
 
 interface User {
   id: number;
@@ -23,6 +26,24 @@ interface User {
   prochains_evenements: any[];
 }
 
+/**
+ * Cache configuration for API requests
+ */
+interface CacheConfig {
+  /** Whether to use cache for this request (default: true for GET, false for others) */
+  useCache?: boolean;
+  /** Time-to-live in seconds (default: based on endpoint, see CacheTTL) */
+  ttl?: number;
+  /** Custom cache key (default: auto-generated from URL) */
+  cacheKey?: string;
+  /** Use stale-while-revalidate: return cached data immediately, fetch fresh in background */
+  staleWhileRevalidate?: boolean;
+  /** Cache keys to invalidate after successful mutation (for POST/PUT/DELETE) */
+  invalidateKeys?: string[];
+  /** Pattern to invalidate after successful mutation (supports wildcards) */
+  invalidatePattern?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
@@ -36,7 +57,8 @@ interface AuthContextType {
   reloadUser: () => Promise<void>;
   makeAuthenticatedRequest: (
     url: string,
-    options?: RequestInit
+    options?: RequestInit,
+    cacheConfig?: CacheConfig
   ) => Promise<Response>;
 }
 
@@ -310,6 +332,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.deleteItemAsync("refreshToken");
     await storage.deleteItemAsync("user");
 
+    // 🆕 Clear all caches on logout
+    await cacheManager.clear();
+    console.log("🗑️ All caches cleared on logout");
+
     router.replace("/(auth)/login");
   };
 
@@ -318,7 +344,125 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return await refreshAccessTokenInternal(refreshToken);
   };
 
+  /**
+   * Make an authenticated API request with aggressive caching
+   *
+   * Features:
+   * - Automatic caching for GET requests
+   * - Cache invalidation for mutations (POST/PUT/DELETE/PATCH)
+   * - Request deduplication (prevents duplicate simultaneous requests)
+   * - Stale-while-revalidate support
+   * - Automatic token refresh on 401
+   *
+   * @param url Request URL
+   * @param options Fetch options
+   * @param cacheConfig Cache configuration
+   */
   const makeAuthenticatedRequest = async (
+    url: string,
+    options: RequestInit = {},
+    cacheConfig: CacheConfig = {}
+  ): Promise<Response> => {
+    if (!accessToken) throw new Error("Pas de token d'accès");
+
+    const method = (options.method || 'GET').toUpperCase();
+    const isGetRequest = method === 'GET';
+    const isMutation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+    // Extract cache config with defaults
+    const {
+      useCache = isGetRequest, // Default: cache GET, don't cache mutations
+      ttl = CacheTTL.CONVERSATIONS_LIST, // Default TTL
+      cacheKey = url, // Default: use URL as cache key
+      staleWhileRevalidate = false,
+      invalidateKeys = [],
+      invalidatePattern,
+    } = cacheConfig;
+
+    // Generate request deduplication key
+    const dedupeKey = requestDeduplicator.generateKey(url, method, options.body);
+
+    // For GET requests with caching enabled
+    if (isGetRequest && useCache) {
+      // Check cache first
+      const cachedData = await cacheManager.get<{
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        body: any;
+      }>(cacheKey);
+
+      if (cachedData) {
+        // Cache hit - return cached response
+        const cachedResponse = new Response(JSON.stringify(cachedData.body), {
+          status: cachedData.status,
+          statusText: cachedData.statusText,
+          headers: new Headers(cachedData.headers),
+        });
+
+        // If stale-while-revalidate, fetch fresh data in background
+        if (staleWhileRevalidate) {
+          console.log(`🔄 Stale-while-revalidate: returning cache, fetching fresh for ${cacheKey}`);
+
+          // Fetch in background (don't await)
+          requestDeduplicator
+            .deduplicate(dedupeKey, async () => {
+              const freshResponse = await performAuthenticatedFetch(url, options);
+              if (freshResponse.ok) {
+                await cacheResponse(cacheKey, freshResponse.clone(), ttl);
+              }
+              return freshResponse;
+            })
+            .catch((error) => {
+              console.error(`❌ Background refresh failed for ${cacheKey}:`, error);
+            });
+        }
+
+        return cachedResponse;
+      }
+
+      // Cache miss - fetch with deduplication
+      console.log(`❌ Cache miss, fetching: ${cacheKey}`);
+
+      return requestDeduplicator.deduplicate(dedupeKey, async () => {
+        const response = await performAuthenticatedFetch(url, options);
+
+        // Cache successful responses
+        if (response.ok) {
+          await cacheResponse(cacheKey, response.clone(), ttl);
+        }
+
+        return response;
+      });
+    }
+
+    // For mutations or non-cached requests
+    const response = await performAuthenticatedFetch(url, options);
+
+    // Invalidate cache after successful mutations
+    if (isMutation && response.ok) {
+      // Invalidate specific keys
+      if (invalidateKeys.length > 0) {
+        await Promise.all(
+          invalidateKeys.map((key) => cacheManager.invalidate(key))
+        );
+        console.log(`🗑️ Invalidated ${invalidateKeys.length} cache keys after ${method}`);
+      }
+
+      // Invalidate by pattern
+      if (invalidatePattern) {
+        await cacheManager.invalidatePattern(invalidatePattern);
+        console.log(`🗑️ Invalidated pattern "${invalidatePattern}" after ${method}`);
+      }
+    }
+
+    return response;
+  };
+
+  /**
+   * Perform the actual authenticated fetch with token refresh on 401
+   */
+  const performAuthenticatedFetch = async (
     url: string,
     options: RequestInit = {}
   ): Promise<Response> => {
@@ -332,6 +476,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       },
     });
 
+    // Handle 401 - refresh token and retry
     if (response.status === 401) {
       const newToken = await refreshAccessToken();
       if (!newToken) {
@@ -339,6 +484,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error("Session expirée, veuillez vous reconnecter");
       }
 
+      // Retry with new token
       return fetch(url, {
         ...options,
         headers: {
@@ -349,6 +495,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     return response;
+  };
+
+  /**
+   * Cache a successful response
+   */
+  const cacheResponse = async (
+    key: string,
+    response: Response,
+    ttl: number
+  ): Promise<void> => {
+    try {
+      // Clone response to read body
+      const body = await response.json();
+
+      // Extract headers as plain object
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
+      // Cache the response data
+      await cacheManager.set(
+        key,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+          body,
+        },
+        ttl
+      );
+    } catch (error) {
+      console.error(`❌ Failed to cache response for ${key}:`, error);
+    }
   };
 
   const isLoggedIn = !!user && !!accessToken;
