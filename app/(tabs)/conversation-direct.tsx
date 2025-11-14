@@ -6,8 +6,9 @@ import { TypingIndicator } from '@/components/TypingIndicator';
 import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -476,6 +477,16 @@ export default function ConversationDirect() {
     }
     return () => { if (localWebsocket) localWebsocket.close(); };
   }, [conversationId, accessToken]);
+
+  // Rafraîchir les messages à chaque fois qu'on revient sur cet écran
+  useFocusEffect(
+    useCallback(() => {
+      if (conversationId && accessToken) {
+        fetchMessages();
+      }
+    }, [conversationId, accessToken])
+  );
+
   // Auto-scroll vers le bas après le chargement des messages
   useEffect(() => {
     if (messages.length > 0 && scrollViewRef.current && !loading) {
