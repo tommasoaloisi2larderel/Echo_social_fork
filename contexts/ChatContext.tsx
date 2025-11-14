@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Image as RNImage } from 'react-native';
+import { Image as RNImage, AppState, AppStateStatus } from 'react-native';
 import { storage } from '../utils/storage';
+import { cacheManager } from '../utils/CacheManager';
+import { CacheKeys, CacheTTL } from '../utils/cache-config';
 
 interface CachedMessage {
   id: number;
@@ -28,7 +30,7 @@ interface ChatContextType {
     conversationId: string,
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
-  prefetchAvatars: (urls: string[]) => Promise<void>;
+  prefetchAvatars: (urls: string[], priority?: 'high' | 'low') => Promise<void>;
   prefetchAllMessages: (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
@@ -48,6 +50,11 @@ interface ChatContextType {
   ) => Promise<void>;
   removeFromPrivateConversationsCache: (conversationUuid: string) => void;
   removeFromGroupConversationsCache: (conversationUuid: string) => void;
+  // 🆕 Phase 2: Enhanced prefetching & background refresh
+  setVisibleConversations: (conversationIds: string[]) => void;
+  backgroundRefresh: (
+    request: (url: string, options?: RequestInit) => Promise<Response>
+  ) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -56,62 +63,176 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  
-  // Caches en mémoire pour accélérer l'ouverture des écrans
-  const messagesCacheRef = useRef<Map<string, CachedMessage[]>>(new Map());
-  const infoCacheRef = useRef<Map<string, any>>(new Map());
+
+  // 🆕 Track in-flight prefetch operations (for deduplication)
   const inFlightPrefetchRef = useRef<Set<string>>(new Set());
-  const messagesIndexRef = useRef<Set<string>>(new Set());
-  
-  // 🆕 Caches d'overview SÉPARÉS
-  const privateConversationsListRef = useRef<any[] | undefined>(undefined);
-  const groupConversationsListRef = useRef<any[] | undefined>(undefined);
-  const connectionsListRef = useRef<any[] | undefined>(undefined);
-  const groupsListRef = useRef<any[] | undefined>(undefined);
-  const invitationsListRef = useRef<any[] | undefined>(undefined);
+
+  // 🆕 Track app state for background refresh
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 🆕 Track visible conversations for smart avatar prefetching
+  const visibleConversationsRef = useRef<string[]>([]);
 
   const API_BASE_URL = typeof window !== 'undefined' && (window as any).location?.hostname === 'localhost'
     ? 'http://localhost:3001'
     : 'https://reseausocial-production.up.railway.app';
 
-  const getCachedMessages = (conversationId: string) => {
-    return messagesCacheRef.current.get(conversationId);
+  // 🆕 Keep memory cache for synchronous access (mirrors CacheManager)
+  const messagesCacheRef = useRef<Map<string, CachedMessage[]>>(new Map());
+  const infoCacheRef = useRef<Map<string, any>>(new Map());
+
+  /**
+   * 🆕 Get cached messages for a conversation
+   * Returns from memory cache immediately (sync)
+   * Also hydrates from CacheManager in background
+   */
+  const getCachedMessages = (conversationId: string): CachedMessage[] | undefined => {
+    // Return from memory cache immediately (synchronous)
+    const memoryCache = messagesCacheRef.current.get(conversationId);
+
+    // Also try to hydrate from CacheManager in background
+    if (!memoryCache) {
+      cacheManager
+        .get<CachedMessage[]>(CacheKeys.conversationMessages(conversationId))
+        .then((data) => {
+          if (data) {
+            messagesCacheRef.current.set(conversationId, data);
+            console.log(`✅ Hydrated ${data.length} messages from cache for ${conversationId}`);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return memoryCache;
   };
 
-  const getCachedConversationInfo = (conversationId: string) => {
-    return infoCacheRef.current.get(conversationId);
+  /**
+   * 🆕 Get cached conversation info
+   * Returns from memory cache immediately (sync)
+   */
+  const getCachedConversationInfo = (conversationId: string): any | undefined => {
+    // Return from memory cache immediately (synchronous)
+    const memoryCache = infoCacheRef.current.get(conversationId);
+
+    // Also try to hydrate from CacheManager in background
+    if (!memoryCache) {
+      cacheManager
+        .get<any>(CacheKeys.conversationInfo(conversationId))
+        .then((data) => {
+          if (data) {
+            infoCacheRef.current.set(conversationId, data);
+            console.log(`✅ Hydrated conversation info from cache for ${conversationId}`);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return memoryCache;
   };
 
-  const primeCache = (conversationId: string, info: any | null, messages: CachedMessage[]) => {
-    if (info) infoCacheRef.current.set(conversationId, info);
-    if (messages && messages.length >= 0) messagesCacheRef.current.set(conversationId, messages);
+  /**
+   * 🆕 Prime cache with conversation data
+   * Updates both memory cache (sync) and CacheManager (async)
+   */
+  const primeCache = (
+    conversationId: string,
+    info: any | null,
+    messages: CachedMessage[]
+  ): void => {
     try {
-      messagesIndexRef.current.add(conversationId);
-      storage.setItemAsync('cache_messages_index', JSON.stringify(Array.from(messagesIndexRef.current)));
-      storage.setItemAsync(`cache_messages_${conversationId}`, JSON.stringify(messages));
-    } catch {}
+      // Update memory cache immediately (synchronous)
+      if (info) {
+        infoCacheRef.current.set(conversationId, info);
+      }
+      if (messages && messages.length >= 0) {
+        messagesCacheRef.current.set(conversationId, messages);
+      }
+
+      // Update CacheManager in background (asynchronous)
+      (async () => {
+        try {
+          if (info) {
+            await cacheManager.set(
+              CacheKeys.conversationInfo(conversationId),
+              info,
+              CacheTTL.CONVERSATION_INFO
+            );
+          }
+          if (messages && messages.length >= 0) {
+            await cacheManager.set(
+              CacheKeys.conversationMessages(conversationId),
+              messages,
+              CacheTTL.MESSAGES // Infinity
+            );
+            console.log(`💾 Cached ${messages.length} messages for ${conversationId}`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to persist cache for ${conversationId}:`, error);
+        }
+      })();
+    } catch (error) {
+      console.error(`❌ Failed to prime memory cache for ${conversationId}:`, error);
+    }
   };
 
+  /**
+   * 🆕 Prefetch conversation data (info + messages)
+   * Uses CacheManager for persistence
+   */
   const prefetchConversation = async (
     conversationId: string,
     request: (url: string, options?: RequestInit) => Promise<Response>
-  ) => {
+  ): Promise<void> => {
     if (!conversationId) return;
-    if (messagesCacheRef.current.has(conversationId)) return;
-    if (inFlightPrefetchRef.current.has(conversationId)) return;
+
+    // Check if already cached in memory
+    if (messagesCacheRef.current.has(conversationId)) {
+      console.log(`⚡ Conversation ${conversationId} already in memory cache`);
+      return;
+    }
+
+    // Check if already prefetching
+    if (inFlightPrefetchRef.current.has(conversationId)) {
+      console.log(`🔄 Already prefetching conversation ${conversationId}`);
+      return;
+    }
+
+    // Check if in CacheManager (persistent cache)
+    const cachedMessages = await cacheManager.get<CachedMessage[]>(
+      CacheKeys.conversationMessages(conversationId)
+    );
+    if (cachedMessages) {
+      console.log(`✅ Found ${cachedMessages.length} cached messages for ${conversationId}`);
+      messagesCacheRef.current.set(conversationId, cachedMessages);
+
+      // Also get conversation info from cache
+      const cachedInfo = await cacheManager.get<any>(
+        CacheKeys.conversationInfo(conversationId)
+      );
+      if (cachedInfo) {
+        infoCacheRef.current.set(conversationId, cachedInfo);
+      }
+      return;
+    }
+
+    // Not cached - fetch from API
     inFlightPrefetchRef.current.add(conversationId);
     try {
+      console.log(`🌐 Prefetching conversation ${conversationId} from API...`);
+
       const [infoResp, msgsResp] = await Promise.all([
         request(`${API_BASE_URL}/messaging/conversations/${conversationId}/`),
         request(`${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`),
       ]);
 
       if (!infoResp.ok || !msgsResp.ok) {
-        throw new Error('Prefetch HTTP error');
+        throw new Error(`Prefetch HTTP error: ${infoResp.status} ${msgsResp.status}`);
       }
 
       const infoData = await infoResp.json();
       const msgsData = await msgsResp.json();
+
       let messages: CachedMessage[] = Array.isArray(msgsData) ? msgsData : (msgsData.results || []);
       messages = messages
         .filter((m: any) => !m.conversation_uuid || m.conversation_uuid === conversationId)
@@ -124,93 +245,286 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           is_read: m.is_read,
           conversation_uuid: m.conversation_uuid,
         }))
-        .sort((a: CachedMessage, b: CachedMessage) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-      infoCacheRef.current.set(conversationId, infoData);
-      messagesCacheRef.current.set(conversationId, messages);
-      try {
-        messagesIndexRef.current.add(conversationId);
-        storage.setItemAsync('cache_messages_index', JSON.stringify(Array.from(messagesIndexRef.current)));
-        storage.setItemAsync(`cache_messages_${conversationId}`, JSON.stringify(messages));
-      } catch {}
-    } catch (e) {
-      // silencieux
+      // Cache in both memory and CacheManager
+      primeCache(conversationId, infoData, messages);
+
+      console.log(`✅ Prefetched ${messages.length} messages for ${conversationId}`);
+    } catch (error) {
+      console.error(`❌ Failed to prefetch conversation ${conversationId}:`, error);
     } finally {
       inFlightPrefetchRef.current.delete(conversationId);
     }
   };
 
-  const prefetchAvatars = async (urls: string[]) => {
+  /**
+   * 🆕 Smart avatar prefetching with prioritization
+   * Prioritizes avatars from visible conversations
+   *
+   * @param urls Array of avatar URLs
+   * @param priority 'high' for visible conversations, 'low' for background
+   */
+  const prefetchAvatars = async (
+    urls: string[],
+    priority: 'high' | 'low' = 'low'
+  ): Promise<void> => {
     const unique = Array.from(new Set((urls || []).filter(Boolean)));
     if (unique.length === 0) return;
+
+    console.log(`🖼️ Prefetching ${unique.length} avatars (priority: ${priority})...`);
+
     try {
-      await Promise.allSettled(unique.map((u) => RNImage.prefetch(u)));
-    } catch {}
+      if (priority === 'high') {
+        // High priority: prefetch immediately in parallel
+        await Promise.all(unique.map((url) => RNImage.prefetch(url)));
+        console.log(`✅ Prefetched ${unique.length} high-priority avatars`);
+      } else {
+        // Low priority: prefetch in batches with delays to avoid blocking
+        const batchSize = 5;
+        for (let i = 0; i < unique.length; i += batchSize) {
+          const batch = unique.slice(i, i + batchSize);
+          await Promise.allSettled(batch.map((url) => RNImage.prefetch(url)));
+
+          // Small delay between batches to avoid overwhelming the system
+          if (i + batchSize < unique.length) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+        console.log(`✅ Prefetched ${unique.length} low-priority avatars`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to prefetch avatars:`, error);
+    }
   };
 
-  // 🆕 Getters/Setters pour conversations PRIVÉES
-  const getCachedPrivateConversations = () => privateConversationsListRef.current;
-  const setCachedPrivateConversations = (list: any[]) => {
-    privateConversationsListRef.current = Array.isArray(list) ? list : [];
-    try { 
-      storage.setItemAsync('cache_private_conversations', JSON.stringify(privateConversationsListRef.current)); 
-    } catch {}
+  /**
+   * 🆕 Set visible conversations for smart prefetching
+   * Call this when a conversation list is rendered
+   */
+  const setVisibleConversations = (conversationIds: string[]): void => {
+    visibleConversationsRef.current = conversationIds;
   };
 
-  const removeFromPrivateConversationsCache = (conversationUuid: string) => {
+  // 🆕 Memory cache refs for conversation lists (for synchronous access)
+  const privateConversationsListRef = useRef<any[] | undefined>(undefined);
+  const groupConversationsListRef = useRef<any[] | undefined>(undefined);
+  const connectionsListRef = useRef<any[] | undefined>(undefined);
+  const groupsListRef = useRef<any[] | undefined>(undefined);
+  const invitationsListRef = useRef<any[] | undefined>(undefined);
+
+  /**
+   * 🆕 Get cached private conversations (sync)
+   * Auto-hydrates from CacheManager if not in memory
+   */
+  const getCachedPrivateConversations = (): any[] | undefined => {
+    const memoryCache = privateConversationsListRef.current;
+
+    // Hydrate from CacheManager in background
+    if (!memoryCache) {
+      cacheManager
+        .get<any[]>(CacheKeys.privateConversations())
+        .then((data) => {
+          if (data) {
+            privateConversationsListRef.current = data;
+            console.log(`✅ Hydrated ${data.length} private conversations from cache`);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return memoryCache;
+  };
+
+  /**
+   * 🆕 Set cached private conversations
+   * Updates both memory and CacheManager
+   */
+  const setCachedPrivateConversations = (list: any[]): void => {
+    const safeList = Array.isArray(list) ? list : [];
+    privateConversationsListRef.current = safeList;
+
+    // Persist to CacheManager
+    cacheManager
+      .set(CacheKeys.privateConversations(), safeList, CacheTTL.CONVERSATIONS_LIST)
+      .catch((error) =>
+        console.error('Failed to cache private conversations:', error)
+      );
+  };
+
+  /**
+   * 🆕 Remove conversation from private cache
+   */
+  const removeFromPrivateConversationsCache = (conversationUuid: string): void => {
     if (!privateConversationsListRef.current) return;
+
     privateConversationsListRef.current = privateConversationsListRef.current.filter(
       (conv: any) => conv.uuid !== conversationUuid
     );
-    try {
-      storage.setItemAsync('cache_private_conversations', JSON.stringify(privateConversationsListRef.current));
-    } catch (error) {
-      console.error('Erreur mise à jour cache privé:', error);
+
+    // Update CacheManager
+    cacheManager
+      .set(
+        CacheKeys.privateConversations(),
+        privateConversationsListRef.current,
+        CacheTTL.CONVERSATIONS_LIST
+      )
+      .catch((error) => console.error('Failed to update private conversations cache:', error));
+
+    console.log(`🗑️ Removed private conversation ${conversationUuid} from cache`);
+  };
+
+  /**
+   * 🆕 Get cached group conversations (sync)
+   */
+  const getCachedGroupConversations = (): any[] | undefined => {
+    const memoryCache = groupConversationsListRef.current;
+
+    if (!memoryCache) {
+      cacheManager
+        .get<any[]>(CacheKeys.groupConversations())
+        .then((data) => {
+          if (data) {
+            groupConversationsListRef.current = data;
+            console.log(`✅ Hydrated ${data.length} group conversations from cache`);
+          }
+        })
+        .catch(() => {});
     }
-    console.log(`🗑️ Conversation privée ${conversationUuid} retirée du cache`);
+
+    return memoryCache;
   };
 
-  // 🆕 Getters/Setters pour conversations de GROUPE
-  const getCachedGroupConversations = () => groupConversationsListRef.current;
-  const setCachedGroupConversations = (list: any[]) => {
-    groupConversationsListRef.current = Array.isArray(list) ? list : [];
-    try { 
-      storage.setItemAsync('cache_group_conversations', JSON.stringify(groupConversationsListRef.current)); 
-    } catch {}
+  /**
+   * 🆕 Set cached group conversations
+   */
+  const setCachedGroupConversations = (list: any[]): void => {
+    const safeList = Array.isArray(list) ? list : [];
+    groupConversationsListRef.current = safeList;
+
+    cacheManager
+      .set(CacheKeys.groupConversations(), safeList, CacheTTL.CONVERSATIONS_LIST)
+      .catch((error) => console.error('Failed to cache group conversations:', error));
   };
 
-  const removeFromGroupConversationsCache = (conversationUuid: string) => {
+  /**
+   * 🆕 Remove conversation from group cache
+   */
+  const removeFromGroupConversationsCache = (conversationUuid: string): void => {
     if (!groupConversationsListRef.current) return;
+
     groupConversationsListRef.current = groupConversationsListRef.current.filter(
       (conv: any) => conv.uuid !== conversationUuid
     );
-    try {
-      storage.setItemAsync('cache_group_conversations', JSON.stringify(groupConversationsListRef.current));
-    } catch (error) {
-      console.error('Erreur mise à jour cache groupe:', error);
+
+    cacheManager
+      .set(
+        CacheKeys.groupConversations(),
+        groupConversationsListRef.current,
+        CacheTTL.CONVERSATIONS_LIST
+      )
+      .catch((error) => console.error('Failed to update group conversations cache:', error));
+
+    console.log(`🗑️ Removed group conversation ${conversationUuid} from cache`);
+  };
+
+  /**
+   * 🆕 Get cached connections
+   */
+  const getCachedConnections = (): any[] | undefined => {
+    const memoryCache = connectionsListRef.current;
+
+    if (!memoryCache) {
+      cacheManager
+        .get<any[]>(CacheKeys.connections())
+        .then((data) => {
+          if (data) {
+            connectionsListRef.current = data;
+            console.log(`✅ Hydrated ${data.length} connections from cache`);
+          }
+        })
+        .catch(() => {});
     }
-    console.log(`🗑️ Conversation groupe ${conversationUuid} retirée du cache`);
+
+    return memoryCache;
   };
 
-  // Connections
-  const getCachedConnections = () => connectionsListRef.current;
-  const setCachedConnections = (list: any[]) => {
-    connectionsListRef.current = Array.isArray(list) ? list : [];
-    try { storage.setItemAsync('cache_connections', JSON.stringify(connectionsListRef.current)); } catch {}
+  /**
+   * 🆕 Set cached connections
+   */
+  const setCachedConnections = (list: any[]): void => {
+    const safeList = Array.isArray(list) ? list : [];
+    connectionsListRef.current = safeList;
+
+    cacheManager
+      .set(CacheKeys.connections(), safeList, CacheTTL.CONNECTIONS)
+      .catch((error) => console.error('Failed to cache connections:', error));
   };
 
-  // Groups
-  const getCachedGroups = () => groupsListRef.current;
-  const setCachedGroups = (list: any[]) => {
-    groupsListRef.current = Array.isArray(list) ? list : [];
-    try { storage.setItemAsync('cache_groups', JSON.stringify(groupsListRef.current)); } catch {}
+  /**
+   * 🆕 Get cached groups
+   */
+  const getCachedGroups = (): any[] | undefined => {
+    const memoryCache = groupsListRef.current;
+
+    if (!memoryCache) {
+      cacheManager
+        .get<any[]>(CacheKeys.groups())
+        .then((data) => {
+          if (data) {
+            groupsListRef.current = data;
+            console.log(`✅ Hydrated ${data.length} groups from cache`);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return memoryCache;
   };
 
-  // Invitations
-  const getCachedGroupInvitations = () => invitationsListRef.current;
-  const setCachedGroupInvitations = (list: any[]) => {
-    invitationsListRef.current = Array.isArray(list) ? list : [];
-    try { storage.setItemAsync('cache_group_invitations', JSON.stringify(invitationsListRef.current)); } catch {}
+  /**
+   * 🆕 Set cached groups
+   */
+  const setCachedGroups = (list: any[]): void => {
+    const safeList = Array.isArray(list) ? list : [];
+    groupsListRef.current = safeList;
+
+    cacheManager
+      .set(CacheKeys.groups(), safeList, CacheTTL.GROUPS)
+      .catch((error) => console.error('Failed to cache groups:', error));
+  };
+
+  /**
+   * 🆕 Get cached group invitations
+   */
+  const getCachedGroupInvitations = (): any[] | undefined => {
+    const memoryCache = invitationsListRef.current;
+
+    if (!memoryCache) {
+      cacheManager
+        .get<any[]>(CacheKeys.groupInvitations())
+        .then((data) => {
+          if (data) {
+            invitationsListRef.current = data;
+            console.log(`✅ Hydrated ${data.length} invitations from cache`);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return memoryCache;
+  };
+
+  /**
+   * 🆕 Set cached group invitations
+   */
+  const setCachedGroupInvitations = (list: any[]): void => {
+    const safeList = Array.isArray(list) ? list : [];
+    invitationsListRef.current = safeList;
+
+    cacheManager
+      .set(CacheKeys.groupInvitations(), safeList, CacheTTL.INVITATIONS)
+      .catch((error) => console.error('Failed to cache invitations:', error));
   };
 
   // 🆕 Fonction de prefetch modifiée pour SÉPARER privé et groupe
@@ -367,32 +681,91 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  // 🆕 Hydrate les caches depuis le stockage au démarrage du provider
+  /**
+   * 🆕 Background refresh for stale data
+   * Refreshes cached data that has become stale
+   */
+  const backgroundRefresh = async (
+    request: (url: string, options?: RequestInit) => Promise<Response>
+  ): Promise<void> => {
+    try {
+      console.log('🔄 Background refresh: checking stale caches...');
+
+      // Refresh conversations overview if they exist (they may be stale)
+      if (privateConversationsListRef.current || groupConversationsListRef.current) {
+        console.log('🔄 Refreshing conversations overview in background...');
+        await prefetchConversationsOverview(request);
+      }
+
+      console.log('✅ Background refresh completed');
+    } catch (error) {
+      console.error('❌ Background refresh failed:', error);
+    }
+  };
+
+  /**
+   * 🆕 Hydrate caches from CacheManager on mount
+   */
   useEffect(() => {
     (async () => {
       try {
+        console.log('📦 Hydrating caches from CacheManager...');
+
         const [priv, grp, co, g, inv] = await Promise.all([
-          storage.getItemAsync('cache_private_conversations'),
-          storage.getItemAsync('cache_group_conversations'),
-          storage.getItemAsync('cache_connections'),
-          storage.getItemAsync('cache_groups'),
-          storage.getItemAsync('cache_group_invitations'),
+          cacheManager.get<any[]>(CacheKeys.privateConversations()),
+          cacheManager.get<any[]>(CacheKeys.groupConversations()),
+          cacheManager.get<any[]>(CacheKeys.connections()),
+          cacheManager.get<any[]>(CacheKeys.groups()),
+          cacheManager.get<any[]>(CacheKeys.groupInvitations()),
         ]);
-        if (priv) privateConversationsListRef.current = JSON.parse(priv);
-        if (grp) groupConversationsListRef.current = JSON.parse(grp);
-        if (co) connectionsListRef.current = JSON.parse(co);
-        if (g) groupsListRef.current = JSON.parse(g);
-        if (inv) invitationsListRef.current = JSON.parse(inv);
-        
-        console.log('📦 Cache chargé depuis storage:', {
-          private: privateConversationsListRef.current?.length || 0,
-          group: groupConversationsListRef.current?.length || 0,
-          connections: connectionsListRef.current?.length || 0,
+
+        if (priv) privateConversationsListRef.current = priv;
+        if (grp) groupConversationsListRef.current = grp;
+        if (co) connectionsListRef.current = co;
+        if (g) groupsListRef.current = g;
+        if (inv) invitationsListRef.current = inv;
+
+        console.log('✅ Cache hydrated:', {
+          private: priv?.length || 0,
+          group: grp?.length || 0,
+          connections: co?.length || 0,
+          groups: g?.length || 0,
+          invitations: inv?.length || 0,
         });
       } catch (error) {
-        console.error('❌ Erreur chargement cache:', error);
+        console.error('❌ Failed to hydrate cache:', error);
       }
     })();
+  }, []);
+
+  /**
+   * 🆕 App lifecycle listeners for background refresh
+   */
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App came to foreground - trigger background refresh
+        console.log('📱 App resumed, triggering background refresh...');
+
+        // Note: We need access to makeAuthenticatedRequest, which isn't available here
+        // This will be handled by the component that uses ChatContext
+        // For now, we'll just log that we detected the state change
+      }
+
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+      if (backgroundRefreshTimerRef.current) {
+        clearTimeout(backgroundRefreshTimerRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -423,6 +796,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         getCachedGroupInvitations,
         setCachedGroupInvitations,
         prefetchConversationsOverview,
+        // 🆕 Phase 2: Enhanced features
+        setVisibleConversations,
+        backgroundRefresh,
       }}
     >
       {children}

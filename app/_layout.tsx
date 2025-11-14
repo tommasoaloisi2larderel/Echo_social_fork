@@ -8,6 +8,7 @@ import { JarvisProvider } from "../contexts/JarvisContext";
 import { NavigationProvider } from "../contexts/NavigationContext";
 import { TransitionProvider } from "../contexts/TransitionContext";
 import { UserProfileProvider } from "../contexts/UserProfileContext";
+import { AppLifecycleManager } from "../components/AppLifecycleManager";
 
 export default function RootLayout() {
   console.log('🔧 RootLayout loaded!');
@@ -21,6 +22,8 @@ export default function RootLayout() {
               <AgentsProvider>
                 <NavigationProvider>
                   <TransitionProvider>
+                    {/* 🆕 App lifecycle manager for background refresh */}
+                    <AppLifecycleManager />
                     <Stack screenOptions={{ headerShown: false }}>
                       <Stack.Screen name="index" />
                       <Stack.Screen name="(auth)" />
