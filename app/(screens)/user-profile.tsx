@@ -5,12 +5,16 @@ import {
     ActivityIndicator,
     Alert,
     Image,
+    Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -181,7 +185,7 @@ export default function UserProfileScreen() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            other_user_uuid: profile.uuid,
+            recipient_uuid: profile.uuid,
           }),
         }
       );
@@ -538,54 +542,63 @@ export default function UserProfileScreen() {
         transparent={true}
         onRequestClose={() => setShowMessageModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Message de présentation</Text>
-            <Text style={styles.modalSubtitle}>
-              Présentez-vous à {profile.surnom || profile.username}
-            </Text>
-            
-            <TextInput
-              style={styles.messageInput}
-              multiline
-              placeholder="Écrivez votre message..."
-              value={connectionMessage}
-              onChangeText={setConnectionMessage}
-              maxLength={300}
-            />
-            
-            <Text style={styles.characterCount}>
-              {connectionMessage.length}/300
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>Message de présentation</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Présentez-vous à {profile.surnom || profile.username}
+                  </Text>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButtonCancel}
-                onPress={() => {
-                  setShowMessageModal(false);
-                  setConnectionMessage('');
-                }}
-              >
-                <Text style={styles.modalButtonCancelText}>Annuler</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.modalButtonSend,
-                  (!connectionMessage.trim() || sendingRequest) && styles.modalButtonDisabled
-                ]}
-                onPress={handleSendConnectionRequest}
-                disabled={!connectionMessage.trim() || sendingRequest}
-              >
-                {sendingRequest ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonSendText}>Envoyer</Text>
-                )}
-              </TouchableOpacity>
+                  <TextInput
+                    style={styles.messageInput}
+                    multiline
+                    placeholder="Écrivez votre message..."
+                    value={connectionMessage}
+                    onChangeText={setConnectionMessage}
+                    maxLength={300}
+                  />
+
+                  <Text style={styles.characterCount}>
+                    {connectionMessage.length}/300
+                  </Text>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.modalButtonCancel}
+                      onPress={() => {
+                        setShowMessageModal(false);
+                        setConnectionMessage('');
+                      }}
+                    >
+                      <Text style={styles.modalButtonCancelText}>Annuler</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.modalButtonSend,
+                        (!connectionMessage.trim() || sendingRequest) && styles.modalButtonDisabled
+                      ]}
+                      onPress={handleSendConnectionRequest}
+                      disabled={!connectionMessage.trim() || sendingRequest}
+                    >
+                      {sendingRequest ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.modalButtonSendText}>Envoyer</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
