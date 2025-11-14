@@ -16,18 +16,12 @@ export default function Index() {
       username: user?.username
     });
 
-    if (isLoggedIn) {
-      console.log('🚀 Force redirect to tabs');
-      router.replace('/(tabs)');
-    }
+    // Always redirect to tabs (guest mode enabled)
+    console.log('🚀 Force redirect to tabs (guest mode enabled)');
+    router.replace('/(tabs)');
   }, [isLoggedIn, user, accessToken]);
 
-  // Rediriger selon l'état de connexion
-  if (isLoggedIn) {
-    console.log('✅ Index - Redirection vers tabs via Redirect');
-    return <Redirect href="/(tabs)" />;
-  } else {
-    console.log('❌ Index - Redirection vers login');
-    return <Redirect href="/(auth)/login" />;
-  }
+  // Always allow access to main app (guest mode)
+  console.log('✅ Index - Redirection vers tabs (guest mode)');
+  return <Redirect href="/(tabs)" />;
 }

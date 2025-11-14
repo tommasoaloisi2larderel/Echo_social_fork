@@ -78,7 +78,7 @@ export default function UserProfileScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { makeAuthenticatedRequest } = useAuth();
+  const { makeAuthenticatedRequest, accessToken } = useAuth();
   const { getUserProfile, getUserStats } = useUserProfile();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -502,7 +502,22 @@ export default function UserProfileScreen() {
 
         {/* Bouton action (demande d'ami ou commencer conversation) */}
         <View style={styles.actionSection}>
-          {checkingFriendStatus ? (
+          {!accessToken ? (
+            // Guest mode - show login prompt
+            <View style={styles.guestPromptContainer}>
+              <Ionicons name="lock-closed-outline" size={28} color="rgba(10, 145, 104, 0.5)" />
+              <Text style={styles.guestPromptText}>
+                Connectez-vous pour envoyer des demandes d'ami et discuter
+              </Text>
+              <TouchableOpacity
+                style={styles.guestLoginButton}
+                onPress={() => router.push('/(auth)/login')}
+              >
+                <Text style={styles.guestLoginButtonText}>Se connecter</Text>
+                <Ionicons name="log-in-outline" size={18} color="#fff" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            </View>
+          ) : checkingFriendStatus ? (
             <View style={styles.checkingStatusContainer}>
               <ActivityIndicator size="small" color="rgba(10, 145, 104, 1)" />
             </View>
@@ -819,6 +834,41 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  guestPromptContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  guestPromptText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginVertical: 12,
+    lineHeight: 20,
+  },
+  guestLoginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  guestLoginButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
