@@ -196,21 +196,40 @@ export default function HomePage() {
       <LinearGradient colors={['#c8e6c9', '#a5d6a7']} style={styles.hero}>
         <View style={[styles.blob, styles.blobA]} />
         <View style={[styles.blob, styles.blobB]} />
-        <View style={styles.heroContent}>
-          {(user as any)?.photo_profil_url ? (
-            <Image 
-              source={{ uri: (user as any).photo_profil_url }} 
-              style={styles.profileAvatar} 
-            />
-          ) : (
-            <DefaultAvatar name={user?.username || 'User'} size={60} />
-          )}
-          <View style={styles.heroTextWrap}>
-            <Text style={styles.hello}>Bonjour,</Text>
-            <Text style={styles.name}>{user?.first_name || user?.username || 'Utilisateur'}</Text>
-            <Text style={styles.subtitle}>Tout est sous contrôle.</Text>
+
+        {/* Show user info when authenticated */}
+        {accessToken && user ? (
+          <View style={styles.heroContent}>
+            {(user as any)?.photo_profil_url ? (
+              <Image
+                source={{ uri: (user as any).photo_profil_url }}
+                style={styles.profileAvatar}
+              />
+            ) : (
+              <DefaultAvatar name={user?.username || 'User'} size={60} />
+            )}
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.hello}>Bonjour,</Text>
+              <Text style={styles.name}>{user?.first_name || user?.username || 'Utilisateur'}</Text>
+              <Text style={styles.subtitle}>Tout est sous contrôle.</Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          /* Show Login button when not authenticated */
+          <View style={styles.guestContent}>
+            <View style={styles.guestTextWrap}>
+              <Text style={styles.guestTitle}>Bienvenue sur Echo Social</Text>
+              <Text style={styles.guestSubtitle}>Découvrez l'application en mode invité</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <Text style={styles.loginButtonText}>Se connecter</Text>
+              <Ionicons name="log-in-outline" size={20} color="#fff" style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
+          </View>
+        )}
       </LinearGradient>
 
       {/* LOADING STATE */}
@@ -224,10 +243,18 @@ export default function HomePage() {
       {/* SUMMARIES */}
       {!loading && summaries.length === 0 && (
         <View style={styles.emptyState}>
-          <Ionicons name="checkmark-circle-outline" size={48} color="rgba(10, 145, 104, 0.5)" />
-          <Text style={styles.emptyTitle}>Tout est à jour !</Text>
+          <Ionicons
+            name={accessToken ? "checkmark-circle-outline" : "lock-closed-outline"}
+            size={48}
+            color="rgba(10, 145, 104, 0.5)"
+          />
+          <Text style={styles.emptyTitle}>
+            {accessToken ? "Tout est à jour !" : "Mode invité"}
+          </Text>
           <Text style={styles.emptyText}>
-            Vous n&apos;avez aucune notification pour le moment.
+            {accessToken
+              ? "Vous n'avez aucune notification pour le moment."
+              : "Connectez-vous pour voir les notifications de Jarvis et discuter avec vos amis."}
           </Text>
         </View>
       )}
@@ -283,6 +310,26 @@ const styles = StyleSheet.create({
   hello: { color: '#1b5e20', fontSize: 14, opacity: 0.9 },
   name: { color: '#1b5e20', fontSize: 26, fontWeight: '800' },
   subtitle: { color: '#4b6a4e', marginTop: 2, fontSize: 13, fontStyle: 'italic' },
+
+  // Guest mode styles
+  guestContent: { alignItems: 'center', paddingVertical: 10 },
+  guestTextWrap: { alignItems: 'center', marginBottom: 20 },
+  guestTitle: { color: '#1b5e20', fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  guestSubtitle: { color: '#4b6a4e', marginTop: 8, fontSize: 14, textAlign: 'center' },
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loginButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   // Ambient blobs
   blob: {

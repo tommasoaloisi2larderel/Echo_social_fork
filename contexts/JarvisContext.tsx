@@ -105,6 +105,18 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   const sendMessage = async (message: string) => {
     if (!message.trim()) return;
 
+    // Check if user is authenticated
+    if (!isLoggedIn) {
+      const errorMessage: JarvisMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: 'Veuillez vous connecter pour discuter avec Jarvis.',
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setError('Not authenticated');
+      return;
+    }
+
     const userMessage: JarvisMessage = {
       id: Date.now(),
       role: 'user',
@@ -157,6 +169,11 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getWelcomeMessage = async () => {
+    if (!isLoggedIn) {
+      console.log('User not authenticated, skipping welcome message');
+      return;
+    }
+
     try {
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/jarvis/chat/?type=welcome`,
@@ -178,6 +195,11 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getNotificationsSummary = async () => {
+    if (!isLoggedIn) {
+      console.log('User not authenticated, skipping notifications summary');
+      return;
+    }
+
     try {
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/jarvis/chat/?type=notifications`,
@@ -199,12 +221,17 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loadHistory = async () => {
+    if (!isLoggedIn) {
+      console.log('User not authenticated, skipping history load');
+      return;
+    }
+
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/jarvis/history/`);
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
-        
+
         // Convert history to messages format
         const historyMessages: JarvisMessage[] = [];
         data.forEach((entry: JarvisHistoryEntry) => {
@@ -219,7 +246,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
             content: entry.jarvis_response,
           });
         });
-        
+
         setMessages(historyMessages);
       }
     } catch (err) {
@@ -228,6 +255,11 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loadStats = async () => {
+    if (!isLoggedIn) {
+      console.log('User not authenticated, skipping stats load');
+      return;
+    }
+
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/jarvis/stats/`);
       if (response.ok) {
