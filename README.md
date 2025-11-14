@@ -251,10 +251,7 @@ Application de messagerie sociale avec agents IA, construite avec React Native/E
 ### **Base URL**
 
 ```typescript
-const API_BASE_URL =
-  typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:3001" // Dev web (proxy)
-    : "https://reseausocial-production.up.railway.app"; // Production
+import { API_BASE_URL } from "@/config/api";
 ```
 
 ### **Authentification**
