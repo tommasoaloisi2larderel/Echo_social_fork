@@ -12,13 +12,12 @@ export default function BottomBar({
   onSummaryPress,
   loadingSummary,
 }: BottomBarProps) {
-  const { websocket } = useChat();
+  const { websocket, sendMessage } = useChat();
   const isChat = currentRoute?.includes('conversation-direct') || currentRoute?.includes('conversation-group');
-  
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
 
-  console.log('🔍 BottomBar index - currentRoute:', currentRoute, 'isChat:', isChat, 'conversationId:', conversationId);
+  console.log('🔍 BottomBar index - currentRoute:', currentRoute, 'isChat:', isChat, 'conversationId:', conversationId, 'sendMessage:', !!sendMessage);
 
   // ✅ Gérer l'envoi de typing_start / typing_stop
   useEffect(() => {
@@ -77,54 +76,99 @@ export default function BottomBar({
     console.log('🔍 handleSendMessage called:', {
       isChat,
       hasWebsocket: !!websocket,
+      hasSendMessage: !!sendMessage,
+
       websocketState: websocket?.readyState,
+
       conversationId,
+
       currentRoute
+
     });
 
-    if (isChat && websocket && conversationId) {
-      // Check if WebSocket is actually open
-      if (websocket.readyState !== WebSocket.OPEN) {
-        console.error('❌ WebSocket is not in OPEN state:', {
-          readyState: websocket.readyState,
-          states: {
-            CONNECTING: WebSocket.CONNECTING,
-            OPEN: WebSocket.OPEN,
-            CLOSING: WebSocket.CLOSING,
-            CLOSED: WebSocket.CLOSED
-          }
-        });
-        return;
-      }
+ 
+
+    if (isChat && conversationId) {
 
       // ✅ Arrêter typing avant d'envoyer le message
-      if (isTypingRef.current) {
+
+      if (isTypingRef.current && websocket) {
+
         console.log('📤 Envoi typing_stop (avant envoi message)');
+
         websocket.send(JSON.stringify({
+
           type: 'typing_stop',
+
           conversation_uuid: conversationId
+
         }));
+
         isTypingRef.current = false;
+
       }
 
-      // Envoyer le message
-      const payload = {
-        type: 'chat_message',
-        conversation_uuid: conversationId,
-        message: message.trim()
-      };
-      websocket.send(JSON.stringify(payload));
-      console.log('✅ Message envoyé via WebSocket:', payload);
-    } else if (!isChat) {
-      console.log('Message envoyé à Jarvis:', message);
-    } else {
-      // ❌ Conditions not met for sending
-      console.error('❌ Cannot send message - missing requirements:', {
-        isChat,
+ 
+
+      // Use the sendMessage handler from context if available
+
+      // This handler has optimistic UI updates built in
+
+      if (sendMessage) {
+
+        console.log('✅ Envoi du message via sendMessage handler');
+
+        sendMessage(message.trim());
+
+        return;
+
+      }
+
+ 
+
+      // Fallback to direct WebSocket if sendMessage handler not available
+
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+
+        console.log('✅ Envoi du message via WebSocket direct (fallback)');
+
+        const payload = {
+
+          type: 'chat_message',
+
+          conversation_uuid: conversationId,
+
+          message: message.trim()
+
+        };
+
+        websocket.send(JSON.stringify(payload));
+
+        return;
+
+      }
+
+ 
+
+      // ❌ Neither method available
+
+      console.error('❌ Cannot send message - no send method available:', {
+
+        hasSendMessage: !!sendMessage,
+
         hasWebsocket: !!websocket,
+
         websocketState: websocket?.readyState,
-        hasConversationId: !!conversationId
+
       });
+
+    } else if (!isChat) {
+
+      console.log('Message envoyé à Jarvis:', message);
+
+    } else {
+
+      console.error('❌ Cannot send message - missing conversationId');
     }
   };
 
