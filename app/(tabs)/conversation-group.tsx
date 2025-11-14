@@ -29,6 +29,8 @@ interface Message {
   created_at: string;
   is_read?: boolean;
   is_ai_generated?: boolean;
+  isPending?: boolean; // For optimistic UI updates
+  isAiLoading?: boolean; // For AI response loading state
 }
 
 interface GroupInfo {
@@ -104,19 +106,29 @@ export default function ConversationGroup() {
             return;
           }
           const msg = data.message || data;
-          const newMsg: Message = { 
-            id: msg.id, 
-            uuid: msg.uuid, 
-            sender_username: msg.sender_username, 
-            content: msg.content, 
+          const newMsg: Message = {
+            id: msg.id,
+            uuid: msg.uuid,
+            sender_username: msg.sender_username,
+            content: msg.content,
             created_at: msg.created_at,
             is_ai_generated: msg.is_ai_generated || false
           };
           setMessages((prev) => {
-            const exists = prev.some((m) => m.uuid === newMsg.uuid);
-            if (exists) return prev.map((m) => (m.uuid === newMsg.uuid ? { ...m, ...newMsg } : m));
+            // Remove any pending messages with the same content and sender
+            // Also remove AI loading indicators when any new message arrives
+            const withoutPendingAndLoading = prev.filter(m =>
+              !(m.isPending && m.sender_username === newMsg.sender_username && m.content === newMsg.content) &&
+              !m.isAiLoading
+            );
+
+            // Check if message already exists (by real UUID)
+            const exists = withoutPendingAndLoading.some((m) => m.uuid === newMsg.uuid);
+            if (exists) return withoutPendingAndLoading.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
+
+            // Add new message and sort
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-            return [...prev, newMsg];
+            return [...withoutPendingAndLoading, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           });
         }
         // Gérer la confirmation de lecture (message vu)
@@ -149,11 +161,6 @@ export default function ConversationGroup() {
     }
   };
 
-  const sendMessageHandler = (messageText: string) => {
-    if (!messageText.trim() || !localWebsocket) return;
-    localWebsocket.send(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-  };
 
   const toggleAgentMessage = (messageUuid: string) => {
     setExpandedAgentMessages(prev => {
@@ -240,10 +247,61 @@ export default function ConversationGroup() {
     } catch {}
   }, [conversationId]);
 
+  // Set up sendMessage handler when websocket is available
   useEffect(() => {
-    setSendMessage(() => sendMessageHandler);
-    return () => setSendMessage(null);
-  }, [localWebsocket, conversationId]);
+    if (localWebsocket && conversationId) {
+      const handler = (messageText: string) => {
+        if (!messageText.trim() || !localWebsocket) return;
+        console.log('📤 [GROUP] Envoi du message via WebSocket:', messageText);
+
+        // Create optimistic message immediately
+        const optimisticMessage: Message = {
+          id: Date.now(),
+          uuid: `temp-${Date.now()}`,
+          sender_username: user?.username || '',
+          content: messageText.trim(),
+          created_at: new Date().toISOString(),
+          is_read: false,
+          isPending: true,
+          is_ai_generated: false
+        };
+
+        // Add optimistic message to UI immediately
+        setMessages((prev) => {
+          // Check if there's an AI agent in this conversation
+          const hasAiAgent = prev.some(m => m.is_ai_generated);
+          const newMessages = [...prev, optimisticMessage];
+
+          // If there's an AI agent, also add a loading indicator
+          if (hasAiAgent) {
+            const aiLoadingMessage: Message = {
+              id: Date.now() + 1,
+              uuid: `temp-ai-loading-${Date.now()}`,
+              sender_username: 'AI Assistant',
+              content: '',
+              created_at: new Date().toISOString(),
+              is_ai_generated: false,
+              isAiLoading: true,
+            };
+            newMessages.push(aiLoadingMessage);
+          }
+
+          return newMessages;
+        });
+
+        // Send message via WebSocket
+        localWebsocket.send(JSON.stringify({
+          type: "chat_message",
+          conversation_uuid: conversationId,
+          message: messageText.trim()
+        }));
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      };
+      setSendMessage(() => handler);
+    } else {
+      setSendMessage(null);
+    }
+  }, [localWebsocket, conversationId, setSendMessage, user?.username]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
@@ -388,6 +446,36 @@ export default function ConversationGroup() {
                   <View style={styles.systemMessageContainer}>
                     <Text style={styles.systemMessageText}>{msg.content}</Text>
                   </View>
+                ) : msg.isAiLoading ? (
+                  // AI Loading indicator - shown while waiting for AI response
+                  <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                        borderRadius: 12,
+                        padding: 12,
+                        marginHorizontal: 20,
+                        maxWidth: '80%',
+                        borderWidth: 1,
+                        borderColor: 'rgba(10, 145, 104, 0.3)',
+                        shadowColor: 'rgba(10, 145, 104, 0.2)',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 12, color: 'rgba(10, 145, 104, 0.8)', fontWeight: '600' }}>
+                          🤖 IA Assistant
+                        </Text>
+                        <ActivityIndicator size="small" color="rgba(10, 145, 104, 0.8)" />
+                      </View>
+                      <Text style={{ fontSize: 10, color: 'rgba(10, 145, 104, 0.6)', marginTop: 4 }}>
+                        Génération de la réponse...
+                      </Text>
+                    </View>
+                  </View>
                 ) : msg.is_ai_generated ? (
                   // Message d'agent IA - affichage centré et pliable
                   <View style={{ alignItems: 'center', marginVertical: 8 }}>
@@ -467,7 +555,7 @@ export default function ConversationGroup() {
                           </Text>
                           {isMe && (
                             <Text style={styles.readStatus}>
-                              {msg.is_read ? "Lu" : "Envoyé"}
+                              {msg.isPending ? "Envoi..." : msg.is_read ? "Lu" : "Envoyé"}
                             </Text>
                           )}
                         </View>
