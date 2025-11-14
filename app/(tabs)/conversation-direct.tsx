@@ -412,6 +412,7 @@ export default function ConversationDirect() {
     }
   }, []);
 
+  // Set up sendMessage handler when websocket is available
   useEffect(() => {
       if (localWebsocket && conversationId) {
           const handler = (messageText: string) => {
@@ -430,11 +431,10 @@ export default function ConversationDirect() {
                 attachments: []
               };
 
-              // Check if there's an AI agent in this conversation
-              const hasAiAgent = messages.some(m => m.is_ai_generated);
-
               // Add optimistic message to UI immediately
               setMessages((prev) => {
+                // Check if there's an AI agent in this conversation
+                const hasAiAgent = prev.some(m => m.is_ai_generated);
                 const newMessages = [...prev, optimisticMessage];
 
                 // If there's an AI agent, also add a loading indicator
@@ -467,8 +467,7 @@ export default function ConversationDirect() {
       } else {
           setSendMessage(null);
       }
-      return () => setSendMessage(null);
-  }, [localWebsocket, conversationId, setSendMessage, messages, user?.username]);
+  }, [localWebsocket, conversationId, setSendMessage, user?.username]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
