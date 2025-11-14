@@ -33,6 +33,8 @@ interface Message {
   is_read?: boolean;
   is_ai_generated?: boolean;
   attachments?: { uuid: string; file_type: string; file_url: string; thumbnail_url?: string; original_filename?: string }[];
+  isPending?: boolean; // For optimistic UI updates
+  isAiLoading?: boolean; // For AI response loading state
 }
 
 interface ConversationInfo {
@@ -139,9 +141,19 @@ export default function ConversationDirect() {
             }
             
             setMessages((prev) => {
-              const exists = prev.some((m) => m.uuid === newMsg.uuid);
-              if (exists) return prev.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
-              return [...prev, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              // Remove any pending messages with the same content and sender
+              // Also remove AI loading indicators when any new message arrives
+              const withoutPendingAndLoading = prev.filter(m =>
+                !(m.isPending && m.sender_username === newMsg.sender_username && m.content === newMsg.content) &&
+                !m.isAiLoading
+              );
+
+              // Check if message already exists (by real UUID)
+              const exists = withoutPendingAndLoading.some((m) => m.uuid === newMsg.uuid);
+              if (exists) return withoutPendingAndLoading.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
+
+              // Add new message and sort
+              return [...withoutPendingAndLoading, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
             });
             
             // 🔴 MARQUER COMME VU après réception
@@ -216,7 +228,48 @@ export default function ConversationDirect() {
 
   const sendMessageHandler = (messageText: string) => {
     if (!messageText.trim() || !localWebsocket) return;
+
+    // Create optimistic message immediately
+    const optimisticMessage: Message = {
+      id: Date.now(), // Temporary ID
+      uuid: `temp-${Date.now()}`, // Temporary UUID
+      sender_username: user?.username || '',
+      content: messageText.trim(),
+      created_at: new Date().toISOString(),
+      is_read: false,
+      isPending: true, // Mark as pending
+      attachments: []
+    };
+
+    // Check if there's an AI agent in this conversation (by checking if any previous messages are AI-generated)
+    const hasAiAgent = messages.some(m => m.is_ai_generated);
+
+    // Add optimistic message to UI immediately
+    setMessages((prev) => {
+      const newMessages = [...prev, optimisticMessage];
+
+      // If there's an AI agent, also add a loading indicator
+      if (hasAiAgent) {
+        const aiLoadingMessage: Message = {
+          id: Date.now() + 1,
+          uuid: `temp-ai-loading-${Date.now()}`,
+          sender_username: 'AI Assistant',
+          content: '',
+          created_at: new Date().toISOString(),
+          is_ai_generated: false,
+          isAiLoading: true,
+          attachments: []
+        };
+        newMessages.push(aiLoadingMessage);
+      }
+
+      return newMessages;
+    });
+
+    // Send message via WebSocket
     localWebsocket.send(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
+
+    // Scroll to bottom
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -364,10 +417,49 @@ export default function ConversationDirect() {
           const handler = (messageText: string) => {
               if (!messageText.trim() || !localWebsocket) return;
               console.log('📤 Envoi du message via WebSocket:', messageText);
-              localWebsocket.send(JSON.stringify({ 
-                  type: "chat_message", 
-                  conversation_uuid: conversationId, 
-                  message: messageText.trim() 
+
+              // Create optimistic message immediately
+              const optimisticMessage: Message = {
+                id: Date.now(),
+                uuid: `temp-${Date.now()}`,
+                sender_username: user?.username || '',
+                content: messageText.trim(),
+                created_at: new Date().toISOString(),
+                is_read: false,
+                isPending: true,
+                attachments: []
+              };
+
+              // Check if there's an AI agent in this conversation
+              const hasAiAgent = messages.some(m => m.is_ai_generated);
+
+              // Add optimistic message to UI immediately
+              setMessages((prev) => {
+                const newMessages = [...prev, optimisticMessage];
+
+                // If there's an AI agent, also add a loading indicator
+                if (hasAiAgent) {
+                  const aiLoadingMessage: Message = {
+                    id: Date.now() + 1,
+                    uuid: `temp-ai-loading-${Date.now()}`,
+                    sender_username: 'AI Assistant',
+                    content: '',
+                    created_at: new Date().toISOString(),
+                    is_ai_generated: false,
+                    isAiLoading: true,
+                    attachments: []
+                  };
+                  newMessages.push(aiLoadingMessage);
+                }
+
+                return newMessages;
+              });
+
+              // Send message via WebSocket
+              localWebsocket.send(JSON.stringify({
+                  type: "chat_message",
+                  conversation_uuid: conversationId,
+                  message: messageText.trim()
               }));
               setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
           };
@@ -376,7 +468,7 @@ export default function ConversationDirect() {
           setSendMessage(null);
       }
       return () => setSendMessage(null);
-  }, [localWebsocket, conversationId, setSendMessage]);
+  }, [localWebsocket, conversationId, setSendMessage, messages, user?.username]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
@@ -544,6 +636,36 @@ export default function ConversationDirect() {
                   <View style={styles.systemMessageContainer}>
                     <Text style={styles.systemMessageText}>{msg.content}</Text>
                   </View>
+                ) : msg.isAiLoading ? (
+                  // AI Loading indicator - shown while waiting for AI response
+                  <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(10, 145, 104, 0.1)',
+                        borderRadius: 12,
+                        padding: 12,
+                        marginHorizontal: 20,
+                        maxWidth: '80%',
+                        borderWidth: 1,
+                        borderColor: 'rgba(10, 145, 104, 0.3)',
+                        shadowColor: 'rgba(10, 145, 104, 0.2)',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 12, color: 'rgba(10, 145, 104, 0.8)', fontWeight: '600' }}>
+                          🤖 IA Assistant
+                        </Text>
+                        <ActivityIndicator size="small" color="rgba(10, 145, 104, 0.8)" />
+                      </View>
+                      <Text style={{ fontSize: 10, color: 'rgba(10, 145, 104, 0.6)', marginTop: 4 }}>
+                        Génération de la réponse...
+                      </Text>
+                    </View>
+                  </View>
                 ) : msg.is_ai_generated ? (
                   // Message d'agent IA - affichage centré et pliable
                   <View style={{ alignItems: 'center', marginVertical: 8 }}>
@@ -573,26 +695,26 @@ export default function ConversationDirect() {
                             IA Assistant
                           </Text>
                         </View>
-                        <Ionicons 
-                          name={expandedAgentMessages.has(msg.uuid) ? "chevron-up" : "chevron-down"} 
-                          size={16} 
-                          color="rgba(10, 145, 104, 0.6)" 
+                        <Ionicons
+                          name={expandedAgentMessages.has(msg.uuid) ? "chevron-up" : "chevron-down"}
+                          size={16}
+                          color="rgba(10, 145, 104, 0.6)"
                         />
                       </View>
                       {expandedAgentMessages.has(msg.uuid) && (
                         <View>
-                          <Text style={{ 
-                            fontSize: 14, 
-                            color: '#333', 
+                          <Text style={{
+                            fontSize: 14,
+                            color: '#333',
                             lineHeight: 20,
                             marginBottom: 8
                           }}>
                             {msg.content}
                           </Text>
-                          <Text style={{ 
-                            fontSize: 10, 
-                            color: 'rgba(10, 145, 104, 0.6)', 
-                            textAlign: 'right' 
+                          <Text style={{
+                            fontSize: 10,
+                            color: 'rgba(10, 145, 104, 0.6)',
+                            textAlign: 'right'
                           }}>
                             {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                           </Text>
@@ -665,7 +787,7 @@ export default function ConversationDirect() {
                           </Text>
                           {isMe && (
                             <Text style={styles.readStatus}>
-                              {msg.is_read ? "Lu" : "Envoyé"}
+                              {msg.isPending ? "Envoi..." : msg.is_read ? "Lu" : "Envoyé"}
                             </Text>
                           )}
                         </View>
