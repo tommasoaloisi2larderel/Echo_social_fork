@@ -83,6 +83,20 @@ export default function BottomBar({
     });
 
     if (isChat && websocket && conversationId) {
+      // Check if WebSocket is actually open
+      if (websocket.readyState !== WebSocket.OPEN) {
+        console.error('❌ WebSocket is not in OPEN state:', {
+          readyState: websocket.readyState,
+          states: {
+            CONNECTING: WebSocket.CONNECTING,
+            OPEN: WebSocket.OPEN,
+            CLOSING: WebSocket.CLOSING,
+            CLOSED: WebSocket.CLOSED
+          }
+        });
+        return;
+      }
+
       // ✅ Arrêter typing avant d'envoyer le message
       if (isTypingRef.current) {
         console.log('📤 Envoi typing_stop (avant envoi message)');
