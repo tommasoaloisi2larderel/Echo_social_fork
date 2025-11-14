@@ -72,9 +72,9 @@ interface GroupInvitation {
 }
 
 export default function FriendsScreen() {
-  const { makeAuthenticatedRequest, reloadUser } = useAuth();
+  const { makeAuthenticatedRequest, reloadUser, accessToken } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
   const [connections, setConnections] = useState<Connection[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([]);
@@ -134,6 +134,13 @@ export default function FriendsScreen() {
   }, [makeAuthenticatedRequest]);
 
   const fetchData = useCallback(async () => {
+    // Don't fetch if not authenticated
+    if (!accessToken) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       setLoading(true);
       await Promise.all([fetchConnections(), fetchInvitations(), fetchGroupInvitations()]);
@@ -141,7 +148,7 @@ export default function FriendsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchConnections, fetchInvitations, fetchGroupInvitations]);
+  }, [fetchConnections, fetchInvitations, fetchGroupInvitations, accessToken]);
 
   useEffect(() => {
     fetchData();
@@ -399,7 +406,23 @@ export default function FriendsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'friends' ? (
+        {!accessToken ? (
+          // Guest mode - show login prompt
+          <View style={styles.emptyState}>
+            <Ionicons name="lock-closed-outline" size={64} color="rgba(10, 145, 104, 0.5)" />
+            <Text style={styles.emptyTitle}>Connexion requise</Text>
+            <Text style={styles.emptyText}>
+              Connectez-vous pour voir vos amis et gérer vos connexions
+            </Text>
+            <TouchableOpacity
+              style={styles.loginPromptButton}
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <Text style={styles.loginPromptButtonText}>Se connecter</Text>
+              <Ionicons name="log-in-outline" size={18} color="#fff" style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+          </View>
+        ) : activeTab === 'friends' ? (
           // Liste des amis
           connections.length === 0 ? (
             <View style={styles.emptyState}>
@@ -858,6 +881,25 @@ const styles = StyleSheet.create({
     color: '#6c8a6e',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  loginPromptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 145, 104, 1)',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loginPromptButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

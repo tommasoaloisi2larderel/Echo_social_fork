@@ -1,8 +1,9 @@
 import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, usePathname } from 'expo-router';
-import React, { ComponentRef, useEffect, useRef, useState } from 'react';
+import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -543,10 +544,12 @@ export default function ConversationsScreen() {
     }
   };
 
-  useEffect(() => {
-    // Charger les données au démarrage
-    fetchData();
-  }, []);
+  // Charger les données au démarrage et à chaque fois qu'on revient sur cet écran
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
 
   useEffect(() => {
       if (viewMode === 'direct') {
