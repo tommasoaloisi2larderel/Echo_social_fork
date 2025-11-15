@@ -2,7 +2,7 @@
   "expo": {
     "name": "Echo",
     "slug": "echo-app",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/logo2.png",
     "scheme": "echo",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.echo.social2",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/logo2.png",
