@@ -236,7 +236,7 @@ export default function UserProfileScreen() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            destinataire: profile.id,
+            destinataire_uuid: profile.uuid,
             message: connectionMessage,
           }),
         }
