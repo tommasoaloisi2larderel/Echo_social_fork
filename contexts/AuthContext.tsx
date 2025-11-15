@@ -60,6 +60,24 @@ interface AuthContextType {
     options?: RequestInit,
     cacheConfig?: CacheConfig
   ) => Promise<Response>;
+  /**
+   * 🆕 Ensure we have a valid access token
+   * Refreshes if token is expired or expiring soon
+   * @returns A valid access token or null if refresh fails
+   */
+  ensureValidToken: () => Promise<string | null>;
+  /**
+   * 🆕 Subscribe to token refresh events
+   * @param callback Called when tokens are refreshed with new access token
+   * @returns Unsubscribe function
+   */
+  onTokenRefresh: (callback: (newAccessToken: string) => void) => () => void;
+  /**
+   * 🆕 Check if current token is expiring soon
+   * @param bufferMinutes Minutes before expiry to consider "expiring soon"
+   * @returns true if token will expire within buffer time
+   */
+  isTokenExpiringSoon: (bufferMinutes?: number) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -103,6 +121,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Refs for auto-refresh mechanism
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // 🆕 Token refresh event listeners
+  const tokenRefreshListenersRef = useRef<Set<(newAccessToken: string) => void>>(new Set());
 
   // Auto-refresh tokens periodically
   const startAutoRefresh = (refresh: string) => {
@@ -225,6 +246,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       setAccessToken(data.access);
       await storage.setItemAsync("accessToken", data.access);
+
+      // 🆕 Notify all listeners about the new token
+      tokenRefreshListenersRef.current.forEach((listener) => {
+        try {
+          listener(data.access);
+        } catch (error) {
+          console.error("Error in token refresh listener:", error);
+        }
+      });
 
       console.log("✅ Access token refreshed successfully");
       return data.access;
@@ -540,12 +570,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const reloadUser = async () => {
     if (!accessToken) return;
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/profile/`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
-      
+
       if (response.ok) {
         const freshUser = await response.json();
         setUser(freshUser);
@@ -556,6 +586,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('❌ Erreur rechargement user:', error);
     }
   };
+
+  /**
+   * 🆕 Ensure we have a valid access token
+   * Checks if current token is expiring soon and refreshes if needed
+   * @returns A valid access token or null if refresh fails
+   */
+  const ensureValidToken = async (): Promise<string | null> => {
+    const currentAccessToken = await storage.getItemAsync("accessToken");
+    const currentRefreshToken = await storage.getItemAsync("refreshToken");
+
+    if (!currentAccessToken || !currentRefreshToken) {
+      console.warn("⚠️ No tokens found");
+      return null;
+    }
+
+    // Check if token is expiring soon (within 5 minutes)
+    if (isTokenExpiringSoon(currentAccessToken, 5)) {
+      console.log("🔄 Token expiring soon, refreshing...");
+      const newToken = await refreshAccessTokenInternal(currentRefreshToken);
+
+      if (!newToken) {
+        console.error("❌ Failed to refresh token");
+        return null;
+      }
+
+      return newToken;
+    }
+
+    // Token is still valid
+    return currentAccessToken;
+  };
+
+  /**
+   * 🆕 Subscribe to token refresh events
+   * Useful for WebSockets and other components that need to know when tokens change
+   * @param callback Called when tokens are refreshed with new access token
+   * @returns Unsubscribe function
+   */
+  const onTokenRefresh = (callback: (newAccessToken: string) => void): (() => void) => {
+    tokenRefreshListenersRef.current.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      tokenRefreshListenersRef.current.delete(callback);
+    };
+  };
+
+  /**
+   * 🆕 Check if current token is expiring soon
+   * @param bufferMinutes Minutes before expiry to consider "expiring soon" (default: 5)
+   * @returns true if token will expire within buffer time
+   */
+  const checkTokenExpiringSoon = (bufferMinutes: number = 5): boolean => {
+    if (!accessToken) return true;
+    return isTokenExpiringSoon(accessToken, bufferMinutes);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -570,6 +657,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         updateUser,
         makeAuthenticatedRequest,
         reloadUser,
+        ensureValidToken,
+        onTokenRefresh,
+        isTokenExpiringSoon: checkTokenExpiringSoon,
       }}
     >
       {children}

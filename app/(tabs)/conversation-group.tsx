@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
+import { useWebSocketWithAuth } from '../../hooks/useWebSocketWithAuth';
 
 interface Message {
   id: number;
@@ -49,7 +50,6 @@ export default function ConversationGroup() {
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
-  const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
@@ -59,21 +59,22 @@ export default function ConversationGroup() {
   const [summary, setSummary] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const connectWebSocket = () => {
-    if (!conversationId || !accessToken) return;
-    try {
-      const ws = new WebSocket(
-        "wss://reseausocial-production.up.railway.app/ws/chat/",
-        ["access_token", accessToken]
-      );
-      ws.onopen = () => {
-        setLocalWebsocket(ws);
-        setWebsocket(ws);
-        setCurrentConversationId(conversationId as string);
-        ws.send(JSON.stringify({ type: "mark_as_seen", conversation_uuid: conversationId }));
-      };
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+  // 🆕 Use the new WebSocket hook with automatic token management
+  const { websocket: localWebsocket, send: wsSend, isConnected: wsIsConnected, connect: wsConnect, disconnect: wsDisconnect } = useWebSocketWithAuth({
+    url: "wss://reseausocial-production.up.railway.app/ws/chat/",
+    autoConnect: false, // We'll manually connect when ready
+    onOpen: () => {
+      console.log('✅ [GROUP] WebSocket connected');
+      setWebsocket(localWebsocket);
+      setCurrentConversationId(conversationId as string);
+
+      // Mark conversation as seen when connection opens
+      if (conversationId) {
+        wsSend(JSON.stringify({ type: "mark_as_seen", conversation_uuid: conversationId }));
+      }
+    },
+    onMessage: (event) => {
+      const data = JSON.parse(event.data);
         console.log('📡 [GROUP] WebSocket message reçu:', data.type);
 
           // Gérer le statut "en train d'écrire"
@@ -149,17 +150,16 @@ export default function ConversationGroup() {
           }
           return;
         }
-      };
-      ws.onerror = (error) => console.error("WS error:", error);
-      ws.onclose = () => {
-        setLocalWebsocket(null);
-        setWebsocket(null);
-        setCurrentConversationId(null);
-      };
-    } catch (error) {
-      console.error("WS connect error:", error);
-    }
-  };
+    },
+    onError: (error) => {
+      console.error("❌ [GROUP] WebSocket error:", error);
+    },
+    onClose: () => {
+      console.log('🔌 [GROUP] WebSocket closed');
+      setWebsocket(null);
+      setCurrentConversationId(null);
+    },
+  });
 
 
   const toggleAgentMessage = (messageUuid: string) => {
@@ -249,9 +249,9 @@ export default function ConversationGroup() {
 
   // Set up sendMessage handler when websocket is available
   useEffect(() => {
-    if (localWebsocket && conversationId) {
+    if (wsIsConnected && conversationId) {
       const handler = (messageText: string) => {
-        if (!messageText.trim() || !localWebsocket) return;
+        if (!messageText.trim() || !wsIsConnected) return;
         console.log('📤 [GROUP] Envoi du message via WebSocket:', messageText);
 
         // Create optimistic message immediately
@@ -290,7 +290,7 @@ export default function ConversationGroup() {
         });
 
         // Send message via WebSocket
-        localWebsocket.send(JSON.stringify({
+        wsSend(JSON.stringify({
           type: "chat_message",
           conversation_uuid: conversationId,
           message: messageText.trim()
@@ -301,14 +301,19 @@ export default function ConversationGroup() {
     } else {
       setSendMessage(null);
     }
-  }, [localWebsocket, conversationId, setSendMessage, user?.username]);
+  }, [wsIsConnected, conversationId, setSendMessage, user?.username, wsSend]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
       fetchMessages();
-      connectWebSocket();
+      // Connect WebSocket with automatic token management
+      wsConnect();
     }
-    return () => { if (localWebsocket) localWebsocket.close(); };
+
+    // Cleanup: disconnect WebSocket when leaving
+    return () => {
+      wsDisconnect();
+    };
   }, [conversationId, accessToken]);
   // Auto-scroll vers le bas après le chargement des messages
   useEffect(() => {
