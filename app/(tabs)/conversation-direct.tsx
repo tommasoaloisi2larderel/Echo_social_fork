@@ -3,7 +3,7 @@ import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
 import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
 import { TypingIndicator } from '@/components/TypingIndicator';
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, WS_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -82,7 +82,7 @@ export default function ConversationDirect() {
     if (!conversationId || !accessToken) return;
     try {
       const ws = new WebSocket(
-        "wss://reseausocial-production.up.railway.app/ws/chat/",
+        `${WS_BASE_URL}/ws/chat/`,
         ["access_token", accessToken]
       );
       ws.onopen = () => {
@@ -157,21 +157,21 @@ export default function ConversationDirect() {
               return [...withoutPendingAndLoading, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
             });
             
-            // 🔴 MARQUER COMME VU après réception
+            // 🔴 MARQUER COMME VU après réception (WebSocket uniquement - plus rapide que REST)
             if (msg.sender_username !== user?.username && localWebsocket && localWebsocket.readyState === WebSocket.OPEN) {
-              localWebsocket.send(JSON.stringify({ 
-                type: "mark_as_seen", 
-                conversation_uuid: conversationId 
+              localWebsocket.send(JSON.stringify({
+                type: "mark_as_seen",
+                conversation_uuid: conversationId
               }));
-              
-              // Retirer la couleur après 2 secondes
+
+              // Retirer la couleur après 2 secondes (réduit de 10s pour UX plus réactive)
               setTimeout(() => {
                 setUnreadMessageUuids(prev => {
                   const updated = new Set(prev);
                   updated.delete(newMsg.uuid);
                   return updated;
                 });
-              }, 10000);
+              }, 2000);
             }
             
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -227,53 +227,6 @@ export default function ConversationDirect() {
     }
   };
 
-  const sendMessageHandler = (messageText: string) => {
-    if (!messageText.trim() || !localWebsocket) return;
-
-    // Create optimistic message immediately
-    const optimisticMessage: Message = {
-      id: Date.now(), // Temporary ID
-      uuid: `temp-${Date.now()}`, // Temporary UUID
-      sender_username: user?.username || '',
-      content: messageText.trim(),
-      created_at: new Date().toISOString(),
-      is_read: false,
-      isPending: true, // Mark as pending
-      attachments: []
-    };
-
-    // Check if there's an AI agent in this conversation (by checking if any previous messages are AI-generated)
-    const hasAiAgent = messages.some(m => m.is_ai_generated);
-
-    // Add optimistic message to UI immediately
-    setMessages((prev) => {
-      const newMessages = [...prev, optimisticMessage];
-
-      // If there's an AI agent, also add a loading indicator
-      if (hasAiAgent) {
-        const aiLoadingMessage: Message = {
-          id: Date.now() + 1,
-          uuid: `temp-ai-loading-${Date.now()}`,
-          sender_username: 'AI Assistant',
-          content: '',
-          created_at: new Date().toISOString(),
-          is_ai_generated: false,
-          isAiLoading: true,
-          attachments: []
-        };
-        newMessages.push(aiLoadingMessage);
-      }
-
-      return newMessages;
-    });
-
-    // Send message via WebSocket
-    localWebsocket.send(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
-
-    // Scroll to bottom
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-  };
-
   const toggleAgentMessage = (messageUuid: string) => {
     setExpandedAgentMessages(prev => {
       const newSet = new Set(prev);
@@ -292,97 +245,84 @@ export default function ConversationDirect() {
       return;
     }
     try {
-      let convDataLocal: any = null;
-      
-      // Récupérer la liste des conversations privées
-      const listResp = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/private/`);
-      
-      if (listResp.ok) {
-        const listData = await listResp.json();
-        const conversationsList = Array.isArray(listData) ? listData : (listData.results || []);
-        
-        // Trouver la conversation correspondante
-        const conversation = conversationsList.find((c: any) => c.uuid === conversationId);
-        
-        if (conversation) {
-          convDataLocal = conversation;
-          setConversationInfo(conversation);
-          
-          // Déterminer les deux participants autorisés
-          const me = user?.username;
-          const otherUsername = conversation?.other_participant?.username;
-          const setVals = new Set<string>();
-          if (me) setVals.add(me);
-          if (otherUsername) setVals.add(otherUsername);
-          allowedUsernamesRef.current = setVals;
+      // 1. D'abord, utiliser le cache pour les infos de conversation (évite un appel réseau)
+      let convDataLocal = getCachedConversationInfo(String(conversationId));
+
+      // 2. Si pas en cache, récupérer seulement les infos de cette conversation
+      if (!convDataLocal) {
+        const infoResp = await makeAuthenticatedRequest(
+          `${API_BASE_URL}/messaging/conversations/${conversationId}/`
+        );
+        if (infoResp.ok) {
+          convDataLocal = await infoResp.json();
         }
       }
 
-      // Messages de la conversation privée
+      // 3. Mettre à jour les infos de conversation
+      if (convDataLocal) {
+        setConversationInfo(convDataLocal);
+
+        // Déterminer les deux participants autorisés
+        const me = user?.username;
+        const otherUsername = convDataLocal?.other_participant?.username;
+        const setVals = new Set<string>();
+        if (me) setVals.add(me);
+        if (otherUsername) setVals.add(otherUsername);
+        allowedUsernamesRef.current = setVals;
+      }
+
+      // 4. Récupérer les messages (un seul appel réseau)
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
       );
-      
-      if (response.status === 401) { 
-        await logout(); 
-        return; 
+
+      if (response.status === 401) {
+        await logout();
+        return;
       }
-      
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
+
       const data = await response.json();
       let messagesList = Array.isArray(data) ? data : (data.results || []);
-      
+
       // Filtrer par participants si on les connaît
       if (allowedUsernamesRef.current.size > 0) {
-        messagesList = messagesList.filter((m: any) => 
+        messagesList = messagesList.filter((m: any) =>
           allowedUsernamesRef.current.has(m.sender_username)
         );
       }
-      // IDENTIFIER LES MESSAGES NON LUS de l'autre personne AVANT de marquer comme vu
+
+      // 5. Identifier les messages non lus (pour l'affichage avec surbrillance)
       const unreadFromOther = messagesList
-      .filter((m: any) => !m.is_read && m.sender_username !== user?.username)
-      .map((m: any) => m.uuid);
-    
-      // Stocker les UUIDs des messages non lus pour l'affichage
+        .filter((m: any) => !m.is_read && m.sender_username !== user?.username)
+        .map((m: any) => m.uuid);
+
       if (unreadFromOther.length > 0) {
         setUnreadMessageUuids(new Set(unreadFromOther));
         console.log(`📩 ${unreadFromOther.length} message(s) non lu(s) détecté(s)`);
+
+        // Retirer la surbrillance après 2 secondes (plus réactif que 10s)
+        setTimeout(() => {
+          setUnreadMessageUuids(new Set());
+        }, 2000);
       }
-        
+
       const sortedMessages = messagesList.sort(
-        (a: Message, b: Message) => 
+        (a: Message, b: Message) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
       setMessages(sortedMessages);
-      //  MARQUER COMME VU après avoir identifié les non-lus
-      if (unreadFromOther.length > 0) {
-        try {
-          await makeAuthenticatedRequest(
-            `${API_BASE_URL}/messaging/conversations/${conversationId}/mark-as-seen/`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({})
-            }
-          );
-          console.log(`✅ ${unreadFromOther.length} message(s) marqué(s) comme vu(s) sur le serveur`);
-          
-          // APRÈS 2 SECONDES, retirer la couleur des messages non lus
-          setTimeout(() => {
-            setUnreadMessageUuids(new Set());
-          }, 10000); // 2 secondes pour voir la couleur
-          
-        } catch (error) {
-          console.error('Erreur mark-as-seen:', error);
-        }
-      }
-      // Prime le cache pour ouverture instantanée ultérieure
-      try { 
-        primeCache(String(conversationId), convDataLocal, sortedMessages as any); 
+
+      // 6. Note: mark-as-seen est déjà envoyé via WebSocket dans onopen (ligne 92)
+      // Plus besoin d'appel REST redondant - le WebSocket est plus rapide!
+
+      // 7. Prime le cache pour ouverture instantanée ultérieure
+      try {
+        primeCache(String(conversationId), convDataLocal, sortedMessages as any);
       } catch {}
-      
+
     } catch (error) {
       console.error('Erreur messages:', error);
     } finally {
