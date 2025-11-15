@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
+import { useWebSocketWithAuth } from '../../hooks/useWebSocketWithAuth';
 
 interface Message {
   id: number;
@@ -67,7 +68,6 @@ export default function ConversationDirect() {
   const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
-  const [localWebsocket, setLocalWebsocket] = useState<WebSocket | null>(null);
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
@@ -78,21 +78,22 @@ export default function ConversationDirect() {
   const [summary, setSummary] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const connectWebSocket = () => {
-    if (!conversationId || !accessToken) return;
-    try {
-      const ws = new WebSocket(
-        "wss://reseausocial-production.up.railway.app/ws/chat/",
-        ["access_token", accessToken]
-      );
-      ws.onopen = () => {
-        setLocalWebsocket(ws);
-        setWebsocket(ws);
-        setCurrentConversationId(conversationId as string);
-        ws.send(JSON.stringify({ type: "mark_as_seen", conversation_uuid: conversationId }));
-      };
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+  // 🆕 Use the new WebSocket hook with automatic token management
+  const { websocket: localWebsocket, send: wsSend, isConnected: wsIsConnected, connect: wsConnect, disconnect: wsDisconnect } = useWebSocketWithAuth({
+    url: "wss://reseausocial-production.up.railway.app/ws/chat/",
+    autoConnect: false, // We'll manually connect when ready
+    onOpen: () => {
+      console.log('✅ WebSocket connected');
+      setWebsocket(localWebsocket);
+      setCurrentConversationId(conversationId as string);
+
+      // Mark conversation as seen when connection opens
+      if (conversationId) {
+        wsSend(JSON.stringify({ type: "mark_as_seen", conversation_uuid: conversationId }));
+      }
+    },
+    onMessage: (event) => {
+      const data = JSON.parse(event.data);
         console.log('📡 WebSocket message reçu:', data.type);
         console.log('📦 Données complètes:', JSON.stringify(data, null, 2));
         
@@ -156,14 +157,14 @@ export default function ConversationDirect() {
               // Add new message and sort
               return [...withoutPendingAndLoading, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
             });
-            
+
             // 🔴 MARQUER COMME VU après réception
-            if (msg.sender_username !== user?.username && localWebsocket && localWebsocket.readyState === WebSocket.OPEN) {
-              localWebsocket.send(JSON.stringify({ 
-                type: "mark_as_seen", 
-                conversation_uuid: conversationId 
+            if (msg.sender_username !== user?.username && wsIsConnected) {
+              wsSend(JSON.stringify({
+                type: "mark_as_seen",
+                conversation_uuid: conversationId
               }));
-              
+
               // Retirer la couleur après 2 secondes
               setTimeout(() => {
                 setUnreadMessageUuids(prev => {
@@ -173,7 +174,7 @@ export default function ConversationDirect() {
                 });
               }, 10000);
             }
-            
+
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
           }
         if (data.type === "typing_status") {
@@ -215,20 +216,19 @@ export default function ConversationDirect() {
           }
           return;
         }
-      };
-      ws.onerror = (error) => console.error("WS error:", error);
-      ws.onclose = () => {
-        setLocalWebsocket(null);
-        setWebsocket(null);
-        setCurrentConversationId(null);
-      };
-    } catch (error) {
-      console.error("WS connect error:", error);
-    }
-  };
+    },
+    onError: (error) => {
+      console.error("❌ WebSocket error:", error);
+    },
+    onClose: () => {
+      console.log('🔌 WebSocket closed');
+      setWebsocket(null);
+      setCurrentConversationId(null);
+    },
+  });
 
   const sendMessageHandler = (messageText: string) => {
-    if (!messageText.trim() || !localWebsocket) return;
+    if (!messageText.trim() || !wsIsConnected) return;
 
     // Create optimistic message immediately
     const optimisticMessage: Message = {
@@ -268,7 +268,7 @@ export default function ConversationDirect() {
     });
 
     // Send message via WebSocket
-    localWebsocket.send(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
+    wsSend(JSON.stringify({ type: "chat_message", conversation_uuid: conversationId, message: messageText.trim() }));
 
     // Scroll to bottom
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -415,9 +415,9 @@ export default function ConversationDirect() {
 
   // Set up sendMessage handler when websocket is available
   useEffect(() => {
-      if (localWebsocket && conversationId) {
+      if (wsIsConnected && conversationId) {
           const handler = (messageText: string) => {
-              if (!messageText.trim() || !localWebsocket) return;
+              if (!messageText.trim() || !wsIsConnected) return;
               console.log('📤 Envoi du message via WebSocket:', messageText);
 
               // Create optimistic message immediately
@@ -457,7 +457,7 @@ export default function ConversationDirect() {
               });
 
               // Send message via WebSocket
-              localWebsocket.send(JSON.stringify({
+              wsSend(JSON.stringify({
                   type: "chat_message",
                   conversation_uuid: conversationId,
                   message: messageText.trim()
@@ -468,14 +468,19 @@ export default function ConversationDirect() {
       } else {
           setSendMessage(null);
       }
-  }, [localWebsocket, conversationId, setSendMessage, user?.username]);
+  }, [wsIsConnected, conversationId, setSendMessage, user?.username, wsSend]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
       fetchMessages();
-      connectWebSocket();
+      // Connect WebSocket with automatic token management
+      wsConnect();
     }
-    return () => { if (localWebsocket) localWebsocket.close(); };
+
+    // Cleanup: disconnect WebSocket when leaving
+    return () => {
+      wsDisconnect();
+    };
   }, [conversationId, accessToken]);
 
   // Rafraîchir les messages à chaque fois qu'on revient sur cet écran
