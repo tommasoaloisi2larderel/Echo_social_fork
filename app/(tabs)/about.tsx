@@ -46,7 +46,9 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {

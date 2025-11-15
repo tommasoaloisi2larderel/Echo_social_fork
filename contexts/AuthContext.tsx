@@ -454,7 +454,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Cache miss - fetch with deduplication
       console.log(`❌ Cache miss, fetching: ${cacheKey}`);
 
-      return requestDeduplicator.deduplicate(dedupeKey, async () => {
+      const response = await requestDeduplicator.deduplicate(dedupeKey, async () => {
         const response = await performAuthenticatedFetch(url, options);
 
         // Cache successful responses
@@ -464,6 +464,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         return response;
       });
+
+      // Clone response before returning to avoid "Already read" errors
+      // when multiple consumers access deduplicated requests
+      return response.clone();
     }
 
     // For mutations or non-cached requests
