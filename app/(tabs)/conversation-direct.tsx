@@ -3,7 +3,7 @@ import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
 import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
 import { TypingIndicator } from '@/components/TypingIndicator';
-import { API_BASE_URL, WS_BASE_URL } from "@/config/api";
+import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -333,12 +333,6 @@ export default function ConversationDirect() {
       const data = await response.json();
       let messagesList = Array.isArray(data) ? data : (data.results || []);
 
-      // Filtrer par participants si on les connaît
-      if (allowedUsernamesRef.current.size > 0) {
-        messagesList = messagesList.filter((m: any) =>
-          allowedUsernamesRef.current.has(m.sender_username)
-        );
-      }
 
       // 5. Identifier les messages non lus (pour l'affichage avec surbrillance)
       const unreadFromOther = messagesList
