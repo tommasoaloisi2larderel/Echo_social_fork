@@ -436,6 +436,15 @@ export default function ConversationDirect() {
 
                 return newMessages;
               });
+              addMessageToCache(String(conversationId), {
+                id: optimisticMessage.id,
+                uuid: optimisticMessage.uuid,
+                sender_username: optimisticMessage.sender_username,
+                content: optimisticMessage.content,
+                created_at: optimisticMessage.created_at,
+                is_read: optimisticMessage.is_read,
+                conversation_uuid: String(conversationId)
+              });
 
               // Send message via WebSocket
               wsSend(JSON.stringify({
@@ -820,4 +829,31 @@ export default function ConversationDirect() {
       )}
     </Animated.View>
   );
+}
+function addMessageToCache(conversationId: string, message: { id: any; uuid: any; sender_username: any; content: any; created_at: any; is_read: any; conversation_uuid: string; }) {
+  try {
+    // @ts-ignore
+    const currentMessages = messagesCacheRef.current.get(conversationId) || [];
+    const exists = currentMessages.some((m: any) => m.uuid === message.uuid);
+
+    if (exists) {
+      const updatedMessages = currentMessages.map((m: any) =>
+        m.uuid === message.uuid ? message : m
+      );
+      // @ts-ignore
+      messagesCacheRef.current.set(conversationId, updatedMessages);
+      // @ts-ignore
+      cacheManager.set(CacheKeys.conversationMessages(conversationId), updatedMessages, CacheTTL.MESSAGES);
+    } else {
+      const updatedMessages = [...currentMessages, message].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      // @ts-ignore
+      messagesCacheRef.current.set(conversationId, updatedMessages);
+      // @ts-ignore
+      cacheManager.set(CacheKeys.conversationMessages(conversationId), updatedMessages, CacheTTL.MESSAGES);
+    }
+  } catch (error) {
+    console.error('Failed to add message to cache:', error);
+  }
 }

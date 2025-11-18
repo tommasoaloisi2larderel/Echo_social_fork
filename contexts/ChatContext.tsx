@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Image as RNImage, AppState, AppStateStatus } from 'react-native';
-import { storage } from '../utils/storage';
+import { AppState, AppStateStatus, Image as RNImage } from 'react-native';
 import { cacheManager } from '../utils/CacheManager';
 import { CacheKeys, CacheTTL } from '../utils/cache-config';
+import { storage } from '../utils/storage';
 
 interface CachedMessage {
   id: number;
@@ -55,6 +55,7 @@ interface ChatContextType {
   backgroundRefresh: (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => Promise<void>;
+  addMessageToCache: (conversationId: string, message: CachedMessage) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -173,6 +174,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       })();
     } catch (error) {
       console.error(`❌ Failed to prime memory cache for ${conversationId}:`, error);
+    }
+  };
+
+  const addMessageToCache = (conversationId: string, message: CachedMessage): void => {
+    try {
+      const currentMessages = messagesCacheRef.current.get(conversationId) || [];
+      const exists = currentMessages.some(m => m.uuid === message.uuid);
+      
+      if (exists) {
+        const updatedMessages = currentMessages.map(m => 
+          m.uuid === message.uuid ? message : m
+        );
+        messagesCacheRef.current.set(conversationId, updatedMessages);
+        cacheManager.set(CacheKeys.conversationMessages(conversationId), updatedMessages, CacheTTL.MESSAGES);
+      } else {
+        const updatedMessages = [...currentMessages, message].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        messagesCacheRef.current.set(conversationId, updatedMessages);
+        cacheManager.set(CacheKeys.conversationMessages(conversationId), updatedMessages, CacheTTL.MESSAGES);
+      }
+    } catch (error) {
+      console.error('Failed to add message to cache:', error);
     }
   };
 
@@ -799,6 +823,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         // 🆕 Phase 2: Enhanced features
         setVisibleConversations,
         backgroundRefresh,
+        addMessageToCache,
       }}
     >
       {children}

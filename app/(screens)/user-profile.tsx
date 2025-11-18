@@ -2,20 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../../components/DefaultAvatar';
@@ -44,12 +44,12 @@ interface UserProfile {
     reponse: string;
     date: string;
   } | null;
-  prochains_evenements?: Array<{
+  prochains_evenements?: {
     id: number;
     titre: string;
     date_debut: string;
     type: string;
-  }>;
+  }[];
 }
 
 interface UserProfileStats {
@@ -220,6 +220,9 @@ export default function UserProfileScreen() {
     }
   };
 
+  // FINAL CORRECT VERSION - app/(screens)/user-profile.tsx
+  // Replace handleSendConnectionRequest with this:
+
   const handleSendConnectionRequest = async () => {
     if (!profile || !connectionMessage.trim()) {
       Alert.alert('Message requis', 'Veuillez écrire un message de présentation');
@@ -229,14 +232,14 @@ export default function UserProfileScreen() {
     setSendingRequest(true);
     try {
       const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/relations/connections/`,
+        `${API_BASE_URL}/relations/connections/`,  // ✅ This endpoint EXISTS
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            destinataire: profile.uuid,
+            destinataire_uuid: profile.uuid,  // ✅ Use destinataire_uuid (not destinataire)
             message: connectionMessage,
           }),
         }
@@ -250,6 +253,10 @@ export default function UserProfileScreen() {
           errorMessage = errorData.detail;
         } else if (errorData.error) {
           errorMessage = errorData.error;
+        } else if (errorData.non_field_errors && Array.isArray(errorData.non_field_errors)) {
+          errorMessage = errorData.non_field_errors[0];
+        } else if (errorData.destinataire_uuid && Array.isArray(errorData.destinataire_uuid)) {
+          errorMessage = errorData.destinataire_uuid[0];
         }
         
         throw new Error(errorMessage);
@@ -257,6 +264,10 @@ export default function UserProfileScreen() {
 
       setShowMessageModal(false);
       setConnectionMessage('');
+      
+      // Reload friend status
+      await checkFriendStatus();
+      
       Alert.alert(
         'Demande envoyée',
         `Votre demande de connexion a été envoyée à ${profile.surnom || profile.username}.`
