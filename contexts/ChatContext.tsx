@@ -555,6 +555,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const prefetchConversationsOverview = async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
+    if (!request) {  // ← Add this check
+      console.log('⚠️ Prefetch skipped: No authenticated request');
+      return;
+    }
     try {
       console.log('🔄 Début prefetch conversations overview...');
       

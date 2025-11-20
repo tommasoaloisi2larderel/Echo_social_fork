@@ -359,6 +359,14 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // ✅ Only prefetch if logged in
+    if (user) {
+      prefetchConversationsOverview(makeAuthenticatedRequest)
+        .catch(err => console.log('Prefetch failed:', err));
+    }
+  }, [user]);
+
 
   const fetchData = async () => {
     try {
