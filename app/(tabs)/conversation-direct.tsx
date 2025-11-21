@@ -7,6 +7,7 @@ import { API_BASE_URL } from "@/config/api";
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -24,20 +25,9 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
+// 🆕 Import Message type correctly
+import { Message, useMessages } from '../../hooks/useMessages';
 import { useWebSocketWithAuth } from '../../hooks/useWebSocketWithAuth';
-
-interface Message {
-  id: number;
-  uuid: string;
-  sender_username: string;
-  content: string;
-  created_at: string;
-  is_read?: boolean;
-  is_ai_generated?: boolean;
-  attachments?: { uuid: string; file_type: string; file_url: string; thumbnail_url?: string; original_filename?: string }[];
-  isPending?: boolean; // For optimistic UI updates
-  isAiLoading?: boolean; // For AI response loading state
-}
 
 interface ConversationInfo {
   other_participant?: {
@@ -58,15 +48,27 @@ interface ConversationInfo {
 
 export default function ConversationDirect() {
   const { conversationId } = useLocalSearchParams();
+  const queryClient = useQueryClient();
+  const { messages: dataMessages, isLoading, refresh } = useMessages(conversationId as string);
+  const messages = dataMessages || [];
   const { accessToken, user, logout, makeAuthenticatedRequest } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
   const { setWebsocket, setSendMessage, setCurrentConversationId, getCachedMessages, getCachedConversationInfo, primeCache, addMessageToCache } = useChat();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
   const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);
   const allowedUsernamesRef = useRef<Set<string>>(new Set());
   const [expandedAgentMessages, setExpandedAgentMessages] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+
+  // updateMessagesCache: helper to update the messages cache for this conversation
+  const updateMessagesCache = useCallback(
+    (updater: (prev: Message[]) => Message[]) => {
+      if (!conversationId) return;
+      queryClient.setQueryData(['messages', conversationId], (oldData?: Message[]) => {
+        return updater(oldData || []);
+      });
+    },
+    [queryClient, conversationId]
+  );
 
   const screenDimensions = Dimensions.get('window');
   const zoomAnim = useRef(new Animated.Value(0)).current;
@@ -132,6 +134,8 @@ export default function ConversationDirect() {
               sender_username: msg.sender_username,
               content: msg.content,
               created_at: msg.created_at,
+              is_read: false, // Default for incoming
+              conversation_uuid: conversationId as string,
               is_ai_generated: msg.is_ai_generated || false,
               attachments: msg.attachments || [],
             };
@@ -142,7 +146,7 @@ export default function ConversationDirect() {
               console.log(`📩 Nouveau message non lu reçu: ${newMsg.uuid}`);
             }
             
-            setMessages((prev) => {
+            updateMessagesCache((prev) => {
               // Remove any pending messages with the same content and sender
               // Also remove AI loading indicators when any new message arrives
               const withoutPendingAndLoading = prev.filter(m =>
@@ -207,7 +211,8 @@ export default function ConversationDirect() {
             console.log('✓✓ Messages marqués comme lus');
             
             // Mettre à jour tous les messages de l'utilisateur comme lus
-            setMessages(prev => prev.map(msg => {
+            // Mettre à jour tous les messages de l'utilisateur comme lus
+            updateMessagesCache(prev => prev.map(msg => {
               if (msg.sender_username === user?.username) {
                 return { ...msg, is_read: true };
               }
@@ -238,15 +243,17 @@ export default function ConversationDirect() {
       content: messageText.trim(),
       created_at: new Date().toISOString(),
       is_read: false,
+      conversation_uuid: conversationId as string,
       isPending: true, // Mark as pending
-      attachments: []
+      attachments: [],
+      is_ai_generated: false
     };
 
     // Check if there's an AI agent in this conversation (by checking if any previous messages are AI-generated)
     const hasAiAgent = messages.some(m => m.is_ai_generated);
 
     // Add optimistic message to UI immediately
-    setMessages((prev) => {
+    updateMessagesCache((prev) => {
       const newMessages = [...prev, optimisticMessage];
 
       // If there's an AI agent, also add a loading indicator
@@ -257,6 +264,8 @@ export default function ConversationDirect() {
           sender_username: 'AI Assistant',
           content: '',
           created_at: new Date().toISOString(),
+          is_read: false,
+          conversation_uuid: conversationId as string,
           is_ai_generated: false,
           isAiLoading: true,
           attachments: []
@@ -295,91 +304,6 @@ export default function ConversationDirect() {
     });
   };
 
-  const fetchMessages = async () => {
-    if (!accessToken) {
-      await logout();
-      return;
-    }
-    try {
-      // 1. D'abord, utiliser le cache pour les infos de conversation (évite un appel réseau)
-      let convDataLocal = getCachedConversationInfo(String(conversationId));
-
-      // 2. Si pas en cache, récupérer seulement les infos de cette conversation
-      if (!convDataLocal) {
-        const infoResp = await makeAuthenticatedRequest(
-          `${API_BASE_URL}/messaging/conversations/${conversationId}/`
-        );
-        if (infoResp.ok) {
-          convDataLocal = await infoResp.json();
-        }
-      }
-
-      // 3. Mettre à jour les infos de conversation
-      if (convDataLocal) {
-        setConversationInfo(convDataLocal);
-
-        // Déterminer les deux participants autorisés
-        const me = user?.username;
-        const otherUsername = convDataLocal?.other_participant?.username;
-        const setVals = new Set<string>();
-        if (me) setVals.add(me);
-        if (otherUsername) setVals.add(otherUsername);
-        allowedUsernamesRef.current = setVals;
-      }
-
-      // 4. Récupérer les messages (un seul appel réseau)
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
-      );
-
-      if (response.status === 401) {
-        await logout();
-        return;
-      }
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      let messagesList = Array.isArray(data) ? data : (data.results || []);
-
-
-      // 5. Identifier les messages non lus (pour l'affichage avec surbrillance)
-      const unreadFromOther = messagesList
-        .filter((m: any) => !m.is_read && m.sender_username !== user?.username)
-        .map((m: any) => m.uuid);
-
-      if (unreadFromOther.length > 0) {
-        setUnreadMessageUuids(new Set(unreadFromOther));
-        console.log(`📩 ${unreadFromOther.length} message(s) non lu(s) détecté(s)`);
-
-        // Retirer la surbrillance après 2 secondes (plus réactif que 10s)
-        setTimeout(() => {
-          setUnreadMessageUuids(new Set());
-        }, 2000);
-      }
-
-      const sortedMessages = messagesList.sort(
-        (a: Message, b: Message) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-
-      setMessages(sortedMessages);
-
-      // 6. Note: mark-as-seen est déjà envoyé via WebSocket dans onopen (ligne 92)
-      // Plus besoin d'appel REST redondant - le WebSocket est plus rapide!
-
-      // 7. Prime le cache pour ouverture instantanée ultérieure
-      try {
-        primeCache(String(conversationId), convDataLocal, sortedMessages as any);
-      } catch {}
-
-    } catch (error) {
-      console.error('Erreur messages:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Charger instantanément depuis le cache si disponible
   useEffect(() => {
     if (!conversationId) return;
@@ -387,9 +311,9 @@ export default function ConversationDirect() {
     const cachedMsgs = getCachedMessages(String(conversationId));
     if (cachedInfo) setConversationInfo(cachedInfo);
     if (cachedMsgs && cachedMsgs.length >= 0) {
-      const onlyThisConv = cachedMsgs;
-      setMessages(onlyThisConv as unknown as Message[]);
-      setLoading(false);
+      // Force type cast for compatibility with old cache format
+      const onlyThisConv = cachedMsgs as unknown as Message[];
+      queryClient.setQueryData(['messages', conversationId], onlyThisConv);
     }
   }, [conversationId]);
 
@@ -418,24 +342,28 @@ export default function ConversationDirect() {
                 content: messageText.trim(),
                 created_at: new Date().toISOString(),
                 is_read: false,
+                conversation_uuid: conversationId as string,
                 isPending: true,
-                attachments: []
+                attachments: [],
+                is_ai_generated: false
               };
 
               // Add optimistic message to UI immediately
-              setMessages((prev) => {
+              updateMessagesCache((prev) => {
                 // Check if there's an AI agent in this conversation
-                const hasAiAgent = prev.some(m => m.is_ai_generated);
+                const hasAiAgentInner = prev.some(m => m.is_ai_generated);
                 const newMessages = [...prev, optimisticMessage];
 
                 // If there's an AI agent, also add a loading indicator
-                if (hasAiAgent) {
+                if (hasAiAgentInner) {
                   const aiLoadingMessage: Message = {
                     id: Date.now() + 1,
                     uuid: `temp-ai-loading-${Date.now()}`,
                     sender_username: 'AI Assistant',
                     content: '',
                     created_at: new Date().toISOString(),
+                    is_read: false,
+                    conversation_uuid: conversationId as string,
                     is_ai_generated: false,
                     isAiLoading: true,
                     attachments: []
@@ -467,11 +395,10 @@ export default function ConversationDirect() {
       } else {
           setSendMessage(null);
       }
-  }, [wsIsConnected, conversationId, setSendMessage, user?.username, wsSend]);
+  }, [wsIsConnected, conversationId, setSendMessage, user?.username, wsSend, updateMessagesCache]);
 
   useEffect(() => {
     if (conversationId && accessToken) {
-      fetchMessages();
       // Connect WebSocket with automatic token management
       wsConnect();
     }
@@ -486,19 +413,19 @@ export default function ConversationDirect() {
   useFocusEffect(
     useCallback(() => {
       if (conversationId && accessToken) {
-        fetchMessages();
+        refresh();
       }
-    }, [conversationId, accessToken])
+    }, [conversationId, accessToken, refresh])
   );
 
   // Auto-scroll vers le bas après le chargement des messages
   useEffect(() => {
-    if (messages.length > 0 && scrollViewRef.current && !loading) {
+    if (messages.length > 0 && scrollViewRef.current && !isLoading) {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: false });
       }, 100);
     }
-  }, [messages.length, loading]);
+  }, [messages.length, isLoading]);
   // Auto-scroll quand quelqu'un tape (indicateur typing)
   useEffect(() => {
     if (typingUsers.size > 0 && scrollViewRef.current) {
@@ -508,7 +435,7 @@ export default function ConversationDirect() {
     }
   }, [typingUsers.size]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={styles.chatContainer}>
         <Stack.Screen options={{ headerShown: false }} />

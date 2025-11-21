@@ -1,12 +1,10 @@
 import { API_BASE_URL } from "@/config/api";
 import { router } from "expo-router";
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
-import { storage } from "../utils/storage";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { cacheManager } from "../utils/CacheManager";
-import { requestDeduplicator } from "../utils/RequestDeduplicator";
-import { CacheTTL } from "../utils/cache-config";
+import { storage } from "../utils/storage";
 
+// User interface definition
 interface User {
   id: number;
   uuid: string;
@@ -26,24 +24,6 @@ interface User {
   prochains_evenements: any[];
 }
 
-/**
- * Cache configuration for API requests
- */
-interface CacheConfig {
-  /** Whether to use cache for this request (default: true for GET, false for others) */
-  useCache?: boolean;
-  /** Time-to-live in seconds (default: based on endpoint, see CacheTTL) */
-  ttl?: number;
-  /** Custom cache key (default: auto-generated from URL) */
-  cacheKey?: string;
-  /** Use stale-while-revalidate: return cached data immediately, fetch fresh in background */
-  staleWhileRevalidate?: boolean;
-  /** Cache keys to invalidate after successful mutation (for POST/PUT/DELETE) */
-  invalidateKeys?: string[];
-  /** Pattern to invalidate after successful mutation (supports wildcards) */
-  invalidatePattern?: string;
-}
-
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
@@ -55,28 +35,18 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (updatedUser: User) => Promise<void>;
   reloadUser: () => Promise<void>;
+  /**
+   * Authenticated fetch wrapper.
+   * Injects the Bearer token and handles 401 refresh/retry logic.
+   * Caching and deduplication are now delegated to React Query.
+   */
   makeAuthenticatedRequest: (
     url: string,
-    options?: RequestInit,
-    cacheConfig?: CacheConfig
+    options?: RequestInit
   ) => Promise<Response>;
-  /**
-   * 🆕 Ensure we have a valid access token
-   * Refreshes if token is expired or expiring soon
-   * @returns A valid access token or null if refresh fails
-   */
+  
   ensureValidToken: () => Promise<string | null>;
-  /**
-   * 🆕 Subscribe to token refresh events
-   * @param callback Called when tokens are refreshed with new access token
-   * @returns Unsubscribe function
-   */
   onTokenRefresh: (callback: (newAccessToken: string) => void) => () => void;
-  /**
-   * 🆕 Check if current token is expiring soon
-   * @param bufferMinutes Minutes before expiry to consider "expiring soon"
-   * @returns true if token will expire within buffer time
-   */
   isTokenExpiringSoon: (bufferMinutes?: number) => boolean;
 }
 
@@ -122,12 +92,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  // 🆕 Token refresh event listeners
+  // Token refresh event listeners
   const tokenRefreshListenersRef = useRef<Set<(newAccessToken: string) => void>>(new Set());
 
   // Auto-refresh tokens periodically
   const startAutoRefresh = (refresh: string) => {
-    // Clear any existing interval
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
     }
@@ -161,11 +130,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const storedUser = await storage.getItemAsync("user");
 
         if (storedAccessToken && storedRefreshToken && storedUser) {
-          // Check if access token is expired or expiring soon
           if (isTokenExpiringSoon(storedAccessToken, 5)) {
             console.log("🔄 Access token expired, refreshing on startup...");
-
-            // Try to refresh the access token
             const newAccessToken = await refreshAccessTokenInternal(storedRefreshToken);
 
             if (newAccessToken) {
@@ -174,14 +140,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setUser(JSON.parse(storedUser));
               startAutoRefresh(storedRefreshToken);
             } else {
-              // Refresh failed, clear stored data and require login
               console.log("❌ Token refresh failed on startup, clearing auth data");
               await storage.deleteItemAsync("accessToken");
               await storage.deleteItemAsync("refreshToken");
               await storage.deleteItemAsync("user");
             }
           } else {
-            // Tokens are still valid
             setAccessToken(storedAccessToken);
             setRefreshToken(storedRefreshToken);
             setUser(JSON.parse(storedUser));
@@ -196,25 +160,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
     loadAuthData();
 
-    // Listen for app state changes (background/foreground)
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
-    // Cleanup on unmount
     return () => {
       stopAutoRefresh();
       subscription.remove();
     };
   }, []);
 
-  // Handle app state changes (foreground/background)
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     if (
       appStateRef.current.match(/inactive|background/) &&
       nextAppState === 'active'
     ) {
-      // App has come to the foreground, check if tokens need refresh
       console.log("📱 App resumed, checking tokens...");
-
       const storedAccessToken = await storage.getItemAsync("accessToken");
       const storedRefreshToken = await storage.getItemAsync("refreshToken");
 
@@ -228,7 +186,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     appStateRef.current = nextAppState;
   };
 
-  // Internal refresh function used by auto-refresh mechanism
   const refreshAccessTokenInternal = async (refresh: string): Promise<string | null> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
@@ -247,7 +204,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setAccessToken(data.access);
       await storage.setItemAsync("accessToken", data.access);
 
-      // 🆕 Notify all listeners about the new token
       tokenRefreshListenersRef.current.forEach((listener) => {
         try {
           listener(data.access);
@@ -287,12 +243,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.setItemAsync("refreshToken", data.refresh);
     await storage.setItemAsync("user", JSON.stringify(data.user));
 
-    // Start auto-refresh mechanism
     startAutoRefresh(data.refresh);
   };
 
   const register = async (formData: Record<string, any>) => {
-    // Django requires password confirmation
     if (formData.password && !formData.password2) {
       formData.password2 = formData.password;
     }
@@ -306,7 +260,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
-      // Handle field-specific errors
       if (errorData.username) {
         const msg = Array.isArray(errorData.username) ? errorData.username.join(', ') : errorData.username;
         throw new Error(`Nom d'utilisateur: ${msg}`);
@@ -334,13 +287,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.setItemAsync("refreshToken", data.tokens.refresh);
     await storage.setItemAsync("user", JSON.stringify(data.user));
 
-    // Start auto-refresh mechanism
     startAutoRefresh(data.tokens.refresh);
   };
 
   const logout = async () => {
     try {
-      // Stop auto-refresh
       stopAutoRefresh();
 
       if (refreshToken) {
@@ -362,10 +313,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await storage.deleteItemAsync("refreshToken");
     await storage.deleteItemAsync("user");
 
-    // 🆕 Clear all caches on logout
-    await cacheManager.clear();
-    console.log("🗑️ All caches cleared on logout");
-
+    // Note: We removed cacheManager.clear() here.
+    // You should assume the queryClient from TanStack Query will be cleared elsewhere or by the parent provider.
+    
     router.replace("/(auth)/login");
   };
 
@@ -375,134 +325,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   /**
-   * Make an authenticated API request with aggressive caching
-   *
-   * Features:
-   * - Automatic caching for GET requests
-   * - Cache invalidation for mutations (POST/PUT/DELETE/PATCH)
-   * - Request deduplication (prevents duplicate simultaneous requests)
-   * - Stale-while-revalidate support
-   * - Automatic token refresh on 401
-   *
-   * @param url Request URL
-   * @param options Fetch options
-   * @param cacheConfig Cache configuration
+   * 🟢 Refactored for TanStack Query Compatibility
+   * This function simply wraps fetch with Token Injection & 401 Retry logic.
+   * It is intended to be used as the `fetcher` in your queryFn.
    */
   const makeAuthenticatedRequest = async (
-    url: string,
-    options: RequestInit = {},
-    cacheConfig: CacheConfig = {}
-  ): Promise<Response> => {
-    if (!accessToken) throw new Error("Pas de token d'accès");
-
-    const method = (options.method || 'GET').toUpperCase();
-    const isGetRequest = method === 'GET';
-    const isMutation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
-
-    // Extract cache config with defaults
-    const {
-      useCache = isGetRequest, // Default: cache GET, don't cache mutations
-      ttl = CacheTTL.CONVERSATIONS_LIST, // Default TTL
-      cacheKey = url, // Default: use URL as cache key
-      staleWhileRevalidate = false,
-      invalidateKeys = [],
-      invalidatePattern,
-    } = cacheConfig;
-
-    // Generate request deduplication key
-    const dedupeKey = requestDeduplicator.generateKey(url, method, options.body);
-
-    // For GET requests with caching enabled
-    if (isGetRequest && useCache) {
-      // Check cache first
-      const cachedData = await cacheManager.get<{
-        status: number;
-        statusText: string;
-        headers: Record<string, string>;
-        body: any;
-      }>(cacheKey);
-
-      if (cachedData) {
-        // Cache hit - return cached response
-        const cachedResponse = new Response(JSON.stringify(cachedData.body), {
-          status: cachedData.status,
-          statusText: cachedData.statusText,
-          headers: new Headers(cachedData.headers),
-        });
-
-        // If stale-while-revalidate, fetch fresh data in background
-        if (staleWhileRevalidate) {
-          console.log(`🔄 Stale-while-revalidate: returning cache, fetching fresh for ${cacheKey}`);
-
-          // Fetch in background (don't await)
-          requestDeduplicator
-            .deduplicate(dedupeKey, async () => {
-              const freshResponse = await performAuthenticatedFetch(url, options);
-              if (freshResponse.ok) {
-                await cacheResponse(cacheKey, freshResponse.clone(), ttl);
-              }
-              return freshResponse;
-            })
-            .catch((error) => {
-              console.error(`❌ Background refresh failed for ${cacheKey}:`, error);
-            });
-        }
-
-        return cachedResponse;
-      }
-
-      // Cache miss - fetch with deduplication
-      console.log(`❌ Cache miss, fetching: ${cacheKey}`);
-
-      const response = await requestDeduplicator.deduplicate(dedupeKey, async () => {
-        const response = await performAuthenticatedFetch(url, options);
-
-        // Cache successful responses
-        if (response.ok) {
-          await cacheResponse(cacheKey, response.clone(), ttl);
-        }
-
-        return response;
-      });
-
-      // Clone response before returning to avoid "Already read" errors
-      // when multiple consumers access deduplicated requests
-      return response.clone();
-    }
-
-    // For mutations or non-cached requests
-    const response = await performAuthenticatedFetch(url, options);
-
-    // Invalidate cache after successful mutations
-    if (isMutation && response.ok) {
-      // Invalidate specific keys
-      if (invalidateKeys.length > 0) {
-        await Promise.all(
-          invalidateKeys.map((key) => cacheManager.invalidate(key))
-        );
-        console.log(`🗑️ Invalidated ${invalidateKeys.length} cache keys after ${method}`);
-      }
-
-      // Invalidate by pattern
-      if (invalidatePattern) {
-        await cacheManager.invalidatePattern(invalidatePattern);
-        console.log(`🗑️ Invalidated pattern "${invalidatePattern}" after ${method}`);
-      }
-    }
-
-    return response;
-  };
-
-  /**
-   * Perform the actual authenticated fetch with token refresh on 401
-   */
-  const performAuthenticatedFetch = async (
     url: string,
     options: RequestInit = {}
   ): Promise<Response> => {
     if (!accessToken) throw new Error("Pas de token d'accès");
 
-    const response = await fetch(url, {
+    // 1. Try request with current token
+    let response = await fetch(url, {
       ...options,
       headers: {
         ...(options.headers || {}),
@@ -510,16 +344,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       },
     });
 
-    // Handle 401 - refresh token and retry
+    // 2. Handle 401 Unauthorized (Token Expired)
     if (response.status === 401) {
+      console.log("🔒 401 detected, attempting silent refresh...");
       const newToken = await refreshAccessToken();
+      
       if (!newToken) {
+        // Refresh failed - User session is invalid
         await logout();
         throw new Error("Session expirée, veuillez vous reconnecter");
       }
 
-      // Retry with new token
-      return fetch(url, {
+      // 3. Retry request with new token
+      response = await fetch(url, {
         ...options,
         headers: {
           ...(options.headers || {}),
@@ -531,41 +368,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return response;
   };
 
-  /**
-   * Cache a successful response
-   */
-  const cacheResponse = async (
-    key: string,
-    response: Response,
-    ttl: number
-  ): Promise<void> => {
-    try {
-      // Clone response to read body
-      const body = await response.json();
-
-      // Extract headers as plain object
-      const headers: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
-
-      // Cache the response data
-      await cacheManager.set(
-        key,
-        {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-          body,
-        },
-        ttl
-      );
-    } catch (error) {
-      console.error(`❌ Failed to cache response for ${key}:`, error);
-    }
-  };
-
   const isLoggedIn = !!user && !!accessToken;
+  
   const updateUser = async (updatedUser: User) => {
     setUser(updatedUser);
     await storage.setItemAsync("user", JSON.stringify(updatedUser));
@@ -576,9 +380,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!accessToken) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/profile/`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/`);
 
       if (response.ok) {
         const freshUser = await response.json();
@@ -591,11 +393,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  /**
-   * 🆕 Ensure we have a valid access token
-   * Checks if current token is expiring soon and refreshes if needed
-   * @returns A valid access token or null if refresh fails
-   */
   const ensureValidToken = async (): Promise<string | null> => {
     const currentAccessToken = await storage.getItemAsync("accessToken");
     const currentRefreshToken = await storage.getItemAsync("refreshToken");
@@ -605,7 +402,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return null;
     }
 
-    // Check if token is expiring soon (within 5 minutes)
     if (isTokenExpiringSoon(currentAccessToken, 5)) {
       console.log("🔄 Token expiring soon, refreshing...");
       const newToken = await refreshAccessTokenInternal(currentRefreshToken);
@@ -614,34 +410,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error("❌ Failed to refresh token");
         return null;
       }
-
       return newToken;
     }
 
-    // Token is still valid
     return currentAccessToken;
   };
 
-  /**
-   * 🆕 Subscribe to token refresh events
-   * Useful for WebSockets and other components that need to know when tokens change
-   * @param callback Called when tokens are refreshed with new access token
-   * @returns Unsubscribe function
-   */
   const onTokenRefresh = (callback: (newAccessToken: string) => void): (() => void) => {
     tokenRefreshListenersRef.current.add(callback);
-
-    // Return unsubscribe function
     return () => {
       tokenRefreshListenersRef.current.delete(callback);
     };
   };
 
-  /**
-   * 🆕 Check if current token is expiring soon
-   * @param bufferMinutes Minutes before expiry to consider "expiring soon" (default: 5)
-   * @returns true if token will expire within buffer time
-   */
   const checkTokenExpiringSoon = (bufferMinutes: number = 5): boolean => {
     if (!accessToken) return true;
     return isTokenExpiringSoon(accessToken, bufferMinutes);
