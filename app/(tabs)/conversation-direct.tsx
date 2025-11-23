@@ -51,7 +51,7 @@ export default function ConversationDirect() {
   const queryClient = useQueryClient();
   const { messages: dataMessages, isLoading, refresh } = useMessages(conversationId as string);
   const messages = dataMessages || [];
-  const { accessToken, user, logout, makeAuthenticatedRequest } = useAuth();
+  const { accessToken, user, logout } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
   const { setWebsocket, setSendMessage, setCurrentConversationId, getCachedMessages, getCachedConversationInfo, primeCache, addMessageToCache } = useChat();
   const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);

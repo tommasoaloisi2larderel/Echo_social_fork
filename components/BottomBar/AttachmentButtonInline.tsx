@@ -1,5 +1,3 @@
-import { useAuth } from '@/contexts/AuthContext';
-import { useChat } from '@/contexts/ChatContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,32 +5,28 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-
-const API_BASE_URL = 'https://reseausocial-production.up.railway.app';
 
 interface AttachmentButtonInlineProps {
   conversationId: string;
-  onAttachmentSent?: () => void;
+  // NEW: We pass the selected file up instead of sending it
+  onFileSelected: (file: { uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string }) => void;
   disabled?: boolean;
 }
 
 const AttachmentButtonInline: React.FC<AttachmentButtonInlineProps> = ({
   conversationId,
-  onAttachmentSent,
+  onFileSelected,
   disabled,
 }) => {
-  const { makeAuthenticatedRequest } = useAuth();
-  const { websocket } = useChat();
   const [showMenu, setShowMenu] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
 
   // ==================== FILE PICKERS ====================
 
@@ -52,10 +46,14 @@ const AttachmentButtonInline: React.FC<AttachmentButtonInlineProps> = ({
       const asset = res.assets?.[0];
       if (!asset?.uri) return;
 
-      await uploadAndSend(asset.uri, `photo_${Date.now()}.jpg`, 'image/jpeg');
+      onFileSelected({
+        uri: asset.uri,
+        name: `photo_${Date.now()}.jpg`,
+        type: 'image',
+        mime: 'image/jpeg'
+      });
     } catch (e) {
       console.error('camera error', e);
-      Alert.alert('Erreur', "Impossible d'accéder à la caméra");
     }
   };
 
@@ -76,15 +74,17 @@ const AttachmentButtonInline: React.FC<AttachmentButtonInlineProps> = ({
       if (!asset?.uri) return;
 
       const isVideo = asset.type === 'video';
-      const name =
-        asset.fileName ||
-        `${isVideo ? 'video' : 'photo'}_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
-      const type = isVideo ? 'video/mp4' : 'image/jpeg';
+      const name = asset.fileName || `${isVideo ? 'video' : 'photo'}_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
+      
+      onFileSelected({
+        uri: asset.uri,
+        name: name,
+        type: isVideo ? 'video' : 'image',
+        mime: isVideo ? 'video/mp4' : 'image/jpeg'
+      });
 
-      await uploadAndSend(asset.uri, name, type);
     } catch (e) {
       console.error('pick photo/video error', e);
-      Alert.alert('Erreur', "Impossible d'accéder à la galerie");
     }
   };
 
@@ -100,90 +100,15 @@ const AttachmentButtonInline: React.FC<AttachmentButtonInlineProps> = ({
       if (res.canceled || res.type === 'cancel') return;
       // @ts-ignore
       const file = res.assets?.[0] || res;
-      const uri = file.uri;
-      const name = file.name || `file_${Date.now()}`;
-      const mime = file.mimeType || 'application/octet-stream';
-
-      await uploadAndSend(uri, name, mime);
+      
+      onFileSelected({
+        uri: file.uri,
+        name: file.name || `file_${Date.now()}`,
+        type: 'file',
+        mime: file.mimeType || 'application/octet-stream'
+      });
     } catch (e) {
       console.error('pick doc error', e);
-      Alert.alert('Erreur', 'Impossible de sélectionner le fichier');
-    }
-  };
-
-  // ==================== UPLOAD AND SEND ====================
-
-  const uploadAndSend = async (uri: string, name: string, type: string) => {
-    setIsUploading(true);
-    try {
-      // Upload file
-      const formData = new FormData();
-      formData.append('file', {
-        uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
-        name,
-        type,
-      } as any);
-
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/messaging/attachments/upload/`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Upload failed:', response.status, errorText);
-        Alert.alert('Erreur', `Upload échoué: ${response.status}`);
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!data?.uuid) {
-        Alert.alert('Erreur', "Impossible d'uploader le fichier");
-        return;
-      }
-
-      console.log('✅ File uploaded:', data.uuid);
-
-      // Send message with attachment
-      const payload = {
-        type: 'chat_message',
-        conversation_uuid: conversationId,
-        message: `📎 ${name}`,
-        attachment_uuids: [data.uuid],
-      };
-
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(JSON.stringify(payload));
-        console.log('✅ Attachment sent via WebSocket');
-      } else {
-        // Fallback REST API
-        await makeAuthenticatedRequest(
-          `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              content: payload.message,
-              attachment_uuids: [data.uuid],
-            }),
-          }
-        );
-        console.log('✅ Attachment sent via REST API');
-      }
-
-      onAttachmentSent?.();
-      Alert.alert('Succès', 'Fichier envoyé');
-    } catch (e) {
-      console.error('uploadAndSend error', e);
-      Alert.alert('Erreur', "Impossible d'envoyer le fichier");
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -194,7 +119,7 @@ const AttachmentButtonInline: React.FC<AttachmentButtonInlineProps> = ({
       <TouchableOpacity
         style={styles.button}
         onPress={() => setShowMenu(true)}
-        disabled={disabled || isUploading}
+        disabled={disabled}
         activeOpacity={0.8}
       >
         <LinearGradient

@@ -8,7 +8,7 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { fetchWithAuth } from "@/services/apiClient";
 
 interface MessageSummary {
   id: string;
@@ -18,7 +18,7 @@ interface MessageSummary {
 }
 
 export default function HomePage() {
-  const { user, makeAuthenticatedRequest, accessToken } = useAuth();
+  const { user, accessToken } = useAuth();
   
   const [summaries, setSummaries] = useState<MessageSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export default function HomePage() {
       console.log('🤖 Requesting AI summaries from Jarvis...');
       
       // Call Jarvis notifications endpoint
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/jarvis/chat/?type=notifications`,
         {
           method: 'POST',
@@ -86,7 +86,7 @@ export default function HomePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [makeAuthenticatedRequest, accessToken]);
+  }, [fetchWithAuth, accessToken]);
 
   // Parse Jarvis notifications from structured JSON response
   const parseJarvisNotifications = (data: any): MessageSummary[] => {
@@ -210,7 +210,7 @@ export default function HomePage() {
             )}
             <View style={styles.heroTextWrap}>
               <Text style={styles.hello}>Bonjour,</Text>
-              <Text style={styles.name}>{user?.first_name || user?.username || 'Utilisateur'}</Text>
+              <Text style={styles.name}>{ user?.username || 'Utilisateur'}</Text>
               <Text style={styles.subtitle}>Tout est sous contrôle.</Text>
             </View>
           </View>
