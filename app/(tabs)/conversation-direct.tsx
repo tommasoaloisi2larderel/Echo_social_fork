@@ -3,7 +3,8 @@ import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
 import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 import AudioPlayer from '@/components/FIlesLecture/Audioplayer';
 import { TypingIndicator } from '@/components/TypingIndicator';
-import { API_BASE_URL } from "@/config/api";
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,12 +23,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
 // 🆕 Import Message type correctly
+import { useWebSocketWithAuth } from '@/hooks/useWebSocketWithAuth';
 import { Message, useMessages } from '../../hooks/useMessages';
-import { useWebSocketWithAuth } from '../../hooks/useWebSocketWithAuth';
 
 interface ConversationInfo {
   other_participant?: {
@@ -51,7 +51,7 @@ export default function ConversationDirect() {
   const queryClient = useQueryClient();
   const { messages: dataMessages, isLoading, refresh } = useMessages(conversationId as string);
   const messages = dataMessages || [];
-  const { accessToken, user, logout } = useAuth();
+  const { user } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
   const { setWebsocket, setSendMessage, setCurrentConversationId, getCachedMessages, getCachedConversationInfo, primeCache, addMessageToCache } = useChat();
   const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);
@@ -81,156 +81,193 @@ export default function ConversationDirect() {
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // 🆕 Use the new WebSocket hook with automatic token management
-  const { websocket: localWebsocket, send: wsSend, isConnected: wsIsConnected, connect: wsConnect, disconnect: wsDisconnect } = useWebSocketWithAuth({
-    url: "wss://reseausocial-production.up.railway.app/ws/chat/",
-    autoConnect: false, // We'll manually connect when ready
-    onOpen: () => {
-      console.log('✅ WebSocket connected');
-      setWebsocket(localWebsocket);
-      setCurrentConversationId(conversationId as string);
+  const {
+    isConnected: wsIsConnected,
+    lastMessage,
+    sendMessage: wsSend,
+    connect: wsConnect,
+  } = useWebSocketWithAuth('/ws/chat/');
 
-      // Mark conversation as seen when connection opens
-      if (conversationId) {
-        wsSend(JSON.stringify({ type: "mark_as_seen", conversation_uuid: conversationId }));
+  // Handle incoming WebSocket messages
+  const handleWebSocketMessage = useCallback(
+    (event: any) => {
+      const rawData = (event && event.data) || event;
+      let data: any;
+      try {
+        data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+      } catch (e) {
+        console.error('❌ Erreur de parsing WebSocket:', e);
+        return;
       }
-    },
-    onMessage: (event) => {
-      const data = JSON.parse(event.data);
-        console.log('📡 WebSocket message reçu:', data.type);
-        console.log('📦 Données complètes:', JSON.stringify(data, null, 2));
-        
-          if (data.type === "chat_message") {
-            const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
-            
-            if (incomingConvUuid !== conversationId) {
-              return;
-            }
-            
-            const msg = data.message || data;
-            console.log('🎤 Message vocal reçu via WebSocket:');
-            console.log('   - content:', msg.content);
-            console.log('   - attachments:', JSON.stringify(msg.attachments, null, 2));
-            console.log('   - file_type:', msg.attachments?.[0]?.file_type);
-            console.log('   - file_url:', msg.attachments?.[0]?.file_url);
 
-            
-            // Filtrage par participants
-            if (allowedUsernamesRef.current.size > 0) {
-              const senderOk = msg.sender_username && allowedUsernamesRef.current.has(msg.sender_username);
-              const isGroupSystem = typeof msg.content === 'string' && (
-                msg.content.startsWith('🎉') ||
-                msg.content.startsWith('👋') ||
-                msg.content.includes('a rejoint') ||
-                msg.content.includes('Bienvenue')
-              );
-              if (!senderOk || isGroupSystem) {
-                return;
-              }
-            }
-            
-            const newMsg: Message = {
-              id: msg.id,
-              uuid: msg.uuid,
-              sender_username: msg.sender_username,
-              content: msg.content,
-              created_at: msg.created_at,
-              is_read: false, // Default for incoming
-              conversation_uuid: conversationId as string,
-              is_ai_generated: msg.is_ai_generated || false,
-              attachments: msg.attachments || [],
-            };
-            
-            // 🔴 SI le message vient de l'autre personne, le marquer comme non lu temporairement
-            if (msg.sender_username !== user?.username) {
-              setUnreadMessageUuids(prev => new Set([...prev, newMsg.uuid]));
-              console.log(`📩 Nouveau message non lu reçu: ${newMsg.uuid}`);
-            }
-            
-            updateMessagesCache((prev) => {
-              // Remove any pending messages with the same content and sender
-              // Also remove AI loading indicators when any new message arrives
-              const withoutPendingAndLoading = prev.filter(m =>
-                !(m.isPending && m.sender_username === newMsg.sender_username && m.content === newMsg.content) &&
-                !m.isAiLoading
-              );
+      console.log('📡 WebSocket message reçu:', data.type);
+      console.log('📦 Données complètes:', JSON.stringify(data, null, 2));
 
-              // Check if message already exists (by real UUID)
-              const exists = withoutPendingAndLoading.some((m) => m.uuid === newMsg.uuid);
-              if (exists) return withoutPendingAndLoading.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
+      if (data.type === 'chat_message') {
+        const incomingConvUuid = data.conversation_uuid || data.message?.conversation_uuid;
 
-              // Add new message and sort
-              return [...withoutPendingAndLoading, newMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-            });
-
-            // 🔴 MARQUER COMME VU après réception
-            if (msg.sender_username !== user?.username && wsIsConnected) {
-              wsSend(JSON.stringify({
-                type: "mark_as_seen",
-                conversation_uuid: conversationId
-              }));
-
-              // Retirer la couleur après 2 secondes
-              setTimeout(() => {
-                setUnreadMessageUuids(prev => {
-                  const updated = new Set(prev);
-                  updated.delete(newMsg.uuid);
-                  return updated;
-                });
-              }, 2000);
-            }
-
-            setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-          }
-        if (data.type === "typing_status") {
-          const { username, is_typing } = data;
-          
-          // Ne pas afficher notre propre statut typing
-          if (username === user?.username) return;
-          
-          setTypingUsers(prev => {
-            const newSet = new Set(prev);
-            if (is_typing) {
-              newSet.add(username);
-            } else {
-              newSet.delete(username);
-            }
-            return newSet;
-          });
+        if (incomingConvUuid !== conversationId) {
           return;
         }
-        // Gérer la confirmation de lecture (message vu)
-        if (data.type === "conversation_seen") {
-          const { conversation_uuid } = data;
-            console.log('👁️ Event conversation_seen reçu !');
-            console.log('   - conversation_uuid:', data.conversation_uuid);
-            console.log('   - username:', data.username);
-            console.log('   - marked_count:', data.marked_count);
-          
-          // Vérifier que c'est bien notre conversation
-          if (conversation_uuid === conversationId) {
-            console.log('✓✓ Messages marqués comme lus');
-            
-            // Mettre à jour tous les messages de l'utilisateur comme lus
-            // Mettre à jour tous les messages de l'utilisateur comme lus
-            updateMessagesCache(prev => prev.map(msg => {
+
+        const msg = data.message || data;
+        console.log('🎤 Message vocal reçu via WebSocket:');
+        console.log('   - content:', msg.content);
+        console.log('   - attachments:', JSON.stringify(msg.attachments, null, 2));
+        console.log('   - file_type:', msg.attachments?.[0]?.file_type);
+        console.log('   - file_url:', msg.attachments?.[0]?.file_url);
+
+        // Filtrage par participants
+        if (allowedUsernamesRef.current.size > 0) {
+          const senderOk = msg.sender_username && allowedUsernamesRef.current.has(msg.sender_username);
+          const isGroupSystem =
+            typeof msg.content === 'string' &&
+            (msg.content.startsWith('🎉') ||
+              msg.content.startsWith('👋') ||
+              msg.content.includes('a rejoint') ||
+              msg.content.includes('Bienvenue'));
+          if (!senderOk || isGroupSystem) {
+            return;
+          }
+        }
+
+        const newMsg: Message = {
+          id: msg.id,
+          uuid: msg.uuid,
+          sender_username: msg.sender_username,
+          content: msg.content,
+          created_at: msg.created_at,
+          is_read: false, // Default for incoming
+          conversation_uuid: conversationId as string,
+          is_ai_generated: msg.is_ai_generated || false,
+          attachments: msg.attachments || [],
+        };
+
+        // 🔴 SI le message vient de l'autre personne, le marquer comme non lu temporairement
+        if (msg.sender_username !== user?.username) {
+          setUnreadMessageUuids((prev) => new Set([...prev, newMsg.uuid]));
+          console.log(`📩 Nouveau message non lu reçu: ${newMsg.uuid}`);
+        }
+
+        updateMessagesCache((prev) => {
+          // Remove any pending messages with the same content and sender
+          // Also remove AI loading indicators when any new message arrives
+          const withoutPendingAndLoading = prev.filter(
+            (m) =>
+              !(
+                m.isPending &&
+                m.sender_username === newMsg.sender_username &&
+                m.content === newMsg.content
+              ) && !m.isAiLoading
+          );
+
+          // Check if message already exists (by real UUID)
+          const exists = withoutPendingAndLoading.some((m) => m.uuid === newMsg.uuid);
+          if (exists) {
+            return withoutPendingAndLoading.map((m) => (m.uuid === newMsg.uuid ? newMsg : m));
+          }
+
+          // Add new message and sort
+          return [...withoutPendingAndLoading, newMsg].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+
+        // 🔴 MARQUER COMME VU après réception
+        if (msg.sender_username !== user?.username && wsIsConnected) {
+          wsSend(
+            JSON.stringify({
+              type: 'mark_as_seen',
+              conversation_uuid: conversationId,
+            })
+          );
+
+          // Retirer la couleur après 2 secondes
+          setTimeout(() => {
+            setUnreadMessageUuids((prev) => {
+              const updated = new Set(prev);
+              updated.delete(newMsg.uuid);
+              return updated;
+            });
+          }, 2000);
+        }
+
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+        return;
+      }
+
+      if (data.type === 'typing_status') {
+        const { username, is_typing } = data;
+
+        // Ne pas afficher notre propre statut typing
+        if (username === user?.username) return;
+
+        setTypingUsers((prev) => {
+          const newSet = new Set(prev);
+          if (is_typing) {
+            newSet.add(username);
+          } else {
+            newSet.delete(username);
+          }
+          return newSet;
+        });
+        return;
+      }
+
+      // Gérer la confirmation de lecture (message vu)
+      if (data.type === 'conversation_seen') {
+        const { conversation_uuid } = data;
+        console.log('👁️ Event conversation_seen reçu !');
+        console.log('   - conversation_uuid:', data.conversation_uuid);
+        console.log('   - username:', data.username);
+        console.log('   - marked_count:', data.marked_count);
+
+        // Vérifier que c'est bien notre conversation
+        if (conversation_uuid === conversationId) {
+          console.log('✓✓ Messages marqués comme lus');
+
+          // Mettre à jour tous les messages de l'utilisateur comme lus
+          updateMessagesCache((prev) =>
+            prev.map((msg) => {
               if (msg.sender_username === user?.username) {
                 return { ...msg, is_read: true };
               }
               return msg;
-            }));
-          }
-          return;
+            })
+          );
         }
+      }
     },
-    onError: (error) => {
-      console.error("❌ WebSocket error:", error);
-    },
-    onClose: () => {
-      console.log('🔌 WebSocket closed');
+    [conversationId, user?.username, wsIsConnected, wsSend, updateMessagesCache]
+  );
+
+  // React to new WebSocket messages
+  useEffect(() => {
+    if (!lastMessage) return;
+    handleWebSocketMessage(lastMessage);
+  }, [lastMessage, handleWebSocketMessage]);
+
+  // Track connection state and mark conversation as seen on connect
+  useEffect(() => {
+    if (wsIsConnected && conversationId) {
+      console.log('✅ WebSocket connected');
+      setCurrentConversationId(conversationId as string);
+
+      wsSend(
+        JSON.stringify({
+          type: 'mark_as_seen',
+          conversation_uuid: conversationId,
+        })
+      );
+    }
+
+    if (!wsIsConnected) {
+      // Consider this as closed
+      console.log('🔌 WebSocket disconnected');
       setWebsocket(null);
       setCurrentConversationId(null);
-    },
-  });
+    }
+  }, [wsIsConnected, conversationId, wsSend, setCurrentConversationId, setWebsocket]);
 
   const sendMessageHandler = (messageText: string) => {
     if (!messageText.trim() || !wsIsConnected) return;
@@ -398,24 +435,19 @@ export default function ConversationDirect() {
   }, [wsIsConnected, conversationId, setSendMessage, user?.username, wsSend, updateMessagesCache]);
 
   useEffect(() => {
-    if (conversationId && accessToken) {
+    if (conversationId) {
       // Connect WebSocket with automatic token management
       wsConnect();
     }
-
-    // Cleanup: disconnect WebSocket when leaving
-    return () => {
-      wsDisconnect();
-    };
-  }, [conversationId, accessToken]);
+  }, [conversationId, wsConnect]);
 
   // Rafraîchir les messages à chaque fois qu'on revient sur cet écran
   useFocusEffect(
     useCallback(() => {
-      if (conversationId && accessToken) {
+      if (conversationId) {
         refresh();
       }
-    }, [conversationId, accessToken, refresh])
+    }, [conversationId, refresh])
   );
 
   // Auto-scroll vers le bas après le chargement des messages
@@ -462,42 +494,28 @@ export default function ConversationDirect() {
   const headerName = otherParticipant ? (otherParticipant.surnom || otherParticipant.username) : 'Conversation';
 
   const fetchSummary = async () => {
-    if (!conversationId || !accessToken) {
-      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', !!accessToken);
+    if (!conversationId) {
+      console.log('❌ Résumé impossible - conversationId manquant');
       return;
     }
-    
+
     console.log('🔍 Début du résumé pour conversation:', conversationId);
     setLoadingSummary(true);
-    
+
     try {
-      const url = `${API_BASE_URL}/messaging/conversations/${conversationId}/summarize/`;
-      console.log('📤 URL appelée:', url);
-      console.log('🔑 Token présent:', !!accessToken);
-      
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(`/messaging/conversations/${conversationId}/summarize/`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
       console.log('📥 Statut de la réponse:', response.status);
-      console.log('📥 Headers de la réponse:', response.headers);
-
-      if (response.status === 401) {
-        console.log('🔒 Erreur 401 - Token expiré');
-        await logout();
-        return;
-      }
 
       if (!response.ok) {
         const errorText = await response.text();
-        setLoadingSummary(false);
         console.log('❌ Erreur HTTP:', response.status, errorText);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
-        
       }
 
       const data = await response.json();
@@ -505,18 +523,19 @@ export default function ConversationDirect() {
       console.log('📝 Résumé:', data.summary);
       console.log('📊 Nombre de messages non lus:', data.unread_count);
       console.log('📊 Messages de contexte:', data.context_messages_count);
-      
+
       setSummary(data.summary || 'Aucun résumé disponible');
       setShowSummary(true);
+    } catch (error) {
+      console.error('❌ Erreur lors du résumé:', error);
+      console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Alert.alert('Erreur', `Impossible de générer le résumé: ${errorMessage}`);
+    } finally {
       setLoadingSummary(false);
-      } catch (error) {
-        console.error('❌ Erreur lors du résumé:', error);
-        console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
-        
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        Alert.alert('Erreur', `Impossible de générer le résumé: ${errorMessage}`);
-      } finally {
-  };}
+    }
+  };
 
 
   return (

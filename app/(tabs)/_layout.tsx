@@ -19,7 +19,7 @@ export default function TabsLayout() {
   const globalParams = useGlobalSearchParams();
   const conversationId = (globalParams.conversationId || localParams.conversationId) as string | undefined;
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
-  const { isLoggedIn, accessToken } = useAuth();
+  const { isLoggedIn, loading } = useAuth();
   const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
   
   // Summary state
@@ -43,7 +43,7 @@ export default function TabsLayout() {
   }, [registerScrollRef]);
 
   useEffect(() => {
-  if (isLoggedIn && accessToken) {
+  if (isLoggedIn && !loading) {
     prefetchConversationsOverview(fetchWithAuth);
     prefetchAllMessages(fetchWithAuth);
   }
@@ -59,8 +59,8 @@ export default function TabsLayout() {
 
   // Summary fetch function
   const fetchSummary = async () => {
-    if (!conversationId || !accessToken) {
-      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', !!accessToken);
+    if (!conversationId || !isLoggedIn) {
+      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', isLoggedIn);
       Alert.alert('Info', 'Aucune conversation sélectionnée');
       return;
     }
