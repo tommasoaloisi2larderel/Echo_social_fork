@@ -1,6 +1,6 @@
+import { fetchWithAuth } from "@/services/apiClient";
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_BASE_URL } from '../config/api';
-import { useAuth } from '../contexts/AuthContext';
 
 // 🆕 Exporting the interface so it can be used in components
 export interface Attachment {
@@ -27,14 +27,13 @@ export interface Message {
 }
 
 export const useMessages = (conversationId: string | null) => {
-  const { makeAuthenticatedRequest } = useAuth();
   const queryClient = useQueryClient();
 
   const messagesQuery = useQuery({
     queryKey: ['messages', conversationId],
     queryFn: async () => {
       if (!conversationId) return [];
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/?limit=50`
       );
       if (!response.ok) throw new Error('Failed to fetch messages');
@@ -54,7 +53,7 @@ export const useMessages = (conversationId: string | null) => {
   const markReadMutation = useMutation({
     mutationFn: async () => {
       if (!conversationId) return;
-      await makeAuthenticatedRequest(
+      await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/read/`,
         { method: 'POST' }
       );

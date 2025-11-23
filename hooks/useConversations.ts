@@ -1,3 +1,4 @@
+import { fetchWithAuth } from "@/services/apiClient";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_BASE_URL } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,13 +25,13 @@ export interface Conversation {
 }
 
 export const useConversations = () => {
-  const { makeAuthenticatedRequest, isLoggedIn } = useAuth();
+  const { isLoggedIn } = useAuth();
   const queryClient = useQueryClient();
 
   const privateConversations = useQuery({
     queryKey: ['conversations', 'private'],
     queryFn: async () => {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/private/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/private/`);
       if (!response.ok) throw new Error('Failed to fetch private conversations');
       const data = await response.json();
       return Array.isArray(data) ? data : (data.results || []);
@@ -42,7 +43,7 @@ export const useConversations = () => {
   const groupConversations = useQuery({
     queryKey: ['conversations', 'groups'],
     queryFn: async () => {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/groups/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/groups/`);
       if (!response.ok) throw new Error('Failed to fetch group conversations');
       const data = await response.json();
       return Array.isArray(data) ? data : (data.results || []);

@@ -22,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useTransition } from '../../contexts/TransitionContext';
 // 🆕 Import the hook
+import { fetchWithAuth } from "@/services/apiClient";
 import { useConversations } from '../../hooks/useConversations';
 
 // 🆕 Define a proper interface for the items we display in the list
@@ -179,7 +180,7 @@ const ExpandableSection = ({ title, count, icon, isExpanded, onToggle, children 
 
 export default function ConversationsScreen() {
   const pathname = usePathname();
-  const { makeAuthenticatedRequest, user } = useAuth();
+  const { user } = useAuth();
   const { setTransitionPosition } = useTransition();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
@@ -257,7 +258,7 @@ export default function ConversationsScreen() {
         });
 
       // ... [Keep existing search logic for friends/connections] ...
-      const connectionsResponse = await makeAuthenticatedRequest(
+      const connectionsResponse = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/?statut=acceptee`
       );
 
@@ -277,7 +278,7 @@ export default function ConversationsScreen() {
           .filter(Boolean)
       );
 
-      const usersResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/users/`);
+      const usersResponse = await fetchWithAuth(`${API_BASE_URL}/api/users/`);
       if (!usersResponse.ok) throw new Error("Error fetching users");
 
       const usersData = await usersResponse.json();
