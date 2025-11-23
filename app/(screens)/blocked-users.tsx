@@ -1,7 +1,7 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -22,7 +22,6 @@ interface BlockedUser {
 }
 
 export default function BlockedUsersScreen() {
-  const { makeAuthenticatedRequest } = useAuth();
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [unblocking, setUnblocking] = useState<string | null>(null);
@@ -32,7 +31,7 @@ export default function BlockedUsersScreen() {
   setLoading(true);
   
   try {
-    const response = await makeAuthenticatedRequest(
+    const response = await fetchWithAuth(
       `${API_BASE_URL}/messaging/blocked-users/`
     );
     
@@ -68,7 +67,7 @@ export default function BlockedUsersScreen() {
   } finally {
     setLoading(false);
   }
-}, [makeAuthenticatedRequest]);
+}, [fetchWithAuth]);
   useEffect(() => {
     fetchBlockedUsers();
   }, [fetchBlockedUsers]);
@@ -84,7 +83,7 @@ export default function BlockedUsersScreen() {
             onPress: async () => {
             setUnblocking(userUuid);
             try {
-                const response = await makeAuthenticatedRequest(
+                const response = await fetchWithAuth(
                 `${API_BASE_URL}/messaging/unblock-user/`,
                 {
                     method: 'POST',

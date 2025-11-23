@@ -1,5 +1,6 @@
 import { FloatingHeader } from '@/components/FloatingHeader';
 import { API_BASE_URL } from "@/config/api";
+import { fetchWithAuth } from '@/services/apiClient';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -17,7 +18,6 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface User {
   id: number;
@@ -35,7 +35,6 @@ interface GroupMember {
 
 export default function AddGroupMembers() {
   const { groupUuid, groupName } = useLocalSearchParams();
-  const { makeAuthenticatedRequest } = useAuth();
   const insets = useSafeAreaInsets();
   
   const [query, setQuery] = useState('');
@@ -67,7 +66,7 @@ export default function AddGroupMembers() {
   const loadGroupMembers = async () => {
     try {
       console.log('📡 Chargement membres du groupe:', groupUuid);
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/groups/${groupUuid}/members/`
       );
       
@@ -97,7 +96,7 @@ export default function AddGroupMembers() {
     setIsSearching(true);
     try {
       console.log('🔍 Recherche utilisateurs avec query:', searchQuery);
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/api/users/`
       );
 
@@ -168,7 +167,7 @@ export default function AddGroupMembers() {
         };
         console.log('📨 Payload:', JSON.stringify(payload, null, 2));
         
-        const response = await makeAuthenticatedRequest(
+        const response = await fetchWithAuth(
           `${API_BASE_URL}/groups/${groupUuid}/invite/`,
           {
             method: 'POST',

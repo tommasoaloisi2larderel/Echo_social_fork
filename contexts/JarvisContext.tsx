@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "@/config/api";
+import { fetchWithAuth } from '@/services/apiClient';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-
 
 interface JarvisInstance {
   uuid: string;
@@ -68,7 +68,7 @@ interface JarvisContextType {
 const JarvisContext = createContext<JarvisContextType | undefined>(undefined);
 
 export const JarvisProvider = ({ children }: { children: ReactNode }) => {
-  const { makeAuthenticatedRequest, isLoggedIn } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [instance, setInstance] = useState<JarvisInstance | null>(null);
   const [messages, setMessages] = useState<JarvisMessage[]>([]);
   const [history, setHistory] = useState<JarvisHistoryEntry[]>([]);
@@ -86,7 +86,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   const initializeInstance = async () => {
     try {
       setIsLoading(true);
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/jarvis/instance/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/jarvis/instance/`);
       if (response.ok) {
         const data = await response.json();
         setInstance(data);
@@ -126,7 +126,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/jarvis/chat/?type=message`,
         {
           method: 'POST',
@@ -175,7 +175,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/jarvis/chat/?type=welcome`,
         { method: 'POST' }
       );
@@ -201,7 +201,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/jarvis/chat/?type=notifications`,
         { method: 'POST' }
       );
@@ -227,7 +227,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/jarvis/history/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/jarvis/history/`);
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
@@ -261,7 +261,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/jarvis/stats/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/jarvis/stats/`);
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -283,7 +283,7 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
 
   const updateInstance = async (updates: Partial<JarvisInstance>) => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/jarvis/instance/`,
         {
           method: 'PATCH',

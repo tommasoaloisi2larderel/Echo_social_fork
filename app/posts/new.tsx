@@ -1,21 +1,21 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ECHO_COLOR } from '../../constants/colors';
-import { useAuth } from '../../contexts/AuthContext';
 
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? "http://localhost:3001"
@@ -23,9 +23,7 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
 
 export default function NewPostScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { makeAuthenticatedRequest } = useAuth();
-  
+  const insets = useSafeAreaInsets();  
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,7 +40,7 @@ export default function NewPostScreen() {
 
     setIsSubmitting(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/posts/`,
         {
           method: 'POST',

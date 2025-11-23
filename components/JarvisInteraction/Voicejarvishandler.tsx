@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { SymbolView } from 'expo-symbols';
@@ -11,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface VoiceJarvisHandlerProps {
   onComplete: (transcription: string, response: string) => void;
@@ -22,7 +22,6 @@ const VoiceJarvisHandler: React.FC<VoiceJarvisHandlerProps> = ({
   onComplete,
   onCancel,
 }) => {
-  const { makeAuthenticatedRequest } = useAuth();
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -148,7 +147,7 @@ const VoiceJarvisHandler: React.FC<VoiceJarvisHandlerProps> = ({
         name: 'voice_message.m4a',
       } as any);
 
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         'https://reseausocial-production.up.railway.app/jarvis/vocal/',
         {
           method: 'POST',

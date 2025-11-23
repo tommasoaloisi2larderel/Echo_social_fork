@@ -72,7 +72,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
 /**
  * Main Authenticated Fetch Wrapper
- * Replaces: makeAuthenticatedRequest
+ * Replaces: fetchWithAuth
  */
 export const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const accessToken = await storage.getItemAsync("accessToken");

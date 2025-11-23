@@ -2,6 +2,7 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,7 +25,7 @@ import { API_BASE_URL } from "../config/api";
 import { storage } from '../utils/storage';
 
 export default function EditProfileScreen() {
-  const { user, makeAuthenticatedRequest,updateUser, reloadUser   } = useAuth();
+  const { user,updateUser   } = useAuth();
   const { clearCache } = useUserProfile();
   const [loading, setLoading] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -114,7 +115,7 @@ export default function EditProfileScreen() {
         } as any);
       }
 
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/api/auth/profile/`,
         {
           method: 'PATCH',

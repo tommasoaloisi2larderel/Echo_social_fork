@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "@/config/api";
 import { ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -41,7 +42,7 @@ interface ExtendedStats extends ProfileStats {
 }
 
 export default function StatsScreen() {
-  const { makeAuthenticatedRequest, user } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState<ExtendedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +52,7 @@ export default function StatsScreen() {
       setLoading(true);
       
       // Appel à l'API réelle
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/api/auth/profile/stats/`
       );
 
@@ -99,7 +100,7 @@ export default function StatsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [makeAuthenticatedRequest]);
+  }, [fetchWithAuth]);
 
   useEffect(() => {
     fetchStats();

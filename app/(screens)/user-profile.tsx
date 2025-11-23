@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -78,7 +79,7 @@ export default function UserProfileScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { makeAuthenticatedRequest, accessToken } = useAuth();
+  const { accessToken } = useAuth();
   const { getUserProfile, getUserStats } = useUserProfile();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -104,12 +105,12 @@ export default function UserProfileScreen() {
     
     setLoading(true);
     try {
-      const profileData = await getUserProfile(uuid, makeAuthenticatedRequest);
+      const profileData = await getUserProfile(uuid, fetchWithAuth);
       if (profileData) {
         setProfile(profileData);
       }
 
-      const statsData = await getUserStats(uuid, makeAuthenticatedRequest);
+      const statsData = await getUserStats(uuid, fetchWithAuth);
       if (statsData) {
         setStats(statsData);
       }
@@ -126,7 +127,7 @@ export default function UserProfileScreen() {
     
     setLoadingPosts(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/posts/?auteur_uuid=${uuid}`
       );
       if (response.ok) {
@@ -148,7 +149,7 @@ export default function UserProfileScreen() {
 
     setCheckingFriendStatus(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/?statut=acceptee`
       );
 
@@ -177,7 +178,7 @@ export default function UserProfileScreen() {
 
     setStartingConversation(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/`,
         {
           method: 'POST',
@@ -231,7 +232,7 @@ export default function UserProfileScreen() {
 
     setSendingRequest(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/`,  // ✅ This endpoint EXISTS
         {
           method: 'POST',

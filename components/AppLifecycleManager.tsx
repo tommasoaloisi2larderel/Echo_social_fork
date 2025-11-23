@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,13 +10,13 @@ import { useChat } from '../contexts/ChatContext';
  * Features:
  * - Detects when app comes to foreground
  * - Triggers background refresh of stale caches
- * - Uses makeAuthenticatedRequest from AuthContext
+ * - Uses fetchWithAuth from AuthContext
  * - Works with ChatContext's background refresh mechanism
  *
  * This component should be mounted at the app root level.
  */
 export function AppLifecycleManager() {
-  const { makeAuthenticatedRequest, isLoggedIn } = useAuth();
+  const { isLoggedIn } = useAuth();
   const { backgroundRefresh } = useChat();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -33,7 +34,7 @@ export function AppLifecycleManager() {
 
         try {
           // Trigger background refresh of stale caches
-          await backgroundRefresh(makeAuthenticatedRequest);
+          await backgroundRefresh(fetchWithAuth);
           console.log('✅ Background refresh completed on app resume');
         } catch (error) {
           console.error('❌ Background refresh failed on app resume:', error);
@@ -50,7 +51,7 @@ export function AppLifecycleManager() {
     return () => {
       subscription.remove();
     };
-  }, [isLoggedIn, makeAuthenticatedRequest, backgroundRefresh]);
+  }, [isLoggedIn, fetchWithAuth, backgroundRefresh]);
 
   // This component doesn't render anything
   return null;

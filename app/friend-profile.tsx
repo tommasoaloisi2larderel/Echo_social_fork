@@ -1,19 +1,19 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DefaultAvatar from '../components/DefaultAvatar';
-import { useAuth } from '../contexts/AuthContext';
 import { useUserProfile } from '../contexts/UserProfileContext';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
@@ -59,7 +59,6 @@ export default function UserProfileScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { makeAuthenticatedRequest } = useAuth();
   const { getUserProfile, getUserStats } = useUserProfile();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -76,12 +75,12 @@ export default function UserProfileScreen() {
     
     setLoading(true);
     try {
-      const profileData = await getUserProfile(uuid, makeAuthenticatedRequest);
+      const profileData = await getUserProfile(uuid, fetchWithAuth);
       if (profileData) {
         setProfile(profileData);
       }
 
-      const statsData = await getUserStats(uuid, makeAuthenticatedRequest);
+      const statsData = await getUserStats(uuid, fetchWithAuth);
       if (statsData) {
         setStats(statsData);
       }
@@ -278,7 +277,7 @@ export default function UserProfileScreen() {
             onPress={async () => {
               try {
                 // Chercher si une conversation existe déjà
-                const response = await makeAuthenticatedRequest(
+                const response = await fetchWithAuth(
                   `${API_BASE_URL}/messaging/conversations/`
                 );
                 
@@ -296,7 +295,7 @@ export default function UserProfileScreen() {
                     });
                   } else {
                     // Créer nouvelle conversation
-                    const createResponse = await makeAuthenticatedRequest(
+                    const createResponse = await fetchWithAuth(
                       `${API_BASE_URL}/messaging/conversations/`,
                       {
                         method: 'POST',

@@ -2,6 +2,7 @@ import DefaultAvatar from '@/components/DefaultAvatar';
 import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -72,7 +73,7 @@ interface GroupInvitation {
 }
 
 export default function FriendsScreen() {
-  const { makeAuthenticatedRequest, reloadUser, accessToken } = useAuth();
+  const { reloadUser, accessToken } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -85,7 +86,7 @@ export default function FriendsScreen() {
 
   const fetchConnections = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/my-connections/`
       );
       if (response.ok) {
@@ -95,11 +96,11 @@ export default function FriendsScreen() {
     } catch (error) {
       console.error('Erreur lors du chargement des connexions:', error);
     }
-  }, [makeAuthenticatedRequest]);
+  }, [fetchWithAuth]);
 
   const fetchInvitations = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/pending/`
       );
       if (response.ok) {
@@ -109,12 +110,12 @@ export default function FriendsScreen() {
     } catch (error) {
       console.error('Erreur lors du chargement des invitations:', error);
     }
-  }, [makeAuthenticatedRequest]);
+  }, [fetchWithAuth]);
 
   const fetchGroupInvitations = useCallback(async () => {
     try {
       console.log('📨 Chargement invitations de groupe...');
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/groups/invitations/received/`
       );
       if (response.ok) {
@@ -131,7 +132,7 @@ export default function FriendsScreen() {
     } catch (error) {
       console.error('❌ Erreur lors du chargement des invitations de groupe:', error);
     }
-  }, [makeAuthenticatedRequest]);
+  }, [fetchWithAuth]);
 
   const fetchData = useCallback(async () => {
     // Don't fetch if not authenticated
@@ -163,7 +164,7 @@ export default function FriendsScreen() {
     setProcessingIds(prev => new Set(prev).add(invitationId));
     
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/relations/connections/${invitationId}/`,
         {
           method: 'PATCH',
@@ -217,7 +218,7 @@ export default function FriendsScreen() {
     
     try {
       console.log(`📨 ${action === 'accept' ? 'Acceptation' : 'Refus'} invitation groupe:`, invitationUuid);
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/groups/invitations/${invitationUuid}/respond/`,
         {
           method: 'POST',
@@ -290,7 +291,7 @@ export default function FriendsScreen() {
           onPress: async () => {
             try {
               // Supprimer la connexion via l'API
-              const response = await makeAuthenticatedRequest(
+              const response = await fetchWithAuth(
                 `${API_BASE_URL}/relations/connections/${connectionId}/`,
                 {
                   method: 'DELETE',

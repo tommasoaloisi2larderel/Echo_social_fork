@@ -1,8 +1,8 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY, ECHO_COLOR } from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
 import { useChat } from '@/contexts/ChatContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -39,7 +39,6 @@ interface ArchivedConversation {
 }
 
 export default function ArchivedConversationsScreen() {
-  const { makeAuthenticatedRequest } = useAuth();
   const { 
   setCachedPrivateConversations,  // 🆕
   setCachedGroupConversations,     // 🆕
@@ -51,7 +50,7 @@ export default function ArchivedConversationsScreen() {
 
   const fetchArchivedConversations = useCallback(async () => {
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/messaging/conversations/archived/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/messaging/conversations/archived/`);
       
       if (response.ok) {
         const data = await response.json();
@@ -65,7 +64,7 @@ export default function ArchivedConversationsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [makeAuthenticatedRequest]);
+  }, [fetchWithAuth]);
 
   useEffect(() => {
     fetchArchivedConversations();
@@ -82,7 +81,7 @@ export default function ArchivedConversationsScreen() {
           onPress: async () => {
             setUnarchiving(conversationUuid);
             try {
-              const response = await makeAuthenticatedRequest(
+              const response = await fetchWithAuth(
                 `${API_BASE_URL}/messaging/conversations/${conversationUuid}/archive/`,
                 {
                   method: 'POST',
@@ -98,13 +97,13 @@ export default function ArchivedConversationsScreen() {
                 
                 // Rafraîchir le cache des conversations pour l'écran principal
                 try {
-                  const convsResponse = await makeAuthenticatedRequest(
+                  const convsResponse = await fetchWithAuth(
                     `${API_BASE_URL}/messaging/conversations/`
                   );
                   if (convsResponse.ok) {
                     const data = await convsResponse.json();
                     const list = data.results || data;
-                    await prefetchConversationsOverview(makeAuthenticatedRequest);
+                    await prefetchConversationsOverview(fetchWithAuth);
                   }
                 } catch (error) {
                   console.error('Erreur rafraîchissement cache:', error);
