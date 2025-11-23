@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
 
 interface ProfileStats {
   total_connexions: number;
@@ -221,7 +221,7 @@ export default function ProfileScreen() {
           </View>
         )}
       </LinearGradient>
-
+      
       <View style={styles.cardsGrid}>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -240,6 +240,46 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.footerSpace} />
+        <Modal
+          visible={showSettingsMenu}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowSettingsMenu(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1}
+            onPress={() => setShowSettingsMenu(false)}
+          >
+            <View style={styles.settingsMenu}>
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSettingsMenu(false);
+                  router.push('/(screens)/blocked-users' as any);
+                }}
+              >
+                <Ionicons name="ban-outline" size={22} color="#333" />
+                <Text style={styles.menuItemText}>Utilisateurs bloqués</Text>
+              </TouchableOpacity>
+
+              <View style={styles.menuDivider} />
+
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSettingsMenu(false);
+                  router.push('/(screens)/archived-conversations' as any);
+                }}
+              >
+                <Ionicons name="archive-outline" size={22} color="#333" />
+                <Text style={styles.menuItemText}>Conversations archivées</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+
     </ScrollView>
   );
 }
@@ -423,5 +463,10 @@ const styles = StyleSheet.create({
   },
   footerSpace: {
     height: 60,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 16,
   },
 });
