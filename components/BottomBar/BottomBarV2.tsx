@@ -9,7 +9,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,    
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -332,9 +332,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     if (event.nativeEvent.oldState === State.ACTIVE) {
       const { translationY, velocityY } = event.nativeEvent;
 
-      // Si on swipe vers le haut (translationY négatif)
       if (translationY < -50 || velocityY < -500) {
-        // Ouvrir la barre
         setIsExpanded(true);
         Animated.spring(barHeight, {
           toValue: MAX_HEIGHT,
@@ -343,8 +341,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
           friction: 9,
         }).start();
       }
-      // On ne ferme plus automatiquement en swipant vers le bas
-      // La fermeture se fait uniquement via le PanGestureHandler du panneau d'agents
     }
   };
 
@@ -354,22 +350,18 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       useNativeDriver: false,
       listener: (event: any) => {
         const { translationY } = event.nativeEvent;
-        // Calculer la nouvelle hauteur basée sur le geste
         const newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, MIN_HEIGHT - translationY));
         barHeight.setValue(newHeight);
       }
     }
   );
 
-  // Gestionnaire pour fermer le panneau en tirant vers le bas depuis le haut
   const onPanelGestureEvent = Animated.event(
     [{ nativeEvent: { translationY: new Animated.Value(0) } }],
     { 
       useNativeDriver: false,
       listener: (event: any) => {
         const { translationY } = event.nativeEvent;
-        // Calculer la nouvelle hauteur basée sur le geste (descendre = translationY positif)
-        // On part de MAX_HEIGHT et on soustrait le translationY
         const newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, MAX_HEIGHT - translationY));
         barHeight.setValue(newHeight);
       }
@@ -379,10 +371,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const onPanelHandlerStateChange = (event: any) => {
     if (event.nativeEvent.oldState === State.ACTIVE) {
       const { translationY, velocityY } = event.nativeEvent;
-
-      // Si on tire vers le bas (translationY positif) depuis le haut du panneau
       if (translationY > 100 || velocityY > 500) {
-        // Fermer la barre
         setIsExpanded(false);
         Animated.spring(barHeight, {
           toValue: MIN_HEIGHT,
@@ -391,7 +380,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
           friction: 9,
         }).start();
       } else {
-        // Revenir à la hauteur maximale si le geste n'est pas suffisant
         Animated.spring(barHeight, {
           toValue: MAX_HEIGHT,
           useNativeDriver: false,
@@ -402,16 +390,15 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     }
   };
 
-  // Interpolations pour des transitions fluides
   const leftMargin = barHeight.interpolate({
     inputRange: [MIN_HEIGHT, MAX_HEIGHT],
-    outputRange: [30, 0], // Plus de distance aux bords quand repliée (30px au lieu de 10px)
+    outputRange: [30, 0],
     extrapolate: 'clamp',
   });
 
   const rightMargin = barHeight.interpolate({
     inputRange: [MIN_HEIGHT, MAX_HEIGHT],
-    outputRange: [30, 0], // Plus de distance aux bords quand repliée (30px au lieu de 10px)
+    outputRange: [30, 0],
     extrapolate: 'clamp',
   });
 
@@ -427,6 +414,9 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     extrapolate: 'clamp',
   });
 
+  // Logique pour déterminer si on affiche le bouton Envoyer à la place du Crayon
+  const isReadyToSend = isWriting || hasStagedContent;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -436,7 +426,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        enabled={!isJarvisActive && !isExpanded && !isChatRecording && !isVoiceRecording && !isTextInputActive} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
+        enabled={!isJarvisActive && !isExpanded && !isChatRecording && !isVoiceRecording && !isTextInputActive}
       >
         <Animated.View
           style={[
@@ -447,24 +437,20 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
               right: rightMargin,
               marginBottom: bottomMarginValue,
               borderRadius: borderRadiusValue,
-              backgroundColor: "rgba(10, 145, 104, 0.7)", // Couleur de fond du panneau
+              backgroundColor: "rgba(10, 145, 104, 0.7)",
             },
           ]}
         >
-        {/* Bottom bar section - toujours visible en bas */}
+        {/* Bottom bar section */}
         <View style={styles.bottomBarSection}>
           {(() => {
             if (isChat) {
               return (
                 <View style={styles.alignedButtonsContainer}>
                   {isChatRecording ? (
-                    // ========================================
-                    // ÉTAT 2 : ENREGISTREMENT EN COURS
-                    // ========================================
+                    // ==================== MODE ENREGISTREMENT ====================
                     <>
                       <RecordingDisplay />
-                      
-                      {/* Bouton Annuler (X rouge) */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.actionButton}
@@ -479,20 +465,13 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                             style={styles.gradient}
                           >
                             {Platform.OS === 'ios' ? (
-                              <SymbolView
-                                name="xmark"
-                                size={20}
-                                tintColor="white"
-                                type="hierarchical"
-                              />
+                              <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" />
                             ) : (
                               <Ionicons name="close" size={20} color="white" />
                             )}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
-
-                      {/* Bouton Valider (checkmark vert) */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.actionButton}
@@ -504,12 +483,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                             style={styles.gradient}
                           >
                             {Platform.OS === 'ios' ? (
-                              <SymbolView
-                                name="checkmark"
-                                size={20}
-                                tintColor="white"
-                                type="hierarchical"
-                              />
+                              <SymbolView name="checkmark" size={20} tintColor="white" type="hierarchical" />
                             ) : (
                               <Ionicons name="checkmark" size={20} color="white" />
                             )}
@@ -518,19 +492,14 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                       </View>
                     </>
                   ) : stagedVoiceUri ? (
-                    // ========================================
-                    // ÉTAT 3 : VOCAL PRÊT À ENVOYER
-                    // ========================================
+                    // ==================== MODE VOCAL PRÊT ====================
                     <>
-                      {/* Indicateur vocal prêt */}
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 16 }}>
                         <Ionicons name="mic" size={20} color="white" />
                         <Text style={{ marginLeft: 8, color: 'white', fontWeight: '600', fontSize: 15 }}>
                           Vocal prêt
                         </Text>
                       </View>
-
-                      {/* Bouton Annuler */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.actionButton}
@@ -542,20 +511,13 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                             style={styles.gradient}
                           >
                             {Platform.OS === 'ios' ? (
-                              <SymbolView
-                                name="xmark"
-                                size={20}
-                                tintColor="white"
-                                type="hierarchical"
-                              />
+                              <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" />
                             ) : (
                               <Ionicons name="close" size={20} color="white" />
                             )}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
-
-                      {/* Bouton Envoyer */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.actionButton}
@@ -569,64 +531,20 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                           >
                             {isSending ? (
                               <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              Platform.OS === 'ios' ? (
-                                <SymbolView
-                                  name="paperplane.fill"
-                                  size={20}
-                                  tintColor="white"
-                                  type="hierarchical"
-                                />
+                            ) : Platform.OS === 'ios' ? (
+                                <SymbolView name="paperplane.fill" size={20} tintColor="white" type="hierarchical" />
                               ) : (
                                 <Ionicons name="send" size={20} color="white" />
                               )
-                            )}
+                            }
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
                     </>
-                  ) : stagedFile ? (
-                    // ========================================
-                    // ÉTAT : FICHIER STAGÉ (existant)
-                    // ========================================
-                    <View
-                      style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        paddingRight: 10,
-                      }}
-                    >
-                      {/* Send Button (Replaces everything else) */}
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.actionButtonActive]}
-                        onPress={handleMasterSend}
-                        disabled={isSending || !conversationId}
-                      >
-                        <LinearGradient
-                          colors={['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)']}
-                          style={[styles.gradient, { width: 60 }]}
-                        >
-                          {isSending ? (
-                            <ActivityIndicator size="small" color="white" />
-                          ) : Platform.OS === 'ios' ? (
-                            <SymbolView
-                              name="paperplane.fill"
-                              size={20}
-                              tintColor="white"
-                              type="hierarchical"
-                            />
-                          ) : (
-                            <Ionicons name="send" size={20} color="white" />
-                          )}
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </View>
                   ) : (
-                    // ========================================
-                    // ÉTAT 1 : MODE NORMAL - 4 BOUTONS
-                    // ========================================
+                    // ==================== MODE NORMAL / ÉCRITURE ====================
+                    // Note: Le bloc "stagedFile" a été supprimé pour que le fichier
+                    // s'affiche dans ce mode normal avec le bouton Envoyer actif.
                     <>
                       {/* ATTACHMENT BUTTON */}
                       {conversationId && (
@@ -651,37 +569,57 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                         />
                       </View>
 
-                      {/* WRITE (PENCIL) BUTTON */}
+                      {/* WRITE / SEND BUTTON */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => setIsWriting(true)}
+                          style={[styles.actionButton, isReadyToSend && styles.actionButtonActive]}
+                          // Si prêt à envoyer, on envoie, sinon on active le mode écriture
+                          onPress={isReadyToSend ? handleMasterSend : () => setIsWriting(true)}
                           activeOpacity={0.7}
-                          disabled={!conversationId}
+                          // Désactivé si pas de conversation, ou si prêt à envoyer mais en cours d'envoi ou vide
+                          disabled={!conversationId || (isReadyToSend && (isSending || !hasStagedContent))}
                         >
                           <LinearGradient
-                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
+                            colors={isReadyToSend 
+                              ? ['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)'] // Vert clair (Envoyer)
+                              : ['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)'] // Vert foncé (Écrire)
+                            }
                             style={styles.gradient}
                           >
-                            {Platform.OS === 'ios' ? (
-                              <SymbolView
-                                name="pencil"
-                                size={20}
-                                tintColor="white"
-                                type="hierarchical"
-                              />
+                            {isReadyToSend ? (
+                              isSending ? (
+                                <ActivityIndicator size="small" color="white" />
+                              ) : Platform.OS === 'ios' ? (
+                                <SymbolView
+                                  name="paperplane.fill"
+                                  size={20}
+                                  tintColor="white"
+                                  type="hierarchical"
+                                />
+                              ) : (
+                                <Ionicons name="send" size={20} color="white" />
+                              )
                             ) : (
-                              <Ionicons
-                                name="create-outline"
-                                size={20}
-                                color="white"
-                              />
+                              Platform.OS === 'ios' ? (
+                                <SymbolView
+                                  name="pencil"
+                                  size={20}
+                                  tintColor="white"
+                                  type="hierarchical"
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="create-outline"
+                                  size={20}
+                                  color="white"
+                                />
+                              )
                             )}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
 
-                      {/* VOICE BUTTON (START RECORDING) */}
+                      {/* VOICE BUTTON */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.voiceButton}
@@ -734,7 +672,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
 
         {/* Zone extensible - Panneau des agents */}
         <View style={styles.expandableArea}>
-          {/* Poignée de fermeture - uniquement visible quand la barre est dépliée - FIXE en haut */}
           {isExpanded && (
             <PanGestureHandler
               ref={panelGestureRef}
@@ -748,14 +685,12 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
             </PanGestureHandler>
           )}
           
-          {/* Contenu scrollable du panneau */}
           <ScrollView 
             style={styles.scrollableContent}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             scrollEnabled={isExpanded}
           >
-            {/* Agent Panel Component - replaces all the agent UI */}
             { (
               <AgentPanel
                 conversationAgents={conversationAgents}
@@ -769,7 +704,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                 glowScale={glowScale}
                 backgroundColor="rgba(249, 250, 251, 1)" 
               />
-
             )}
           </ScrollView>
         </View>
@@ -812,8 +746,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
-    // Le KeyboardAvoidingView ne gère que le positionnement vertical (clavier)
-    // Le positionnement horizontal est géré par l'Animated.View enfant
   },
   alignedButtonsContainer: {
     flexDirection: 'row',
@@ -846,8 +778,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     zIndex: 9998,
-    // left et right sont gérés dynamiquement par leftMargin et rightMargin
-    flexDirection: 'column-reverse', // Inverser l'ordre : bottom bar en bas visuellement mais en haut dans le DOM
+    flexDirection: 'column-reverse', 
     justifyContent: 'flex-start',
     shadowColor: "rgba(10, 145, 104, 0.7)",
     shadowOpacity: 0.8,
@@ -856,7 +787,7 @@ const styles = StyleSheet.create({
   },
   bottomBarSection: {
     width: '100%',
-    zIndex: 10, // Au-dessus du panneau d'agents
+    zIndex: 10, 
   },
   panelGestureArea: {
     width: '100%',
@@ -884,7 +815,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-    // Pas de paddingTop car la poignée gère son propre padding
   },
   actionButton: {
     shadowColor: 'rgba(10, 145, 104, 0.4)',

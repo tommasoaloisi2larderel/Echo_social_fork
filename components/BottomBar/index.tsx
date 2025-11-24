@@ -1,5 +1,7 @@
 // components/BottomBar/index.tsx
 import { useEffect, useRef } from "react";
+import { Animated, Easing, Keyboard, Platform, StyleSheet } from "react-native"; // ✅ Imports mis à jour
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChat } from "../../contexts/ChatContext";
 import BottomBarV2 from "./BottomBarV2";
 import { BottomBarProps } from "./types";
@@ -13,64 +15,52 @@ export default function BottomBar({
   loadingSummary,
 }: BottomBarProps) {
   const { websocket, sendMessage } = useChat();
+  // 2. Récupérez les insets
+  const insets = useSafeAreaInsets();
   const isChat = currentRoute?.includes('conversation-direct') || currentRoute?.includes('conversation-group');
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
 
-  console.log('🔍 BottomBar index - currentRoute:', currentRoute, 'isChat:', isChat, 'conversationId:', conversationId, 'sendMessage:', !!sendMessage);
+  // ✅ Variable animée pour suivre la hauteur du clavier
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
 
-  // ✅ Gérer l'envoi de typing_start / typing_stop
+  // ✅ Gestion manuelle des événements clavier
   useEffect(() => {
-    console.log('⌨️ useEffect typing - chatText:', chatText, 'isChat:', isChat, 'websocket:', !!websocket, 'conversationId:', conversationId);
-    
-    if (!isChat || !websocket || !conversationId) return;
+    // iOS utilise 'WillShow' pour une animation fluide synchronisée
+    // Android utilise 'DidShow', mais on peut essayer de lisser l'animation
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    if (chatText.trim()) {
-      // L'utilisateur tape → envoyer typing_start
-      if (!isTypingRef.current) {
-        console.log('📤 Envoi typing_start');
-        websocket.send(JSON.stringify({
-          type: 'typing_start',
-          conversation_uuid: conversationId
-        }));
-        isTypingRef.current = true;
-      }
+    const onShow = Keyboard.addListener(showEvent, (e) => {
+      // Sur Android, on retire parfois la hauteur de la barre de navigation si nécessaire, 
+      // mais généralement e.endCoordinates.height est correct.
+      const height = e.endCoordinates.height;
+      // 3. CALCUL DE L'AJUSTEMENT
+      // On soustrait insets.bottom car votre barre a déjà un padding/margin en bas
+      // On s'assure de ne pas descendre sous 0
+      const adjustedHeight = Math.max(0, height - insets.bottom);
+      
+      Animated.timing(keyboardHeight, {
+        toValue: adjustedHeight, // Utilisez la hauteur ajustée ici
+        duration: Platform.OS === 'ios' ? e.duration : 200,
+        easing: Platform.OS === 'ios' ? Easing.out(Easing.ease) : undefined,
+        useNativeDriver: false,
+      }).start();
+    });
 
-      // Réinitialiser le timer d'inactivité
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+    const onHide = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(keyboardHeight, {
+        toValue: 0,
+        duration: Platform.OS === 'ios' ? e.duration : 200,
+        useNativeDriver: false,
+      }).start();
+    });
 
-      // Envoyer typing_stop après 2 secondes d'inactivité
-      typingTimeoutRef.current = setTimeout(() => {
-        if (isTypingRef.current) {
-          console.log('📤 Envoi typing_stop (timeout)');
-          websocket.send(JSON.stringify({
-            type: 'typing_stop',
-            conversation_uuid: conversationId
-          }));
-          isTypingRef.current = false;
-        }
-      }, 2000);
-    } else {
-      // Champ vide → arrêter typing immédiatement
-      if (isTypingRef.current) {
-        console.log('📤 Envoi typing_stop (champ vide)');
-        websocket.send(JSON.stringify({
-          type: 'typing_stop',
-          conversation_uuid: conversationId
-        }));
-        isTypingRef.current = false;
-      }
-    }
-
-    // Cleanup
     return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      onShow.remove();
+      onHide.remove();
     };
-  }, [chatText, isChat, websocket, conversationId]);
+  }, []);
 
   const handleSendMessage = (message: string) => {
     console.log('🔍 handleSendMessage called:', {
@@ -172,18 +162,37 @@ export default function BottomBar({
     }
   };
 
-  return (
-    <BottomBarV2
-      onSendMessage={handleSendMessage}
-      onAgentSelect={(agent) => {
-        console.log('Agent sélectionné:', agent);
-      }}
-      conversationId={conversationId}
-      isChat={isChat}
-      chatText={chatText}
-      setChatText={setChatText}
-      onSummaryPress={onSummaryPress}
-      loadingSummary={loadingSummary}
-    />
+return (
+    // ✅ On utilise Animated.View qui se soulève quand le clavier apparaît
+    <Animated.View 
+      style={[
+        styles.container, 
+        { bottom: keyboardHeight } // L'animation se fait ici
+      ]}
+    >
+      <BottomBarV2
+        onSendMessage={handleSendMessage} // Assurez-vous d'avoir gardé votre fonction handleSendMessage
+        onAgentSelect={(agent) => {
+          console.log('Agent sélectionné:', agent);
+        }}
+        conversationId={conversationId}
+        isChat={isChat}
+        chatText={chatText}
+        setChatText={setChatText}
+        onSummaryPress={onSummaryPress}
+        loadingSummary={loadingSummary}
+      />
+    </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    // bottom est géré dynamiquement par le style inline, 
+    // mais commence implicitement à 0 via l'Animated.Value
+    zIndex: 9999,
+  },
+});
