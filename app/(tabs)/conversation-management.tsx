@@ -1,5 +1,6 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { FloatingHeader } from '@/components/FloatingHeader';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +11,6 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View
@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useUserProfile } from '../../contexts/UserProfileContext';
-import ConversationMedia from '../(screens)/conversation-media';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 
@@ -87,7 +86,7 @@ interface ConversationDetails {
 
 export default function ConversationManagement() {
   const { conversationId } = useLocalSearchParams();
-  const { makeAuthenticatedRequest, user } = useAuth();
+  const { user } = useAuth();
   
   const { getUserProfile, getUserStats } = useUserProfile();
   const insets = useSafeAreaInsets();
@@ -153,7 +152,7 @@ export default function ConversationManagement() {
       }
       
       
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/`
       );
       
@@ -186,7 +185,7 @@ export default function ConversationManagement() {
   const loadUserProfile = async (uuid: string) => {
     setLoadingProfile(true);
     try {
-      const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
+      const profile = await getUserProfile(uuid, fetchWithAuth);
       
       if (!profile) {
         console.error('❌ Profil non reçu');
@@ -208,7 +207,7 @@ export default function ConversationManagement() {
     setLoadingProfile(true);
     
     try {
-      const profile = await getUserProfile(uuid, makeAuthenticatedRequest);
+      const profile = await getUserProfile(uuid, fetchWithAuth);
 
       if (!profile) {
         console.log('❌ Pas de profil reçu');
@@ -241,13 +240,13 @@ export default function ConversationManagement() {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/my-groups/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/groups/my-groups/`);
       if (response.ok) {
         const groups = await response.json();
         const group = groups.find((g: any) => g.conversation_uuid === conversationId);
         
         if (group) {
-          const detailResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/${group.uuid}/`);
+          const detailResponse = await fetchWithAuth(`${API_BASE_URL}/groups/${group.uuid}/`);
           if (detailResponse.ok) {
             const details = await detailResponse.json();
             setGroupDetails(details);
@@ -283,7 +282,7 @@ const handleBlockUser = async () => {
         style: 'destructive', 
         onPress: async () => {
           try {
-            const response = await makeAuthenticatedRequest(
+            const response = await fetchWithAuth(
               `${API_BASE_URL}/messaging/block-user/`,
               {
                 method: 'POST',
@@ -335,7 +334,7 @@ const handleBlockUser = async () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await makeAuthenticatedRequest(
+              const response = await fetchWithAuth(
                 `${API_BASE_URL}/groups/${groupDetails.uuid}/leave/`,
                 { method: 'POST' }
               );
@@ -361,7 +360,7 @@ const handleBlockUser = async () => {
           text: 'Archiver',
           onPress: async () => {
             try {
-              const response = await makeAuthenticatedRequest(
+              const response = await fetchWithAuth(
                 `${API_BASE_URL}/messaging/conversations/${conversationId}/archive/`,
                 {
                   method: 'POST',

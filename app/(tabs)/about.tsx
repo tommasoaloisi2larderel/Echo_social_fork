@@ -42,7 +42,7 @@ interface Post {
 }
 
 export default function ProfileScreen() {
-  const { user, accessToken, logout, makeAuthenticatedRequest } = useAuth();
+  const { user, accessToken, logout, fetchWithAuth } = useAuth();
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/profile/stats/`);
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/auth/profile/stats/`);
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -71,14 +71,14 @@ export default function ProfileScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [makeAuthenticatedRequest, accessToken]);
+  }, [fetchWithAuth, accessToken]);
 
   const fetchPosts = useCallback(async () => {
     if (!user?.uuid) return;
     
     setLoadingPosts(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/posts/?auteur_uuid=${user.uuid}`
       );
       if (response.ok) {
@@ -94,7 +94,7 @@ export default function ProfileScreen() {
     } finally {
       setLoadingPosts(false);
     }
-  }, [makeAuthenticatedRequest, user?.uuid]);
+  }, [fetchWithAuth, user?.uuid]);
 
   useEffect(() => {
     fetchStats();

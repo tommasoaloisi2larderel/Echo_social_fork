@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/config/api";
+import { fetchWithAuth } from "@/services/apiClient";
 import { Stack, useGlobalSearchParams, useLocalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
@@ -18,7 +19,7 @@ export default function TabsLayout() {
   const globalParams = useGlobalSearchParams();
   const conversationId = (globalParams.conversationId || localParams.conversationId) as string | undefined;
   const swipeControlRef = useRef<SwipeableContainerHandle>(null);
-  const { isLoggedIn, makeAuthenticatedRequest, accessToken } = useAuth();
+  const { isLoggedIn, loading } = useAuth();
   const { prefetchConversationsOverview, prefetchAllMessages } = useChat();
   
   // Summary state
@@ -42,11 +43,11 @@ export default function TabsLayout() {
   }, [registerScrollRef]);
 
   useEffect(() => {
-  if (isLoggedIn && makeAuthenticatedRequest) {
-    prefetchConversationsOverview(makeAuthenticatedRequest);
-    prefetchAllMessages(makeAuthenticatedRequest);
+  if (isLoggedIn && !loading) {
+    prefetchConversationsOverview(fetchWithAuth);
+    prefetchAllMessages(fetchWithAuth);
   }
-}, [isLoggedIn, makeAuthenticatedRequest, prefetchConversationsOverview, prefetchAllMessages]);
+}, [isLoggedIn, fetchWithAuth, prefetchConversationsOverview, prefetchAllMessages]);
 
 
   const isInConversationDetail = 
@@ -58,8 +59,8 @@ export default function TabsLayout() {
 
   // Summary fetch function
   const fetchSummary = async () => {
-    if (!conversationId || !accessToken) {
-      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', !!accessToken);
+    if (!conversationId || !isLoggedIn) {
+      console.log('❌ Résumé impossible - conversationId:', conversationId, 'accessToken:', isLoggedIn);
       Alert.alert('Info', 'Aucune conversation sélectionnée');
       return;
     }
@@ -71,7 +72,7 @@ export default function TabsLayout() {
       const url = `${API_BASE_URL}/messaging/conversations/${conversationId}/summarize/`;
       console.log('📤 URL appelée:', url);
       
-      const response = await makeAuthenticatedRequest(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

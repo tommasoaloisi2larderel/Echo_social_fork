@@ -1,22 +1,21 @@
+import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
+import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Dimensions,
   FlatList,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  Dimensions,
-  Linking,
-  Alert
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
-import AttachmentImage from '@/components/FIlesLecture/AttachementImage';
-import AttachmentVideo from '@/components/FIlesLecture/AttachementVideo';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 const { width } = Dimensions.get('window');
@@ -57,7 +56,6 @@ interface MediaResponse {
 
 export default function ConversationMedia() {
   const { conversationId, initialTab } = useLocalSearchParams();
-  const { makeAuthenticatedRequest } = useAuth();
   const insets = useSafeAreaInsets();
   
   const [activeTab, setActiveTab] = useState<'photos' | 'documents'>(
@@ -87,7 +85,7 @@ export default function ConversationMedia() {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/media/photos/?page=${page}`
       );
 
@@ -118,7 +116,7 @@ export default function ConversationMedia() {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/media/documents/?page=${page}`
       );
 

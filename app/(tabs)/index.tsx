@@ -5,10 +5,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import DefaultAvatar from '@/components/DefaultAvatar';
-import { API_BASE_URL } from "@/config/api";
 import { BACKGROUND_GRAY } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { fetchWithAuth } from "@/services/apiClient";
 
 interface MessageSummary {
   id: string;
@@ -18,7 +17,7 @@ interface MessageSummary {
 }
 
 export default function HomePage() {
-  const { user, makeAuthenticatedRequest, accessToken } = useAuth();
+  const { user } = useAuth();
   
   const [summaries, setSummaries] = useState<MessageSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +37,8 @@ export default function HomePage() {
   // Fetch AI summaries from Jarvis
   const fetchAISummaries = useCallback(async () => {
     // Don't fetch if not authenticated
-    if (!accessToken) {
-      console.log('No access token, skipping fetch');
+    if (!user) {
+      console.log('No authenticated user, skipping fetch');
       setLoading(false);
       setRefreshing(false);
       return;
@@ -49,8 +48,8 @@ export default function HomePage() {
       console.log('🤖 Requesting AI summaries from Jarvis...');
       
       // Call Jarvis notifications endpoint
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/jarvis/chat/?type=notifications`,
+      const response = await fetchWithAuth(
+        '/jarvis/chat/?type=notifications',
         {
           method: 'POST',
           headers: {
@@ -86,7 +85,7 @@ export default function HomePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [makeAuthenticatedRequest, accessToken]);
+  }, [user]);
 
   // Parse Jarvis notifications from structured JSON response
   const parseJarvisNotifications = (data: any): MessageSummary[] => {
@@ -160,12 +159,12 @@ export default function HomePage() {
 
   useEffect(() => {
     // Only fetch if user is authenticated
-    if (accessToken) {
+    if (user) {
       fetchAISummaries();
     } else {
       setLoading(false);
     }
-  }, [fetchAISummaries, accessToken]);
+  }, [fetchAISummaries, user]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -198,7 +197,7 @@ export default function HomePage() {
         <View style={[styles.blob, styles.blobB]} />
 
         {/* Show user info when authenticated */}
-        {accessToken && user ? (
+        {user ? (
           <View style={styles.heroContent}>
             {(user as any)?.photo_profil_url ? (
               <Image
@@ -210,7 +209,7 @@ export default function HomePage() {
             )}
             <View style={styles.heroTextWrap}>
               <Text style={styles.hello}>Bonjour,</Text>
-              <Text style={styles.name}>{user?.first_name || user?.username || 'Utilisateur'}</Text>
+              <Text style={styles.name}>{ user?.username || 'Utilisateur'}</Text>
               <Text style={styles.subtitle}>Tout est sous contrôle.</Text>
             </View>
           </View>
@@ -244,15 +243,15 @@ export default function HomePage() {
       {!loading && summaries.length === 0 && (
         <View style={styles.emptyState}>
           <Ionicons
-            name={accessToken ? "checkmark-circle-outline" : "lock-closed-outline"}
+            name={user ? "checkmark-circle-outline" : "lock-closed-outline"}
             size={48}
             color="rgba(10, 145, 104, 0.5)"
           />
           <Text style={styles.emptyTitle}>
-            {accessToken ? "Tout est à jour !" : "Mode invité"}
+            {user ? "Tout est à jour !" : "Mode invité"}
           </Text>
           <Text style={styles.emptyText}>
-            {accessToken
+            {user
               ? "Vous n'avez aucune notification pour le moment."
               : "Connectez-vous pour voir les notifications de Jarvis et discuter avec vos amis."}
           </Text>

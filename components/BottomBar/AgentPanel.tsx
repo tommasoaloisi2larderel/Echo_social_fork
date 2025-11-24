@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
@@ -14,7 +15,6 @@ import {
   View
 } from "react-native";
 import { useAgents } from "../../contexts/AgentsContext";
-import { useAuth } from "../../contexts/AuthContext";
 
 interface Agent {
   uuid: string;
@@ -58,7 +58,6 @@ export default function AgentPanel({
   glowScale,
   backgroundColor = 'rgba(249, 250, 251, 1)',
 }: AgentPanelProps) {
-  const { makeAuthenticatedRequest } = useAuth();
   const { createAgent, updateAgent, addAgentToConversation } = useAgents();
   
   const [showAgentsDropdown, setShowAgentsDropdown] = useState(false);
@@ -119,7 +118,7 @@ export default function AgentPanel({
 
   const loadAvailableUsers = async () => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         'https://reseausocial-production.up.railway.app/api/connections/',
         { method: 'GET' }
       );
@@ -135,7 +134,7 @@ export default function AgentPanel({
   
   const loadAgentDetails = async (agentUuid: string) => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `https://reseausocial-production.up.railway.app/agents/agents/${agentUuid}/`,
         { method: 'GET' }
       );
@@ -152,7 +151,7 @@ export default function AgentPanel({
   
   const loadAgentStats = async (agentUuid: string) => {
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `https://reseausocial-production.up.railway.app/agents/agents/${agentUuid}/stats/`,
         { method: 'GET' }
       );
@@ -181,7 +180,7 @@ export default function AgentPanel({
         )
       };
 
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/interactions/`,
         {
           method: 'POST',
@@ -209,7 +208,7 @@ export default function AgentPanel({
     if (!editingAgent) return;
 
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/interactions/${ruleId}/`,
         { method: 'DELETE' }
       );
@@ -231,7 +230,7 @@ export default function AgentPanel({
 
     setTestingAgent(true);
     try {
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `https://reseausocial-production.up.railway.app/agents/agents/${editingAgent.uuid}/test/`,
         {
           method: 'POST',
@@ -281,15 +280,15 @@ export default function AgentPanel({
 
       if (editingAgent) {
         // Update existing agent
-        await updateAgent(editingAgent.uuid, agentData, makeAuthenticatedRequest);
+        await updateAgent(editingAgent.uuid, agentData, fetchWithAuth);
         Alert.alert('Succès', 'Agent mis à jour avec succès');
       } else {
         // Create new agent
-        const newAgent = await createAgent(agentData, makeAuthenticatedRequest);
+        const newAgent = await createAgent(agentData, fetchWithAuth);
         
         // If creating from conversation, automatically add to conversation
         if (conversationId) {
-          await addAgentToConversation(conversationId, newAgent.uuid, makeAuthenticatedRequest);
+          await addAgentToConversation(conversationId, newAgent.uuid, fetchWithAuth);
           Alert.alert('Succès', `Agent "${name}" créé et ajouté à la conversation`);
         } else {
           Alert.alert('Succès', `Agent "${name}" créé avec succès`);

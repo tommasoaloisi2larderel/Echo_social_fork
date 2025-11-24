@@ -1,24 +1,23 @@
 // components/AttachmentButton.tsx
+import { useChat } from '@/contexts/ChatContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { SymbolView } from 'expo-symbols';
 import React, { useState } from 'react';
 import {
-    ActionSheetIOS,
-    ActivityIndicator,
-    Alert,
-    Image,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import { useChat } from '@/contexts/ChatContext';
-import { Modal } from 'react-native';
 
 const API_BASE_URL = "https://reseausocial-production.up.railway.app";
 
@@ -42,7 +41,6 @@ export default function AttachmentButton({
   conversationId, 
   onAttachmentSent 
 }: AttachmentButtonProps) {
-  const { makeAuthenticatedRequest } = useAuth();
   const { websocket } = useChat();
   
   const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
@@ -172,7 +170,7 @@ export default function AttachmentButton({
 
         console.log('📤 Uploading:', file.name, file.type);
 
-        const response = await makeAuthenticatedRequest(
+        const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/attachments/upload/`,
         {
             method: 'POST',
@@ -238,7 +236,7 @@ export default function AttachmentButton({
         console.log('✅ Attachments sent via WebSocket');
       } else {
         // Fallback REST API
-        await makeAuthenticatedRequest(
+        await fetchWithAuth(
           `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
           {
             method: 'POST',

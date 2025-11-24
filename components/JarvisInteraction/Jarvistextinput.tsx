@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { SymbolView } from 'expo-symbols';
 import React, { useState } from 'react';
@@ -10,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface JarvisTextInputProps {
   onComplete: (message: string, response: string) => void;
@@ -21,7 +21,6 @@ const JarvisTextInput: React.FC<JarvisTextInputProps> = ({
   onComplete,
   onQuit,
 }) => {
-  const { makeAuthenticatedRequest } = useAuth();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -35,7 +34,7 @@ const JarvisTextInput: React.FC<JarvisTextInputProps> = ({
     try {
       console.log('📤 Envoi du message à Jarvis:', message);
       
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         'https://reseausocial-production.up.railway.app/jarvis/chat/?type=message',
         {
           method: 'POST',

@@ -1,6 +1,7 @@
 import DefaultAvatar from '@/components/DefaultAvatar';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { API_BASE_URL } from "@/config/api";
+import { fetchWithAuth } from '@/services/apiClient';
 import { styles } from '@/styles/appStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -42,7 +43,7 @@ interface GroupInfo {
 
 export default function ConversationGroup() {
   const { conversationId } = useLocalSearchParams();
-  const { accessToken, user, logout, makeAuthenticatedRequest } = useAuth();
+  const { accessToken, user, logout } = useAuth();
   const { transitionPosition, setTransitionPosition } = useTransition();
   const { setWebsocket, setSendMessage, setCurrentConversationId, getCachedMessages, getCachedConversationInfo, primeCache, getCachedGroups } = useChat();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -178,12 +179,12 @@ export default function ConversationGroup() {
     if (!accessToken) { await logout(); return; }
     try {
       // Identifier le groupe associé à cette conversation
-      const groupsResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/my-groups/`);
+      const groupsResponse = await fetchWithAuth(`${API_BASE_URL}/groups/my-groups/`);
       if (groupsResponse.ok) {
         const groups = await groupsResponse.json();
         for (const group of groups) {
           try {
-            const detailsResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/groups/${group.uuid}/`);
+            const detailsResponse = await fetchWithAuth(`${API_BASE_URL}/groups/${group.uuid}/`);
             if (detailsResponse.ok) {
               const groupData = await detailsResponse.json();
               if (groupData.conversation_uuid === conversationId) {
@@ -196,7 +197,7 @@ export default function ConversationGroup() {
       }
 
       // Messages de la conversation de groupe
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         `${API_BASE_URL}/messaging/conversations/${conversationId}/messages/`
       );
       if (response.status === 401) { await logout(); return; }

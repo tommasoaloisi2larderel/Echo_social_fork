@@ -14,7 +14,6 @@ import {
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAgents } from '../../contexts/AgentsContext';
-import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import JarvisResponseModal from '../FIlesLecture/JarvisResponseModal';
 import JarvisSplitButton from '../JarvisInteraction/Jarvissplitbutton';
@@ -24,9 +23,11 @@ import AgentPanel from './AgentPanel';
 import AttachmentButtonInline from './AttachmentButtonInline';
 import JarvisChatBar from './JarvisChatBar';
 // import VoiceButtonFloating from './VoiceButtonFloating';
+import { fetchWithAuth } from "@/services/apiClient";
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import ComposingMessageBubble from './ComposingMessageBubble';
+import StagedContentPreview from './StagedContentPreview';
 import SummaryButton from './SummaryButton';
 import VoiceRecorder from './VoiceRecorder';
 
@@ -72,14 +73,21 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   loadingSummary,  
 }) => {
   const insets = useSafeAreaInsets();
-  const { makeAuthenticatedRequest } = useAuth();
   const { createAgent, updateAgent, addAgentToConversation, myAgents, conversationAgents, fetchConversationAgents, removeAgentFromConversation } = useAgents();
+  const { websocket } = useChat();
   
-  
+  // UI States
   const [isJarvisActive, setIsJarvisActive] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // Suivre si la barre est étendue
   const [isWriting, setIsWriting] = useState(false);
-  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false); // Jarvis voice state
+
+  // Chat staging states
+  const [stagedFile, setStagedFile] = useState<{ uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string } | null>(null);
+  const [stagedVoiceUri, setStagedVoiceUri] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  // Jarvis States
   const [voiceTranscription, setVoiceTranscription] = useState<string | null>(null);
   const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
   const [isTextInputActive, setIsTextInputActive] = useState(false);
@@ -100,55 +108,24 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const glowOpacity = useRef(new Animated.Value(1)).current;
   const glowScale = useRef(new Animated.Value(1)).current;
 
-  // ========== GESTION DU VOCAL ==========
-
-
-  const {
-    isRecording,
-    recordedUri,
-    recordingSeconds,
-    isPaused,
-    startRecording,
-    stopRecording,
-    pauseRecording,
-    resumeRecording,
-    cancelRecorded,
-    sendRecorded,
-  } = VoiceRecorder({ 
-    onSendRecorded: async (uri: string) => {
-      // Upload et envoi
-      const uuid = await uploadVoiceAttachment(uri);
-      if (uuid) {
-        await handleSendVoice(uuid);
-      }
-    }
-  });
-  
-  const { websocket } = useChat();
-
-    
-  const uploadVoiceAttachment = async (uri: string) => {
+  // ========== HELPER: Upload Function ==========
+  const uploadFileToBackend = async (uri: string, name: string, type: string) => {
     try {
       const formData = new FormData();
       formData.append('file', {
-        uri,
-        name: `voice_${Date.now()}.mp3`,
-        type: 'audio/mpeg',
+        uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+        name,
+        type,
       } as any);
 
-      // ✅ Utiliser makeAuthenticatedRequest
-      // Il ajoute automatiquement Authorization: Bearer {token}
-      const response = await makeAuthenticatedRequest(
+      const response = await fetchWithAuth(
         'https://reseausocial-production.up.railway.app/messaging/attachments/upload/',
         {
           method: 'POST',
           body: formData,
-          // ❌ NE PAS mettre de header Content-Type
-          // FormData gère automatiquement le multipart/form-data avec boundary
         }
       );
 
-      // Vérifier si la réponse est OK
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Upload failed:', response.status, errorText);
@@ -159,58 +136,31 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       const data = await response.json();
       
       if (data?.uuid) {
-        console.log('✅ Voice file uploaded:', data.uuid);
+        console.log('✅ File uploaded:', data.uuid);
         return data.uuid;
       }
       return null;
     } catch (e) {
-      console.error('uploadVoiceAttachment error', e);
-      Alert.alert('Erreur', "Impossible d'uploader le fichier vocal");
+      console.error('uploadFileToBackend error', e);
+      Alert.alert('Erreur', "Impossible d'uploader le fichier");
       return null;
     }
   };
-  const handleSendVoice = async (attachementUuid: string) => {
-    if (!conversationId) {
-      console.warn('No conversationId for voice message');
-      return;
+
+  // ========== VOICE RECORDER (CHAT) ==========
+  // Use the hook, but let it give us the URI when finished
+  const {
+    isRecording: isChatRecording,
+    startRecording: startChatRecording,
+    stopRecording: stopChatRecording,
+    RecordingDisplay,
+  } = VoiceRecorder({ 
+    onRecordingStop: (uri: string) => {
+      setStagedVoiceUri(uri);
     }
-    
-    try {
+  });
 
-      // Envoyer via WebSocket
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-        const payload = {
-          type: 'chat_message',
-          conversation_uuid: conversationId,
-          message: '🎤 Message vocal',
-          attachment_uuids: [attachementUuid],
-        };
-        websocket.send(JSON.stringify(payload));
-      } else {
-        // Fallback : envoyer via API REST
-        await makeAuthenticatedRequest(
-          `https://reseausocial-production.up.railway.app/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              content: '🎤 Message vocal',
-              attachment_uuids: [attachementUuid],
-            }),
-          }
-        );
-      }
-      
-      console.log('✅ Voice message sent');
-    } catch (e) {
-      console.error('handleSendVoice error', e);
-      Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
-    }
-  };
-
-
+  // ========== HANDLERS ==========
 
   const handleJarvisActivation = () => {
     setIsJarvisActive(true);
@@ -249,48 +199,107 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
 
 
   const handleVoiceStart = () => {
-  console.log('🎤 Démarrage de l\'enregistrement vocal');
-  setIsVoiceRecording(true);
-};
+    console.log('🎤 Démarrage de l\'enregistrement vocal (Jarvis)');
+    setIsVoiceRecording(true);
+  };
 
-const handleVoiceComplete = (transcription: string, response: string) => {
-  console.log('✅ Vocal terminé - Transcription:', transcription);
-  console.log('✅ Réponse Jarvis:', response);
-  
-  setVoiceTranscription(transcription);
-  setVoiceResponse(response);
-  setIsVoiceRecording(false);
-  
-  // Afficher le modal personnalisé
-  setModalTitle('🎤 Message vocal traité');
-  setModalMessage(`Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`);
-  setModalIcon('mic');
-  setModalVisible(true);
+  const handleVoiceComplete = (transcription: string, response: string) => {
+    console.log('✅ Vocal Jarvis terminé - Transcription:', transcription);
+    console.log('✅ Réponse Jarvis:', response);
+    
+    setVoiceTranscription(transcription);
+    setVoiceResponse(response);
+    setIsVoiceRecording(false);
+    
+    // Afficher le modal personnalisé
+    setModalTitle('🎤 Message vocal traité');
+    setModalMessage(`Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`);
+    setModalIcon('mic');
+    setModalVisible(true);
 
-};
+  };
 
-const handleVoiceCancel = () => {
-  console.log('❌ Enregistrement vocal annulé');
-  setIsVoiceRecording(false);
-  setVoiceTranscription(null);
-  setVoiceResponse(null);
-};
+  const handleVoiceCancel = () => {
+    console.log('❌ Enregistrement vocal Jarvis annulé');
+    setIsVoiceRecording(false);
+    setVoiceTranscription(null);
+    setVoiceResponse(null);
+  };
 
   const handleSendMessage = (message: string) => {
     onSendMessage?.(message);
   };
 
-  const handleChatSend = () => {
-    if (chatText.trim() && onSendMessage) {
-      onSendMessage(chatText);
+  // Combined Send Handler (Text, File, or Voice)
+  const handleMasterSend = async () => {
+    if (!conversationId || isSending) return;
+    
+    setIsSending(true);
+    let attachmentUuid: string | null = null;
+
+    try {
+      // 1. Upload content if needed
+      if (stagedFile) {
+        attachmentUuid = await uploadFileToBackend(stagedFile.uri, stagedFile.name, stagedFile.mime);
+      } else if (stagedVoiceUri) {
+        attachmentUuid = await uploadFileToBackend(stagedVoiceUri, `voice_${Date.now()}.mp3`, 'audio/mpeg');
+      }
+
+      // 2. Prepare Message Content
+      let messageContent = chatText.trim();
+      if (!messageContent) {
+         if (stagedFile) messageContent = `📎 ${stagedFile.name}`;
+         else if (stagedVoiceUri) messageContent = "🎤 Message vocal";
+      }
+
+      // 3. Send via WebSocket or REST
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        const payload = {
+          type: 'chat_message',
+          conversation_uuid: conversationId,
+          message: messageContent,
+          attachment_uuids: attachmentUuid ? [attachmentUuid] : [],
+        };
+        websocket.send(JSON.stringify(payload));
+      } else {
+        await fetchWithAuth(
+          `https://reseausocial-production.up.railway.app/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: messageContent,
+              attachment_uuids: attachmentUuid ? [attachmentUuid] : [],
+            }),
+          }
+        );
+      }
+      
+      console.log('✅ Chat message sent');
+
+      // 4. Cleanup
       setChatText?.('');
+      setStagedFile(null);
+      setStagedVoiceUri(null);
+      setIsWriting(false);
+
+    } catch (e) {
+      console.error('handleMasterSend error', e);
+      Alert.alert('Erreur', "Impossible d'envoyer le message");
+    } finally {
+      setIsSending(false);
     }
   };
+
+  // Detect if there is ANY content waiting to be sent
+  const hasStagedContent = !!chatText.trim() || !!stagedFile || !!stagedVoiceUri;
 
   const handleRemoveAgent = async (agentUuid: string) => {
     if (!conversationId) return;
     try {
-      await removeAgentFromConversation(conversationId, agentUuid, makeAuthenticatedRequest);
+      await removeAgentFromConversation(conversationId, agentUuid, fetchWithAuth);
       Alert.alert('Succès', 'Agent retiré de la conversation');
     } catch (error) {
       console.error('Error removing agent:', error);
@@ -301,12 +310,20 @@ const handleVoiceCancel = () => {
   const handleAddAgent = async (agentUuid: string) => {
     if (!conversationId) return;
     try {
-      await addAgentToConversation(conversationId, agentUuid, makeAuthenticatedRequest);
+      await addAgentToConversation(conversationId, agentUuid, fetchWithAuth);
       Alert.alert('Succès', 'Agent ajouté à la conversation');
     } catch (error) {
       console.error('Error adding agent:', error);
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Une erreur est survenue');
     }
+  };
+
+  // Helper to reset all staged content
+  const cancelStagedContent = () => {
+    setChatText?.('');
+    setStagedFile(null);
+    setStagedVoiceUri(null);
+    setIsWriting(false);
   };
 
   const onHandlerStateChange = (event: any) => {
@@ -417,7 +434,7 @@ const handleVoiceCancel = () => {
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        enabled={!isJarvisActive && !isExpanded && !isRecording && !isVoiceRecording && !isTextInputActive} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
+        enabled={!isJarvisActive && !isExpanded && !isChatRecording && !isVoiceRecording && !isTextInputActive} // Désactiver le swipe quand Jarvis est actif OU quand la barre est étendue
       >
         <Animated.View
           style={[
@@ -438,88 +455,118 @@ const handleVoiceCancel = () => {
             if (isChat) {
               return (
                 <View style={styles.alignedButtonsContainer}>
-                  {conversationId && (
-                    <View style={styles.actionButtonWrapper}>
-                      <AttachmentButtonInline
-                        conversationId={conversationId || ''}
-                        onAttachmentSent={() => {
-                          console.log('Attachment sent');
-                        }}
-                        disabled={!conversationId}
-                      />
-                    </View>
+                  {isChatRecording ? (
+                    <RecordingDisplay />
+                  ) : (
+                    <>
+                      {!hasStagedContent ? (
+                        <>
+                          {/* ATTACHMENT BUTTON */}
+                          {conversationId && (
+                            <View style={styles.actionButtonWrapper}>
+                              <AttachmentButtonInline
+                                conversationId={conversationId || ''}
+                                onFileSelected={(file: { uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string }) => {
+                                  setStagedFile(file);
+                                  setIsWriting(true);
+                                }}
+                                disabled={!conversationId}
+                              />
+                            </View>
+                          )}
+
+                          {/* SUMMARY BUTTON */}
+                          <View style={styles.actionButtonWrapper}>
+                            <SummaryButton
+                              onPress={onSummaryPress ?? (() => {})}
+                              loading={!!loadingSummary}
+                              disabled={!conversationId || !!loadingSummary}
+                            />
+                          </View>
+
+                          {/* WRITE (PENCIL) BUTTON */}
+                          <View style={styles.actionButtonWrapper}>
+                            <TouchableOpacity
+                              style={styles.actionButton}
+                              onPress={() => setIsWriting(true)}
+                              activeOpacity={0.7}
+                              disabled={!conversationId}
+                            >
+                              <LinearGradient
+                                colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
+                                style={styles.gradient}
+                              >
+                                {Platform.OS === 'ios' ? (
+                                  <SymbolView
+                                    name="pencil"
+                                    size={20}
+                                    tintColor="white"
+                                    type="hierarchical"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="create-outline"
+                                    size={20}
+                                    color="white"
+                                  />
+                                )}
+                              </LinearGradient>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* VOICE BUTTON (START RECORDING) */}
+                          <View style={styles.actionButtonWrapper}>
+                            <TouchableOpacity
+                              style={styles.voiceButton}
+                              onPress={startChatRecording}
+                              disabled={!conversationId}
+                            >
+                              <Ionicons
+                                name="mic"
+                                size={24}
+                                color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'}
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      ) : (
+                        // ============ STAGED MODE (Ready to Send) ============
+                        <View
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            paddingRight: 10,
+                          }}
+                        >
+                          {/* Send Button (Replaces everything else) */}
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.actionButtonActive]}
+                            onPress={handleMasterSend}
+                            disabled={isSending || !conversationId}
+                          >
+                            <LinearGradient
+                              colors={['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)']}
+                              style={[styles.gradient, { width: 60 }]} // Slightly wider
+                            >
+                              {isSending ? (
+                                <Ionicons name="hourglass" size={20} color="white" />
+                              ) : Platform.OS === 'ios' ? (
+                                <SymbolView
+                                  name="paperplane.fill"
+                                  size={20}
+                                  tintColor="white"
+                                  type="hierarchical"
+                                />
+                              ) : (
+                                <Ionicons name="send" size={20} color="white" />
+                              )}\n                            </LinearGradient>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </>
                   )}
-
-                  <View style={styles.actionButtonWrapper}>
-                    <SummaryButton
-                      onPress={onSummaryPress ?? (() => {})}
-                      loading={!!loadingSummary}
-                      disabled={!conversationId || !!loadingSummary}
-                    />
-                  </View>
-
-                  <View style={styles.actionButtonWrapper}>
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        isWriting && styles.actionButtonActive,
-                      ]}
-                      onPress={() => {
-                        if (isWriting) {
-                          // Send the message
-                          handleChatSend();
-                          setIsWriting(false);
-                        } else {
-                          // Start writing
-                          setIsWriting(true);
-                        }
-                      }}
-                      disabled={!conversationId || (isWriting && !chatText.trim())}
-                      activeOpacity={0.7}
-                    >
-                      <LinearGradient
-                        colors={
-                          isWriting
-                            ? ['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)'] // Green when ready to send
-                            : ['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)'] // Normal color
-                        }
-                        style={styles.gradient}
-                      >
-                        {Platform.OS === 'ios' ? (
-                          <SymbolView
-                            name={isWriting ? 'paperplane.fill' : 'pencil'}
-                            size={20}
-                            tintColor="white"
-                            type="hierarchical"
-                          />
-                        ) : (
-                          <Ionicons
-                            name={isWriting ? 'send' : 'create-outline'}
-                            size={20}
-                            color="white"
-                          />
-                        )}
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.actionButtonWrapper}>
-                    <TouchableOpacity
-                      style={[
-                        styles.voiceButton,
-                        isRecording && styles.voiceButtonRecording,
-                        !conversationId && styles.voiceButtonDisabled,
-                      ]}
-                      onPress={isRecording ? stopRecording : startRecording}
-                      disabled={!conversationId}
-                    >
-                      <Ionicons
-                        name={isRecording ? 'stop-circle' : 'mic'}
-                        size={24}
-                        color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'}
-                      />
-                    </TouchableOpacity>
-                  </View>
                 </View>
               );
             } else if (isJarvisActive) {
@@ -608,14 +655,20 @@ const handleVoiceCancel = () => {
       />
       
       {/* Writing bubble overlay for chat mode */}
-      {isChat && isWriting && (
+      {isChat && isWriting && !stagedFile && !stagedVoiceUri && (
         <ComposingMessageBubble
           chatText={chatText}
           onChangeText={(text) => setChatText?.(text)}
-          onCancel={() => {
-            setIsWriting(false);
-            setChatText?.('');
-          }}
+          onCancel={cancelStagedContent}
+        />
+      )}
+
+      {/* File/voice preview overlay */}
+      {isChat && (stagedFile || stagedVoiceUri) && (
+        <StagedContentPreview
+          stagedFile={stagedFile}
+          stagedVoiceUri={stagedVoiceUri}
+          onCancel={cancelStagedContent}
         />
       )}
     </KeyboardAvoidingView>
@@ -703,23 +756,23 @@ const styles = StyleSheet.create({
     // Pas de paddingTop car la poignée gère son propre padding
   },
   actionButton: {
-  shadowColor: 'rgba(10, 145, 104, 0.4)',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.6,
-  shadowRadius: 4,
-  elevation: 4,
-},
-actionButtonActive: {
-  shadowColor: 'rgba(34, 197, 94, 0.6)',
-  shadowOpacity: 0.8,
-},
-gradient: {
-  width: 48,
-  height: 48,
-  borderRadius: 24,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
+    shadowColor: 'rgba(10, 145, 104, 0.4)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  actionButtonActive: {
+    shadowColor: 'rgba(34, 197, 94, 0.6)',
+    shadowOpacity: 0.8,
+  },
+  gradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default BottomBarV2;

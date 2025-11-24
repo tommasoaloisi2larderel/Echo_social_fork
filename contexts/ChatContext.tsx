@@ -778,7 +778,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         // App came to foreground - trigger background refresh
         console.log('📱 App resumed, triggering background refresh...');
 
-        // Note: We need access to makeAuthenticatedRequest, which isn't available here
+        // Note: We need access to fetchWithAuth, which isn't available here
         // This will be handled by the component that uses ChatContext
         // For now, we'll just log that we detected the state change
       }

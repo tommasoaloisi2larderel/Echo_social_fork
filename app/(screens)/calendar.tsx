@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/config/api";
 import { ECHO_COLOR } from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
+import { fetchWithAuth } from '@/services/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -75,7 +75,6 @@ const EVENT_TYPES_COLORS: Record<string, string> = {
 };
 
 export default function CalendarScreen() {
-  const { makeAuthenticatedRequest } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [monthData, setMonthData] = useState<MonthData | null>(null);
@@ -101,7 +100,7 @@ export default function CalendarScreen() {
       const url = `${API_BASE_URL}/calendrier/month/?year=${year}&month=${month}`;
       log('fetchMonthEvents ->', { year, month, url });
 
-      const response = await makeAuthenticatedRequest(url);
+      const response = await fetchWithAuth(url);
       log('fetchMonthEvents response status', response?.status);
 
       if (!response.ok) {
@@ -334,7 +333,7 @@ export default function CalendarScreen() {
         is_all_day: false,
       };
       log('handleCreate -> POST /calendrier/events/', payload);
-      const resp = await makeAuthenticatedRequest(`${API_BASE_URL}/calendrier/events/`, {
+      const resp = await fetchWithAuth(`${API_BASE_URL}/calendrier/events/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
