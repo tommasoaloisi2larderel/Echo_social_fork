@@ -86,6 +86,7 @@ export default function ConversationDirect() {
     lastMessage,
     sendMessage: wsSend,
     connect: wsConnect,
+    socket: activeSocket
   } = useWebSocketWithAuth('/ws/chat/');
 
   // Handle incoming WebSocket messages
@@ -249,25 +250,28 @@ export default function ConversationDirect() {
 
   // Track connection state and mark conversation as seen on connect
   useEffect(() => {
-    if (wsIsConnected && conversationId) {
-      console.log('✅ WebSocket connected');
+    if (wsIsConnected && conversationId && activeSocket) {
+      console.log('✅ ConversationDirect: Syncing active socket to Context');
       setCurrentConversationId(conversationId as string);
+      setWebsocket(activeSocket); // <--- On partage le socket avec le contexte (et donc la BottomBar)
 
-      wsSend(
-        JSON.stringify({
-          type: 'mark_as_seen',
-          conversation_uuid: conversationId,
-        })
-      );
+      // Marquer comme vu
+      if (activeSocket.readyState === WebSocket.OPEN) {
+        activeSocket.send(
+          JSON.stringify({
+            type: 'mark_as_seen',
+            conversation_uuid: conversationId,
+          })
+        );
+      }
     }
 
     if (!wsIsConnected) {
-      // Consider this as closed
-      console.log('🔌 WebSocket disconnected');
+      console.log('🔌 ConversationDirect: Socket disconnected, clearing Context');
       setWebsocket(null);
       setCurrentConversationId(null);
     }
-  }, [wsIsConnected, conversationId, wsSend, setCurrentConversationId, setWebsocket]);
+  }, [wsIsConnected, conversationId, activeSocket, setCurrentConversationId, setWebsocket]);
 
   const sendMessageHandler = (messageText: string) => {
     if (!messageText.trim() || !wsIsConnected) return;

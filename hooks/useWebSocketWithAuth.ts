@@ -9,7 +9,6 @@ export const useWebSocketWithAuth = (endpoint: string) => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(async () => {
-    // 1. Get token securely inside the hook
     const token = await storage.getItemAsync('accessToken');
     
     if (!token) {
@@ -17,9 +16,8 @@ export const useWebSocketWithAuth = (endpoint: string) => {
       return;
     }
 
-    // 2. Determine WebSocket URL (handle wss/ws logic)
     const wsBase = API_BASE_URL.replace('http', 'ws');
-    const fullUrl = `${wsBase}${endpoint}?token=${token}`; // Passing token via Query Param is standard for WS
+    const fullUrl = `${wsBase}${endpoint}?token=${token}`;
 
     if (socketRef.current) {
       socketRef.current.close();
@@ -31,7 +29,6 @@ export const useWebSocketWithAuth = (endpoint: string) => {
     ws.onopen = () => {
       console.log(`✅ WS Connected: ${endpoint}`);
       setIsConnected(true);
-      // Clear any pending reconnects
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
 
@@ -45,14 +42,13 @@ export const useWebSocketWithAuth = (endpoint: string) => {
     };
 
     ws.onerror = (e) => {
-      console.error(`❌ WS Error (${endpoint}):`, e);
+      // On log l'erreur mais on ne bloque pas l'app
+      console.log(`ℹ️ WS Error (${endpoint}) - connexion instable ou fermée`);
     };
 
     ws.onclose = () => {
       console.log(`🔌 WS Disconnected: ${endpoint}`);
       setIsConnected(false);
-      // Optional: Auto-reconnect logic
-      // reconnectTimeoutRef.current = setTimeout(connect, 3000); 
     };
   }, [endpoint]);
 
@@ -72,5 +68,6 @@ export const useWebSocketWithAuth = (endpoint: string) => {
     }
   }, []);
 
-  return { isConnected, lastMessage, sendMessage, connect };
+  // ✅ MODIFICATION ICI : On retourne 'socket: socketRef.current'
+  return { isConnected, lastMessage, sendMessage, connect, socket: socketRef.current };
 };

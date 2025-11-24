@@ -1,4 +1,7 @@
+import { fetchWithAuth } from "@/services/apiClient";
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,12 +26,8 @@ import JarvisTextInput from '../JarvisInteraction/Jarvistextinput';
 import VoiceJarvisHandler from '../JarvisInteraction/Voicejarvishandler';
 import AgentPanel from './AgentPanel';
 import AttachmentButtonInline from './AttachmentButtonInline';
-import JarvisChatBar from './JarvisChatBar';
-// import VoiceButtonFloating from './VoiceButtonFloating';
-import { fetchWithAuth } from "@/services/apiClient";
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import ComposingMessageBubble from './ComposingMessageBubble';
+import JarvisChatBar from './JarvisChatBar';
 import StagedContentPreview from './StagedContentPreview';
 import SummaryButton from './SummaryButton';
 import VoiceRecorder from './VoiceRecorder';
@@ -50,8 +49,8 @@ interface Agent {
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MIN_HEIGHT = 60; // Hauteur minimale de la barre (plus fine)
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.95; // Hauteur maximale (85% de l'écran)
+const MIN_HEIGHT = 60;
+const MAX_HEIGHT = SCREEN_HEIGHT * 0.95;
 
 interface BottomBarV2Props {
   onSendMessage?: (message: string) => void;
@@ -78,18 +77,15 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const { createAgent, updateAgent, addAgentToConversation, myAgents, conversationAgents, fetchConversationAgents, removeAgentFromConversation } = useAgents();
   const { websocket } = useChat();
   
-  // UI States
   const [isJarvisActive, setIsJarvisActive] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // Suivre si la barre est étendue
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
-  const [isVoiceRecording, setIsVoiceRecording] = useState(false); // Jarvis voice state
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
-  // Chat staging states
   const [stagedFile, setStagedFile] = useState<{ uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string } | null>(null);
   const [stagedVoiceUri, setStagedVoiceUri] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
 
-  // Jarvis States
   const [voiceTranscription, setVoiceTranscription] = useState<string | null>(null);
   const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
   const [isTextInputActive, setIsTextInputActive] = useState(false);
@@ -101,16 +97,11 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const [modalMessage, setModalMessage] = useState('');
   const [modalIcon, setModalIcon] = useState<keyof typeof Ionicons.glyphMap>('chatbubble-ellipses');
 
-
-  // Hauteur de la barre (animée)
   const barHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
-  
-  // Ref pour le PanGestureHandler du panneau d'agents
   const panelGestureRef = useRef(null);
   const glowOpacity = useRef(new Animated.Value(1)).current;
   const glowScale = useRef(new Animated.Value(1)).current;
 
-  // ========== HELPER: Upload Function ==========
   const uploadFileToBackend = async (uri: string, name: string, type: string) => {
     try {
       const formData = new FormData();
@@ -122,10 +113,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
 
       const response = await fetchWithAuth(
         'https://reseausocial-production.up.railway.app/messaging/attachments/upload/',
-        {
-          method: 'POST',
-          body: formData,
-        }
+        { method: 'POST', body: formData }
       );
 
       if (!response.ok) {
@@ -136,7 +124,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       }
 
       const data = await response.json();
-      
       if (data?.uuid) {
         console.log('✅ File uploaded:', data.uuid);
         return data.uuid;
@@ -149,8 +136,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     }
   };
 
-  // ========== VOICE RECORDER (CHAT) ==========
-  // Use the hook, but let it give us the URI when finished
   const {
     isRecording: isChatRecording,
     startRecording: startChatRecording,
@@ -162,67 +147,38 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     }
   });
 
-  // ========== HANDLERS ==========
-
-  const handleJarvisActivation = () => {
-    setIsJarvisActive(true);
-  };
-
-  const handleJarvisDeactivation = () => {
-    setIsJarvisActive(false);
-  };
-
-  const handleTextInputActivate = () => {
-    console.log('📝 Activation de l\'input texte Jarvis');
-    setIsTextInputActive(true);
-  };
-
-
+  const handleJarvisActivation = () => setIsJarvisActive(true);
+  const handleJarvisDeactivation = () => setIsJarvisActive(false);
+  const handleTextInputActivate = () => setIsTextInputActive(true);
+  
   const handleTextInputComplete = (message: string, response: string) => {
-    console.log('✅ Message texte envoyé:', message);
-    console.log('✅ Réponse Jarvis:', response);
-    
     setLastJarvisMessage(message);
     setLastJarvisResponse(response);
-      // Afficher le modal personnalisé
     setModalTitle('💬 Jarvis répond');
     setModalMessage(response);
     setModalIcon('chatbubble-ellipses');
     setModalVisible(true);
-
   };
 
   const handleTextInputQuit = () => {
-    console.log('❌ Fermeture de l\'input texte');
     setIsTextInputActive(false);
     setLastJarvisMessage(null);
     setLastJarvisResponse(null);
   };
 
-
-  const handleVoiceStart = () => {
-    console.log('🎤 Démarrage de l\'enregistrement vocal (Jarvis)');
-    setIsVoiceRecording(true);
-  };
-
+  const handleVoiceStart = () => setIsVoiceRecording(true);
+  
   const handleVoiceComplete = (transcription: string, response: string) => {
-    console.log('✅ Vocal Jarvis terminé - Transcription:', transcription);
-    console.log('✅ Réponse Jarvis:', response);
-    
     setVoiceTranscription(transcription);
     setVoiceResponse(response);
     setIsVoiceRecording(false);
-    
-    // Afficher le modal personnalisé
     setModalTitle('🎤 Message vocal traité');
     setModalMessage(`Vous avez dit : "${transcription}"\n\nJarvis répond : "${response}"`);
     setModalIcon('mic');
     setModalVisible(true);
-
   };
 
   const handleVoiceCancel = () => {
-    console.log('❌ Enregistrement vocal Jarvis annulé');
     setIsVoiceRecording(false);
     setVoiceTranscription(null);
     setVoiceResponse(null);
@@ -254,8 +210,17 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
          else if (stagedVoiceUri) messageContent = "🎤 Message vocal";
       }
 
-      // 3. Send via WebSocket or REST
+      // 3. UI Update (Optimistic)
+      // This calls the handler in ConversationDirect, which ONLY updates the cache.
+      if (!attachmentUuid && onSendMessage) {
+        console.log('🚀 UI Update (Optimistic) - Triggered via Context');
+        onSendMessage(messageContent);
+      }
+
+      // 4. Network Transmission
+      // Since the handler in ConversationDirect is now UI-only, BottomBarV2 MUST send the data.
       if (websocket && websocket.readyState === WebSocket.OPEN) {
+        console.log('📡 Sending via WebSocket');
         const payload = {
           type: 'chat_message',
           conversation_uuid: conversationId,
@@ -264,13 +229,12 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
         };
         websocket.send(JSON.stringify(payload));
       } else {
+        console.log('🌐 Sending via REST API (Fallback)');
         await fetchWithAuth(
           `https://reseausocial-production.up.railway.app/messaging/conversations/${conversationId}/messages/create-with-attachments/`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               content: messageContent,
               attachment_uuids: attachmentUuid ? [attachmentUuid] : [],
@@ -279,9 +243,9 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
         );
       }
       
-      console.log('✅ Chat message sent');
+      console.log('✅ Chat message transmitted to server');
 
-      // 4. Cleanup
+      // 5. Cleanup
       setChatText?.('');
       setStagedFile(null);
       setStagedVoiceUri(null);
@@ -295,7 +259,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     }
   };
 
-  // Detect if there is ANY content waiting to be sent
   const hasStagedContent = !!chatText.trim() || !!stagedFile || !!stagedVoiceUri;
 
   const handleRemoveAgent = async (agentUuid: string) => {
@@ -304,7 +267,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       await removeAgentFromConversation(conversationId, agentUuid, fetchWithAuth);
       Alert.alert('Succès', 'Agent retiré de la conversation');
     } catch (error) {
-      console.error('Error removing agent:', error);
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Une erreur est survenue');
     }
   };
@@ -315,12 +277,10 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       await addAgentToConversation(conversationId, agentUuid, fetchWithAuth);
       Alert.alert('Succès', 'Agent ajouté à la conversation');
     } catch (error) {
-      console.error('Error adding agent:', error);
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Une erreur est survenue');
     }
   };
 
-  // Helper to reset all staged content
   const cancelStagedContent = () => {
     setChatText?.('');
     setStagedFile(null);
@@ -331,15 +291,9 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
   const onHandlerStateChange = (event: any) => {
     if (event.nativeEvent.oldState === State.ACTIVE) {
       const { translationY, velocityY } = event.nativeEvent;
-
       if (translationY < -50 || velocityY < -500) {
         setIsExpanded(true);
-        Animated.spring(barHeight, {
-          toValue: MAX_HEIGHT,
-          useNativeDriver: false,
-          tension: 40,
-          friction: 9,
-        }).start();
+        Animated.spring(barHeight, { toValue: MAX_HEIGHT, useNativeDriver: false, tension: 40, friction: 9 }).start();
       }
     }
   };
@@ -373,19 +327,9 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       const { translationY, velocityY } = event.nativeEvent;
       if (translationY > 100 || velocityY > 500) {
         setIsExpanded(false);
-        Animated.spring(barHeight, {
-          toValue: MIN_HEIGHT,
-          useNativeDriver: false,
-          tension: 40,
-          friction: 9,
-        }).start();
+        Animated.spring(barHeight, { toValue: MIN_HEIGHT, useNativeDriver: false, tension: 40, friction: 9 }).start();
       } else {
-        Animated.spring(barHeight, {
-          toValue: MAX_HEIGHT,
-          useNativeDriver: false,
-          tension: 40,
-          friction: 9,
-        }).start();
+        Animated.spring(barHeight, { toValue: MAX_HEIGHT, useNativeDriver: false, tension: 40, friction: 9 }).start();
       }
     }
   };
@@ -414,7 +358,6 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
     extrapolate: 'clamp',
   });
 
-  // Logique pour déterminer si on affiche le bouton Envoyer à la place du Crayon
   const isReadyToSend = isWriting || hasStagedContent;
 
   return (
@@ -441,399 +384,158 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
             },
           ]}
         >
-        {/* Bottom bar section */}
         <View style={styles.bottomBarSection}>
           {(() => {
             if (isChat) {
               return (
                 <View style={styles.alignedButtonsContainer}>
                   {isChatRecording ? (
-                    // ==================== MODE ENREGISTREMENT ====================
                     <>
                       <RecordingDisplay />
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={styles.actionButton}
-                          onPress={() => {
-                            stopChatRecording();
-                            setStagedVoiceUri(null);
-                          }}
+                          onPress={() => { stopChatRecording(); setStagedVoiceUri(null); }}
                           activeOpacity={0.7}
                         >
-                          <LinearGradient
-                            colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']}
-                            style={styles.gradient}
-                          >
-                            {Platform.OS === 'ios' ? (
-                              <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" />
-                            ) : (
-                              <Ionicons name="close" size={20} color="white" />
-                            )}
+                          <LinearGradient colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']} style={styles.gradient}>
+                            {Platform.OS === 'ios' ? <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="close" size={20} color="white" />}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
                       <View style={styles.actionButtonWrapper}>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={stopChatRecording}
-                          activeOpacity={0.7}
-                        >
-                          <LinearGradient
-                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
-                            style={styles.gradient}
-                          >
-                            {Platform.OS === 'ios' ? (
-                              <SymbolView name="checkmark" size={20} tintColor="white" type="hierarchical" />
-                            ) : (
-                              <Ionicons name="checkmark" size={20} color="white" />
-                            )}
+                        <TouchableOpacity style={styles.actionButton} onPress={stopChatRecording} activeOpacity={0.7}>
+                          <LinearGradient colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']} style={styles.gradient}>
+                            {Platform.OS === 'ios' ? <SymbolView name="checkmark" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="checkmark" size={20} color="white" />}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
                     </>
                   ) : stagedVoiceUri ? (
-                    // ==================== MODE VOCAL PRÊT ====================
                     <>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 16 }}>
                         <Ionicons name="mic" size={20} color="white" />
-                        <Text style={{ marginLeft: 8, color: 'white', fontWeight: '600', fontSize: 15 }}>
-                          Vocal prêt
-                        </Text>
+                        <Text style={{ marginLeft: 8, color: 'white', fontWeight: '600', fontSize: 15 }}>Vocal prêt</Text>
                       </View>
                       <View style={styles.actionButtonWrapper}>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={cancelStagedContent}
-                          activeOpacity={0.7}
-                        >
-                          <LinearGradient
-                            colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']}
-                            style={styles.gradient}
-                          >
-                            {Platform.OS === 'ios' ? (
-                              <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" />
-                            ) : (
-                              <Ionicons name="close" size={20} color="white" />
-                            )}
+                        <TouchableOpacity style={styles.actionButton} onPress={cancelStagedContent} activeOpacity={0.7}>
+                          <LinearGradient colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']} style={styles.gradient}>
+                            {Platform.OS === 'ios' ? <SymbolView name="xmark" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="close" size={20} color="white" />}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
                       <View style={styles.actionButtonWrapper}>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={handleMasterSend}
-                          disabled={isSending}
-                          activeOpacity={0.7}
-                        >
-                          <LinearGradient
-                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
-                            style={styles.gradient}
-                          >
-                            {isSending ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : Platform.OS === 'ios' ? (
-                                <SymbolView name="paperplane.fill" size={20} tintColor="white" type="hierarchical" />
-                              ) : (
-                                <Ionicons name="send" size={20} color="white" />
-                              )
-                            }
+                        <TouchableOpacity style={styles.actionButton} onPress={handleMasterSend} disabled={isSending} activeOpacity={0.7}>
+                          <LinearGradient colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']} style={styles.gradient}>
+                            {isSending ? <ActivityIndicator size="small" color="white" /> : Platform.OS === 'ios' ? <SymbolView name="paperplane.fill" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="send" size={20} color="white" />}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
                     </>
                   ) : (
-                    // ==================== MODE NORMAL / ÉCRITURE ====================
-                    // Note: Le bloc "stagedFile" a été supprimé pour que le fichier
-                    // s'affiche dans ce mode normal avec le bouton Envoyer actif.
                     <>
-                      {/* ATTACHMENT BUTTON */}
                       {conversationId && (
                         <View style={styles.actionButtonWrapper}>
                           <AttachmentButtonInline
                             conversationId={conversationId || ''}
-                            onFileSelected={(file: { uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string }) => {
-                              setStagedFile(file);
-                              setIsWriting(true);
-                            }}
+                            onFileSelected={(file: any) => { setStagedFile(file); setIsWriting(true); }}
                             disabled={!conversationId}
                           />
                         </View>
                       )}
-
-                      {/* SUMMARY BUTTON */}
                       <View style={styles.actionButtonWrapper}>
-                        <SummaryButton
-                          onPress={onSummaryPress ?? (() => {})}
-                          loading={!!loadingSummary}
-                          disabled={!conversationId || !!loadingSummary}
-                        />
+                        <SummaryButton onPress={onSummaryPress ?? (() => {})} loading={!!loadingSummary} disabled={!conversationId || !!loadingSummary} />
                       </View>
-
-                      {/* WRITE / SEND BUTTON */}
                       <View style={styles.actionButtonWrapper}>
                         <TouchableOpacity
                           style={[styles.actionButton, isReadyToSend && styles.actionButtonActive]}
-                          // Si prêt à envoyer, on envoie, sinon on active le mode écriture
                           onPress={isReadyToSend ? handleMasterSend : () => setIsWriting(true)}
                           activeOpacity={0.7}
-                          // Désactivé si pas de conversation, ou si prêt à envoyer mais en cours d'envoi ou vide
                           disabled={!conversationId || (isReadyToSend && (isSending || !hasStagedContent))}
                         >
                           <LinearGradient
-                            colors={isReadyToSend 
-                              ? ['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)'] // Vert clair (Envoyer)
-                              : ['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)'] // Vert foncé (Écrire)
-                            }
+                            colors={isReadyToSend ? ['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)'] : ['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
                             style={styles.gradient}
                           >
                             {isReadyToSend ? (
-                              isSending ? (
-                                <ActivityIndicator size="small" color="white" />
-                              ) : Platform.OS === 'ios' ? (
-                                <SymbolView
-                                  name="paperplane.fill"
-                                  size={20}
-                                  tintColor="white"
-                                  type="hierarchical"
-                                />
-                              ) : (
-                                <Ionicons name="send" size={20} color="white" />
-                              )
+                              isSending ? <ActivityIndicator size="small" color="white" /> : Platform.OS === 'ios' ? <SymbolView name="paperplane.fill" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="send" size={20} color="white" />
                             ) : (
-                              Platform.OS === 'ios' ? (
-                                <SymbolView
-                                  name="pencil"
-                                  size={20}
-                                  tintColor="white"
-                                  type="hierarchical"
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="create-outline"
-                                  size={20}
-                                  color="white"
-                                />
-                              )
+                              Platform.OS === 'ios' ? <SymbolView name="pencil" size={20} tintColor="white" type="hierarchical" /> : <Ionicons name="create-outline" size={20} color="white" />
                             )}
                           </LinearGradient>
                         </TouchableOpacity>
                       </View>
-
-                      {/* VOICE BUTTON */}
                       <View style={styles.actionButtonWrapper}>
-                        <TouchableOpacity
-                          style={styles.voiceButton}
-                          onPress={startChatRecording}
-                          disabled={!conversationId}
-                        >
-                          <Ionicons
-                            name="mic"
-                            size={24}
-                            color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'}
-                          />
+                        <TouchableOpacity style={styles.voiceButton} onPress={startChatRecording} disabled={!conversationId}>
+                          <Ionicons name="mic" size={24} color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'} />
                         </TouchableOpacity>
                       </View>
                     </>
                   )}
                 </View>
               );
-            
             } else if (isJarvisActive) {
-              return (
-                <JarvisChatBar
-                  onSendMessage={handleSendMessage}
-                  onQuit={handleJarvisDeactivation}
-                />
-              );
+              return <JarvisChatBar onSendMessage={handleSendMessage} onQuit={handleJarvisDeactivation} />;
             } else if (isVoiceRecording) {
-              return (
-                <VoiceJarvisHandler 
-                  onComplete={handleVoiceComplete}
-                  onCancel={handleVoiceCancel}
-                />
-              );
+              return <VoiceJarvisHandler onComplete={handleVoiceComplete} onCancel={handleVoiceCancel} />;
             } else if (isTextInputActive) {
-              return (
-                <JarvisTextInput 
-                  onComplete={handleTextInputComplete}
-                  onQuit={handleTextInputQuit}
-                />
-              );
+              return <JarvisTextInput onComplete={handleTextInputComplete} onQuit={handleTextInputQuit} />;
             } else {
-              return (
-                <JarvisSplitButton 
-                  onTextActivate={handleTextInputActivate}
-                  onVoiceActivate={handleVoiceStart}
-                />
-              );
+              return <JarvisSplitButton onTextActivate={handleTextInputActivate} onVoiceActivate={handleVoiceStart} />;
             }
           })()}
         </View>
 
-        {/* Zone extensible - Panneau des agents */}
         <View style={styles.expandableArea}>
           {isExpanded && (
-            <PanGestureHandler
-              ref={panelGestureRef}
-              onGestureEvent={onPanelGestureEvent}
-              onHandlerStateChange={onPanelHandlerStateChange}
-              enabled={isExpanded}
-            >
+            <PanGestureHandler ref={panelGestureRef} onGestureEvent={onPanelGestureEvent} onHandlerStateChange={onPanelHandlerStateChange} enabled={isExpanded}>
               <Animated.View style={styles.panelGestureArea}>
                 <View style={styles.dragHandle} />
               </Animated.View>
             </PanGestureHandler>
           )}
-          
-          <ScrollView 
-            style={styles.scrollableContent}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={isExpanded}
-          >
-            { (
-              <AgentPanel
-                conversationAgents={conversationAgents}
-                loadingConversationAgents={false}
-                myAgents={myAgents}
-                conversationId={conversationId}
-                isChat={isChat}
-                handleRemoveAgent={handleRemoveAgent}
-                handleAddAgent={handleAddAgent}
-                glowOpacity={glowOpacity}
-                glowScale={glowScale}
-                backgroundColor="rgba(249, 250, 251, 1)" 
-              />
-            )}
+          <ScrollView style={styles.scrollableContent} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} scrollEnabled={isExpanded}>
+            <AgentPanel
+              conversationAgents={conversationAgents}
+              loadingConversationAgents={false}
+              myAgents={myAgents}
+              conversationId={conversationId}
+              isChat={isChat}
+              handleRemoveAgent={handleRemoveAgent}
+              handleAddAgent={handleAddAgent}
+              glowOpacity={glowOpacity}
+              glowScale={glowScale}
+              backgroundColor="rgba(249, 250, 251, 1)" 
+            />
           </ScrollView>
         </View>
-
         </Animated.View>
       </PanGestureHandler>
       
-      <JarvisResponseModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        title={modalTitle}
-        message={modalMessage}
-        icon={modalIcon}
-      />
-      
-      {/* Writing bubble overlay for chat mode */}
-      {isChat && isWriting && !stagedFile && !stagedVoiceUri && (
-        <ComposingMessageBubble
-          chatText={chatText}
-          onChangeText={(text) => setChatText?.(text)}
-          onCancel={cancelStagedContent}
-        />
-      )}
-
-      {/* File/voice preview overlay */}
-      {isChat && (stagedFile || stagedVoiceUri) && (
-        <StagedContentPreview
-          stagedFile={stagedFile}
-          stagedVoiceUri={stagedVoiceUri}
-          onCancel={cancelStagedContent}
-        />
-      )}
+      <JarvisResponseModal visible={modalVisible} onClose={() => setModalVisible(false)} title={modalTitle} message={modalMessage} icon={modalIcon} />
+      {isChat && isWriting && !stagedFile && !stagedVoiceUri && <ComposingMessageBubble chatText={chatText} onChangeText={(text) => setChatText?.(text)} onCancel={cancelStagedContent} />}
+      {isChat && (stagedFile || stagedVoiceUri) && <StagedContentPreview stagedFile={stagedFile} stagedVoiceUri={stagedVoiceUri} onCancel={cancelStagedContent} />}
     </KeyboardAvoidingView>
   );
 };
+
 const styles = StyleSheet.create({
-  keyboardAvoidingView: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 9999,
-  },
-  alignedButtonsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    width: '100%',
-  },
-  actionButtonWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 4,
-  },
-  voiceButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceButtonRecording: {
-    backgroundColor: 'rgba(220, 38, 38, 0.9)',
-  },
-  voiceButtonDisabled: {
-    opacity: 0.6,
-  },
-  container: {
-    position: 'absolute',
-    bottom: 0,
-    zIndex: 9998,
-    flexDirection: 'column-reverse', 
-    justifyContent: 'flex-start',
-    shadowColor: "rgba(10, 145, 104, 0.7)",
-    shadowOpacity: 0.8,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  bottomBarSection: {
-    width: '100%',
-    zIndex: 10, 
-  },
-  panelGestureArea: {
-    width: '100%',
-    paddingTop: 16,
-    paddingBottom: 12,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    marginBottom: 8,
-  },
-  dragHandle: {
-    width: 50,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(10, 145, 104, 0.4)',
-  },
-  expandableArea: {
-    flex: 1,
-    width: '100%',
-    flexDirection: 'column',
-  },
-  scrollableContent: {
-    flex: 1,
-    width: '100%',
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  actionButton: {
-    shadowColor: 'rgba(10, 145, 104, 0.4)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  actionButtonActive: {
-    shadowColor: 'rgba(34, 197, 94, 0.6)',
-    shadowOpacity: 0.8,
-  },
-  gradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  keyboardAvoidingView: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 9999 },
+  alignedButtonsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 12, paddingVertical: 8, width: '100%' },
+  actionButtonWrapper: { alignItems: 'center', justifyContent: 'center', marginHorizontal: 4 },
+  voiceButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.25)', alignItems: 'center', justifyContent: 'center' },
+  voiceButtonRecording: { backgroundColor: 'rgba(220, 38, 38, 0.9)' },
+  voiceButtonDisabled: { opacity: 0.6 },
+  container: { position: 'absolute', bottom: 0, zIndex: 9998, flexDirection: 'column-reverse', justifyContent: 'flex-start', shadowColor: "rgba(10, 145, 104, 0.7)", shadowOpacity: 0.8, shadowRadius: 5, elevation: 5 },
+  bottomBarSection: { width: '100%', zIndex: 10 },
+  panelGestureArea: { width: '100%', paddingTop: 16, paddingBottom: 12, alignItems: 'center', backgroundColor: 'transparent', marginBottom: 8 },
+  dragHandle: { width: 50, height: 5, borderRadius: 3, backgroundColor: 'rgba(10, 145, 104, 0.4)' },
+  expandableArea: { flex: 1, width: '100%', flexDirection: 'column' },
+  scrollableContent: { flex: 1, width: '100%' },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 16 },
+  actionButton: { shadowColor: 'rgba(10, 145, 104, 0.4)', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 4 },
+  actionButtonActive: { shadowColor: 'rgba(34, 197, 94, 0.6)', shadowOpacity: 0.8 },
+  gradient: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
 });
 
 export default BottomBarV2;
