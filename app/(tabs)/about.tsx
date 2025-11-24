@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
+import { fetchWithAuth } from '@/services/apiClient';
 
 interface ProfileStats {
   total_connexions: number;
@@ -42,7 +43,7 @@ interface Post {
 }
 
 export default function ProfileScreen() {
-  const { user, accessToken, logout, fetchWithAuth } = useAuth();
+  const { user, logout } = useAuth();
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,12 +53,6 @@ export default function ProfileScreen() {
 
   const fetchStats = useCallback(async () => {
     try {
-      if (!accessToken) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
       const response = await fetchWithAuth(`${API_BASE_URL}/api/auth/profile/stats/`);
       if (response.ok) {
         const data = await response.json();
@@ -71,7 +66,7 @@ export default function ProfileScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchWithAuth, accessToken]);
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     if (!user?.uuid) return;
@@ -94,7 +89,7 @@ export default function ProfileScreen() {
     } finally {
       setLoadingPosts(false);
     }
-  }, [fetchWithAuth, user?.uuid]);
+  }, [user?.uuid]);
 
   useEffect(() => {
     fetchStats();
@@ -201,25 +196,23 @@ export default function ProfileScreen() {
           <Text style={styles.bioText}>{user.bio}</Text>
         ) : null}
 
-        {(
-          <View style={styles.quickStatsRow}>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/friends' as any)}>
-              <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{user?.nb_connexions ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Amis</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
-              <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Événements</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/stats' as any)}>
-              <Ionicons name="stats-chart-outline" size={18} color={ECHO_COLOR} />
-              <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
-              <Text style={styles.quickStatLabel}>Statistiques</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.quickStatsRow}>
+          <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/friends' as any)}>
+            <Ionicons name="people-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.quickStatNum}>{user?.nb_connexions ?? 0}</Text>
+            <Text style={styles.quickStatLabel}>Amis</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/calendar' as any)}>
+            <Ionicons name="calendar-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.quickStatNum}>{stats?.total_evenements ?? 0}</Text>
+            <Text style={styles.quickStatLabel}>Événements</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickStatCard} onPress={() => router.push('/(screens)/stats' as any)}>
+            <Ionicons name="stats-chart-outline" size={18} color={ECHO_COLOR} />
+            <Text style={styles.quickStatNum}>{stats?.total_reponses ?? 0}</Text>
+            <Text style={styles.quickStatLabel}>Statistiques</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
       
       <View style={styles.cardsGrid}>
@@ -234,52 +227,51 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.emptyState}>
             <Ionicons name="leaf-outline" size={20} color="#9bb89f" />
-            <Text style={styles.emptyText}>Vous n avez pas encore publié. Partagez votre premier post !</Text>
+            <Text style={styles.emptyText}>Vous n'avez pas encore publié. Partagez votre premier post !</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.footerSpace} />
-        <Modal
-          visible={showSettingsMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowSettingsMenu(false)}
+
+      <Modal
+        visible={showSettingsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSettingsMenu(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1}
+          onPress={() => setShowSettingsMenu(false)}
         >
-          <TouchableOpacity 
-            style={styles.modalOverlay} 
-            activeOpacity={1}
-            onPress={() => setShowSettingsMenu(false)}
-          >
-            <View style={styles.settingsMenu}>
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowSettingsMenu(false);
-                  router.push('/(screens)/blocked-users' as any);
-                }}
-              >
-                <Ionicons name="ban-outline" size={22} color="#333" />
-                <Text style={styles.menuItemText}>Utilisateurs bloqués</Text>
-              </TouchableOpacity>
+          <View style={styles.settingsMenu}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                router.push('/(screens)/blocked-users' as any);
+              }}
+            >
+              <Ionicons name="ban-outline" size={22} color="#333" />
+              <Text style={styles.menuItemText}>Utilisateurs bloqués</Text>
+            </TouchableOpacity>
 
-              <View style={styles.menuDivider} />
+            <View style={styles.menuDivider} />
 
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowSettingsMenu(false);
-                  router.push('/(screens)/archived-conversations' as any);
-                }}
-              >
-                <Ionicons name="archive-outline" size={22} color="#333" />
-                <Text style={styles.menuItemText}>Conversations archivées</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
-
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSettingsMenu(false);
+                router.push('/(screens)/archived-conversations' as any);
+              }}
+            >
+              <Ionicons name="archive-outline" size={22} color="#333" />
+              <Text style={styles.menuItemText}>Conversations archivées</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -468,5 +460,57 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f0f0f0',
     marginHorizontal: 16,
+  },
+  cardsGrid: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  newPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ECHO_COLOR,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  newPostText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  emptyState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#888',
+    flex: 1,
   },
 });

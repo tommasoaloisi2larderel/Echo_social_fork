@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -8,6 +9,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Text,    
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -242,7 +244,7 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
       if (stagedFile) {
         attachmentUuid = await uploadFileToBackend(stagedFile.uri, stagedFile.name, stagedFile.mime);
       } else if (stagedVoiceUri) {
-        attachmentUuid = await uploadFileToBackend(stagedVoiceUri, `voice_${Date.now()}.mp3`, 'audio/mpeg');
+        attachmentUuid = await uploadFileToBackend(stagedVoiceUri, `voice_${Date.now()}.m4a`, 'audio/m4a');
       }
 
       // 2. Prepare Message Content
@@ -456,103 +458,119 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
               return (
                 <View style={styles.alignedButtonsContainer}>
                   {isChatRecording ? (
-                    <RecordingDisplay />
-                  ) : (
+                    // ========================================
+                    // ÉTAT 2 : ENREGISTREMENT EN COURS
+                    // ========================================
                     <>
-                      {!hasStagedContent ? (
-                        <>
-                          {/* ATTACHMENT BUTTON */}
-                          {conversationId && (
-                            <View style={styles.actionButtonWrapper}>
-                              <AttachmentButtonInline
-                                conversationId={conversationId || ''}
-                                onFileSelected={(file: { uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string }) => {
-                                  setStagedFile(file);
-                                  setIsWriting(true);
-                                }}
-                                disabled={!conversationId}
-                              />
-                            </View>
-                          )}
-
-                          {/* SUMMARY BUTTON */}
-                          <View style={styles.actionButtonWrapper}>
-                            <SummaryButton
-                              onPress={onSummaryPress ?? (() => {})}
-                              loading={!!loadingSummary}
-                              disabled={!conversationId || !!loadingSummary}
-                            />
-                          </View>
-
-                          {/* WRITE (PENCIL) BUTTON */}
-                          <View style={styles.actionButtonWrapper}>
-                            <TouchableOpacity
-                              style={styles.actionButton}
-                              onPress={() => setIsWriting(true)}
-                              activeOpacity={0.7}
-                              disabled={!conversationId}
-                            >
-                              <LinearGradient
-                                colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
-                                style={styles.gradient}
-                              >
-                                {Platform.OS === 'ios' ? (
-                                  <SymbolView
-                                    name="pencil"
-                                    size={20}
-                                    tintColor="white"
-                                    type="hierarchical"
-                                  />
-                                ) : (
-                                  <Ionicons
-                                    name="create-outline"
-                                    size={20}
-                                    color="white"
-                                  />
-                                )}
-                              </LinearGradient>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* VOICE BUTTON (START RECORDING) */}
-                          <View style={styles.actionButtonWrapper}>
-                            <TouchableOpacity
-                              style={styles.voiceButton}
-                              onPress={startChatRecording}
-                              disabled={!conversationId}
-                            >
-                              <Ionicons
-                                name="mic"
-                                size={24}
-                                color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'}
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        </>
-                      ) : (
-                        // ============ STAGED MODE (Ready to Send) ============
-                        <View
-                          style={{
-                            flex: 1,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            paddingRight: 10,
+                      <RecordingDisplay />
+                      
+                      {/* Bouton Annuler (X rouge) */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => {
+                            stopChatRecording();
+                            setStagedVoiceUri(null);
                           }}
+                          activeOpacity={0.7}
                         >
-                          {/* Send Button (Replaces everything else) */}
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.actionButtonActive]}
-                            onPress={handleMasterSend}
-                            disabled={isSending || !conversationId}
+                          <LinearGradient
+                            colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']}
+                            style={styles.gradient}
                           >
-                            <LinearGradient
-                              colors={['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)']}
-                              style={[styles.gradient, { width: 60 }]} // Slightly wider
-                            >
-                              {isSending ? (
-                                <Ionicons name="hourglass" size={20} color="white" />
-                              ) : Platform.OS === 'ios' ? (
+                            {Platform.OS === 'ios' ? (
+                              <SymbolView
+                                name="xmark"
+                                size={20}
+                                tintColor="white"
+                                type="hierarchical"
+                              />
+                            ) : (
+                              <Ionicons name="close" size={20} color="white" />
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Bouton Valider (checkmark vert) */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={stopChatRecording}
+                          activeOpacity={0.7}
+                        >
+                          <LinearGradient
+                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
+                            style={styles.gradient}
+                          >
+                            {Platform.OS === 'ios' ? (
+                              <SymbolView
+                                name="checkmark"
+                                size={20}
+                                tintColor="white"
+                                type="hierarchical"
+                              />
+                            ) : (
+                              <Ionicons name="checkmark" size={20} color="white" />
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : stagedVoiceUri ? (
+                    // ========================================
+                    // ÉTAT 3 : VOCAL PRÊT À ENVOYER
+                    // ========================================
+                    <>
+                      {/* Indicateur vocal prêt */}
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 16 }}>
+                        <Ionicons name="mic" size={20} color="white" />
+                        <Text style={{ marginLeft: 8, color: 'white', fontWeight: '600', fontSize: 15 }}>
+                          Vocal prêt
+                        </Text>
+                      </View>
+
+                      {/* Bouton Annuler */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={cancelStagedContent}
+                          activeOpacity={0.7}
+                        >
+                          <LinearGradient
+                            colors={['rgba(220, 38, 38, 0.9)', 'rgba(185, 28, 28, 0.9)']}
+                            style={styles.gradient}
+                          >
+                            {Platform.OS === 'ios' ? (
+                              <SymbolView
+                                name="xmark"
+                                size={20}
+                                tintColor="white"
+                                type="hierarchical"
+                              />
+                            ) : (
+                              <Ionicons name="close" size={20} color="white" />
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Bouton Envoyer */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={handleMasterSend}
+                          disabled={isSending}
+                          activeOpacity={0.7}
+                        >
+                          <LinearGradient
+                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
+                            style={styles.gradient}
+                          >
+                            {isSending ? (
+                              <ActivityIndicator size="small" color="white" />
+                            ) : (
+                              Platform.OS === 'ios' ? (
                                 <SymbolView
                                   name="paperplane.fill"
                                   size={20}
@@ -561,14 +579,127 @@ const BottomBarV2: React.FC<BottomBarV2Props> = ({
                                 />
                               ) : (
                                 <Ionicons name="send" size={20} color="white" />
-                              )}\n                            </LinearGradient>
-                          </TouchableOpacity>
+                              )
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : stagedFile ? (
+                    // ========================================
+                    // ÉTAT : FICHIER STAGÉ (existant)
+                    // ========================================
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        paddingRight: 10,
+                      }}
+                    >
+                      {/* Send Button (Replaces everything else) */}
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.actionButtonActive]}
+                        onPress={handleMasterSend}
+                        disabled={isSending || !conversationId}
+                      >
+                        <LinearGradient
+                          colors={['rgba(34, 197, 94, 1)', 'rgba(34, 197, 94, 0.8)']}
+                          style={[styles.gradient, { width: 60 }]}
+                        >
+                          {isSending ? (
+                            <ActivityIndicator size="small" color="white" />
+                          ) : Platform.OS === 'ios' ? (
+                            <SymbolView
+                              name="paperplane.fill"
+                              size={20}
+                              tintColor="white"
+                              type="hierarchical"
+                            />
+                          ) : (
+                            <Ionicons name="send" size={20} color="white" />
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    // ========================================
+                    // ÉTAT 1 : MODE NORMAL - 4 BOUTONS
+                    // ========================================
+                    <>
+                      {/* ATTACHMENT BUTTON */}
+                      {conversationId && (
+                        <View style={styles.actionButtonWrapper}>
+                          <AttachmentButtonInline
+                            conversationId={conversationId || ''}
+                            onFileSelected={(file: { uri: string; type: 'image' | 'video' | 'file'; name: string; mime: string }) => {
+                              setStagedFile(file);
+                              setIsWriting(true);
+                            }}
+                            disabled={!conversationId}
+                          />
                         </View>
                       )}
+
+                      {/* SUMMARY BUTTON */}
+                      <View style={styles.actionButtonWrapper}>
+                        <SummaryButton
+                          onPress={onSummaryPress ?? (() => {})}
+                          loading={!!loadingSummary}
+                          disabled={!conversationId || !!loadingSummary}
+                        />
+                      </View>
+
+                      {/* WRITE (PENCIL) BUTTON */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => setIsWriting(true)}
+                          activeOpacity={0.7}
+                          disabled={!conversationId}
+                        >
+                          <LinearGradient
+                            colors={['rgba(10, 145, 104, 1)', 'rgba(10, 145, 104, 0.8)']}
+                            style={styles.gradient}
+                          >
+                            {Platform.OS === 'ios' ? (
+                              <SymbolView
+                                name="pencil"
+                                size={20}
+                                tintColor="white"
+                                type="hierarchical"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="create-outline"
+                                size={20}
+                                color="white"
+                              />
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* VOICE BUTTON (START RECORDING) */}
+                      <View style={styles.actionButtonWrapper}>
+                        <TouchableOpacity
+                          style={styles.voiceButton}
+                          onPress={startChatRecording}
+                          disabled={!conversationId}
+                        >
+                          <Ionicons
+                            name="mic"
+                            size={24}
+                            color={conversationId ? '#ffffff' : 'rgba(255,255,255,0.5)'}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </>
                   )}
                 </View>
               );
+            
             } else if (isJarvisActive) {
               return (
                 <JarvisChatBar

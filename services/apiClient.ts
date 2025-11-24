@@ -77,10 +77,14 @@ const refreshAccessToken = async (): Promise<string | null> => {
 export const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const accessToken = await storage.getItemAsync("accessToken");
 
+
+  const isFormData = options.body instanceof FormData;
   // 1. Attach current token if it exists
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
+
+  const headers= {
+    // ✅ Seulement ajouter Content-Type si ce n'est PAS un FormData
+    ...(!isFormData && { "Content-Type": "application/json" }),
+    ...(options.headers as Record<string, string>),
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   } as HeadersInit;
 
@@ -105,14 +109,16 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}): Pro
         isRefreshing = false;
         // Process all queued requests with the new token
         processQueue(null, newAccessToken);
+        const retryHeaders: Record<string, string> = {
+          ...(!isFormData && { "Content-Type": "application/json" }),
+          ...(options.headers as Record<string, string>),
+          Authorization: `Bearer ${newAccessToken}`,
+        };
 
         // Retry the original request
         return await fetch(url, {
           ...options,
-          headers: {
-            ...headers,
-            Authorization: `Bearer ${newAccessToken}`,
-          },
+          headers: retryHeaders,
         });
       } else {
         // Refresh failed completely (refresh token expired or invalid)
