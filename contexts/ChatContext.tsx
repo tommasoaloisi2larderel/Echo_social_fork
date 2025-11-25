@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Image as RNImage } from 'react-native';
 import { cacheManager } from '../utils/CacheManager';
 import { CacheKeys, CacheTTL } from '../utils/cache-config';
@@ -74,6 +74,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // 🆕 Track visible conversations for smart avatar prefetching
   const visibleConversationsRef = useRef<string[]>([]);
+  
+  // 🆕 Helper ref for message indexing
+  const messagesIndexRef = useRef<Set<string>>(new Set());
 
   const API_BASE_URL = typeof window !== 'undefined' && (window as any).location?.hostname === 'localhost'
     ? 'http://localhost:3001'
@@ -83,12 +86,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const messagesCacheRef = useRef<Map<string, CachedMessage[]>>(new Map());
   const infoCacheRef = useRef<Map<string, any>>(new Map());
 
+  // 🆕 Memory cache refs for conversation lists (for synchronous access)
+  const privateConversationsListRef = useRef<any[] | undefined>(undefined);
+  const groupConversationsListRef = useRef<any[] | undefined>(undefined);
+  const connectionsListRef = useRef<any[] | undefined>(undefined);
+  const groupsListRef = useRef<any[] | undefined>(undefined);
+  const invitationsListRef = useRef<any[] | undefined>(undefined);
+
   /**
    * 🆕 Get cached messages for a conversation
    * Returns from memory cache immediately (sync)
    * Also hydrates from CacheManager in background
    */
-  const getCachedMessages = (conversationId: string): CachedMessage[] | undefined => {
+  const getCachedMessages = useCallback((conversationId: string): CachedMessage[] | undefined => {
     // Return from memory cache immediately (synchronous)
     const memoryCache = messagesCacheRef.current.get(conversationId);
 
@@ -106,13 +116,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Get cached conversation info
    * Returns from memory cache immediately (sync)
    */
-  const getCachedConversationInfo = (conversationId: string): any | undefined => {
+  const getCachedConversationInfo = useCallback((conversationId: string): any | undefined => {
     // Return from memory cache immediately (synchronous)
     const memoryCache = infoCacheRef.current.get(conversationId);
 
@@ -130,13 +140,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Prime cache with conversation data
    * Updates both memory cache (sync) and CacheManager (async)
    */
-  const primeCache = (
+  const primeCache = useCallback((
     conversationId: string,
     info: any | null,
     messages: CachedMessage[]
@@ -175,9 +185,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error(`❌ Failed to prime memory cache for ${conversationId}:`, error);
     }
-  };
+  }, []);
 
-  const addMessageToCache = (conversationId: string, message: CachedMessage): void => {
+  const addMessageToCache = useCallback((conversationId: string, message: CachedMessage): void => {
     try {
       const currentMessages = messagesCacheRef.current.get(conversationId) || [];
       const exists = currentMessages.some(m => m.uuid === message.uuid);
@@ -198,13 +208,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Failed to add message to cache:', error);
     }
-  };
+  }, []);
 
   /**
    * 🆕 Prefetch conversation data (info + messages)
    * Uses CacheManager for persistence
    */
-  const prefetchConversation = async (
+  const prefetchConversation = useCallback(async (
     conversationId: string,
     request: (url: string, options?: RequestInit) => Promise<Response>
   ): Promise<void> => {
@@ -280,7 +290,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } finally {
       inFlightPrefetchRef.current.delete(conversationId);
     }
-  };
+  }, [API_BASE_URL, primeCache]);
 
   /**
    * 🆕 Smart avatar prefetching with prioritization
@@ -289,7 +299,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    * @param urls Array of avatar URLs
    * @param priority 'high' for visible conversations, 'low' for background
    */
-  const prefetchAvatars = async (
+  const prefetchAvatars = useCallback(async (
     urls: string[],
     priority: 'high' | 'low' = 'low'
   ): Promise<void> => {
@@ -320,28 +330,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error(`❌ Failed to prefetch avatars:`, error);
     }
-  };
+  }, []);
 
   /**
    * 🆕 Set visible conversations for smart prefetching
    * Call this when a conversation list is rendered
    */
-  const setVisibleConversations = (conversationIds: string[]): void => {
+  const setVisibleConversations = useCallback((conversationIds: string[]): void => {
     visibleConversationsRef.current = conversationIds;
-  };
-
-  // 🆕 Memory cache refs for conversation lists (for synchronous access)
-  const privateConversationsListRef = useRef<any[] | undefined>(undefined);
-  const groupConversationsListRef = useRef<any[] | undefined>(undefined);
-  const connectionsListRef = useRef<any[] | undefined>(undefined);
-  const groupsListRef = useRef<any[] | undefined>(undefined);
-  const invitationsListRef = useRef<any[] | undefined>(undefined);
+  }, []);
 
   /**
    * 🆕 Get cached private conversations (sync)
    * Auto-hydrates from CacheManager if not in memory
    */
-  const getCachedPrivateConversations = (): any[] | undefined => {
+  const getCachedPrivateConversations = useCallback((): any[] | undefined => {
     const memoryCache = privateConversationsListRef.current;
 
     // Hydrate from CacheManager in background
@@ -358,13 +361,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Set cached private conversations
    * Updates both memory and CacheManager
    */
-  const setCachedPrivateConversations = (list: any[]): void => {
+  const setCachedPrivateConversations = useCallback((list: any[]): void => {
     const safeList = Array.isArray(list) ? list : [];
     privateConversationsListRef.current = safeList;
 
@@ -374,12 +377,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .catch((error) =>
         console.error('Failed to cache private conversations:', error)
       );
-  };
+  }, []);
 
   /**
    * 🆕 Remove conversation from private cache
    */
-  const removeFromPrivateConversationsCache = (conversationUuid: string): void => {
+  const removeFromPrivateConversationsCache = useCallback((conversationUuid: string): void => {
     if (!privateConversationsListRef.current) return;
 
     privateConversationsListRef.current = privateConversationsListRef.current.filter(
@@ -396,12 +399,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .catch((error) => console.error('Failed to update private conversations cache:', error));
 
     console.log(`🗑️ Removed private conversation ${conversationUuid} from cache`);
-  };
+  }, []);
 
   /**
    * 🆕 Get cached group conversations (sync)
    */
-  const getCachedGroupConversations = (): any[] | undefined => {
+  const getCachedGroupConversations = useCallback((): any[] | undefined => {
     const memoryCache = groupConversationsListRef.current;
 
     if (!memoryCache) {
@@ -417,24 +420,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Set cached group conversations
    */
-  const setCachedGroupConversations = (list: any[]): void => {
+  const setCachedGroupConversations = useCallback((list: any[]): void => {
     const safeList = Array.isArray(list) ? list : [];
     groupConversationsListRef.current = safeList;
 
     cacheManager
       .set(CacheKeys.groupConversations(), safeList, CacheTTL.CONVERSATIONS_LIST)
       .catch((error) => console.error('Failed to cache group conversations:', error));
-  };
+  }, []);
 
   /**
    * 🆕 Remove conversation from group cache
    */
-  const removeFromGroupConversationsCache = (conversationUuid: string): void => {
+  const removeFromGroupConversationsCache = useCallback((conversationUuid: string): void => {
     if (!groupConversationsListRef.current) return;
 
     groupConversationsListRef.current = groupConversationsListRef.current.filter(
@@ -450,12 +453,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .catch((error) => console.error('Failed to update group conversations cache:', error));
 
     console.log(`🗑️ Removed group conversation ${conversationUuid} from cache`);
-  };
+  }, []);
 
   /**
    * 🆕 Get cached connections
    */
-  const getCachedConnections = (): any[] | undefined => {
+  const getCachedConnections = useCallback((): any[] | undefined => {
     const memoryCache = connectionsListRef.current;
 
     if (!memoryCache) {
@@ -471,24 +474,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Set cached connections
    */
-  const setCachedConnections = (list: any[]): void => {
+  const setCachedConnections = useCallback((list: any[]): void => {
     const safeList = Array.isArray(list) ? list : [];
     connectionsListRef.current = safeList;
 
     cacheManager
       .set(CacheKeys.connections(), safeList, CacheTTL.CONNECTIONS)
       .catch((error) => console.error('Failed to cache connections:', error));
-  };
+  }, []);
 
   /**
    * 🆕 Get cached groups
    */
-  const getCachedGroups = (): any[] | undefined => {
+  const getCachedGroups = useCallback((): any[] | undefined => {
     const memoryCache = groupsListRef.current;
 
     if (!memoryCache) {
@@ -504,24 +507,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Set cached groups
    */
-  const setCachedGroups = (list: any[]): void => {
+  const setCachedGroups = useCallback((list: any[]): void => {
     const safeList = Array.isArray(list) ? list : [];
     groupsListRef.current = safeList;
 
     cacheManager
       .set(CacheKeys.groups(), safeList, CacheTTL.GROUPS)
       .catch((error) => console.error('Failed to cache groups:', error));
-  };
+  }, []);
 
   /**
    * 🆕 Get cached group invitations
    */
-  const getCachedGroupInvitations = (): any[] | undefined => {
+  const getCachedGroupInvitations = useCallback((): any[] | undefined => {
     const memoryCache = invitationsListRef.current;
 
     if (!memoryCache) {
@@ -537,22 +540,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     return memoryCache;
-  };
+  }, []);
 
   /**
    * 🆕 Set cached group invitations
    */
-  const setCachedGroupInvitations = (list: any[]): void => {
+  const setCachedGroupInvitations = useCallback((list: any[]): void => {
     const safeList = Array.isArray(list) ? list : [];
     invitationsListRef.current = safeList;
 
     cacheManager
       .set(CacheKeys.groupInvitations(), safeList, CacheTTL.INVITATIONS)
       .catch((error) => console.error('Failed to cache invitations:', error));
-  };
+  }, []);
 
   // 🆕 Fonction de prefetch modifiée pour SÉPARER privé et groupe
-  const prefetchConversationsOverview = async (
+  const prefetchConversationsOverview = useCallback(async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     if (!request) {  // ← Add this check
@@ -644,9 +647,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('❌ Erreur prefetch conversations overview:', error);
     }
-  };
+  }, [API_BASE_URL, setCachedPrivateConversations, setCachedGroupConversations, setCachedConnections, setCachedGroups, setCachedGroupInvitations, prefetchAvatars]);
 
-  const prefetchAllMessages = async (
+  const prefetchAllMessages = useCallback(async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ) => {
     try {
@@ -707,13 +710,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       };
       await Promise.all(Array.from({ length: Math.min(concurrency, allConvs.length) }).map(() => worker()));
     } catch {}
-  };
+  }, [API_BASE_URL, prefetchConversationsOverview]);
 
   /**
    * 🆕 Background refresh for stale data
    * Refreshes cached data that has become stale
    */
-  const backgroundRefresh = async (
+  const backgroundRefresh = useCallback(async (
     request: (url: string, options?: RequestInit) => Promise<Response>
   ): Promise<void> => {
     try {
@@ -729,7 +732,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('❌ Background refresh failed:', error);
     }
-  };
+  }, [prefetchConversationsOverview]);
 
   /**
    * 🆕 Hydrate caches from CacheManager on mount
